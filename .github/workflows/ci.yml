@@ -43,3 +43,19 @@ jobs:
           go-version: '1.24'
       - run: go mod download
       - run: go build ./...
+
+  build-flutter:
+    name: Build Flutter Libs
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/flutter_libs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.x'
+          channel: 'stable'
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test

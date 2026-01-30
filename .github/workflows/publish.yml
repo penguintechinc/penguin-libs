@@ -5,6 +5,7 @@ on:
     tags:
       - 'react-libs-v*'
       - 'python-utils-v*'
+      - 'flutter-libs-v*'
       - 'v*'
   workflow_dispatch:
     inputs:
@@ -16,6 +17,7 @@ on:
         options:
           - react-libs
           - python-utils
+          - flutter-libs
           - all
 
 permissions:
@@ -172,3 +174,50 @@ jobs:
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo "go get github.com/penguintechinc/penguin-libs/packages/go-common" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # Flutter Libraries - pub.dev (dry-run)
+  # ============================================
+  publish-flutter-libs:
+    name: Publish Flutter Libraries
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      (github.event.inputs.package == 'flutter-libs' || github.event.inputs.package == 'all') ||
+      startsWith(github.ref, 'refs/tags/flutter-libs-v') ||
+      startsWith(github.ref, 'refs/tags/v')
+
+    defaults:
+      run:
+        working-directory: packages/flutter_libs
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.x'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Dry run publish
+        run: dart pub publish --dry-run
+
+      - name: Create release summary
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | head -1 | awk '{print $2}')
+          echo "## Published Package" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: flutter_libs" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: pub.dev (dry-run)" >> $GITHUB_STEP_SUMMARY

@@ -47,3 +47,11 @@ temp/
 # Local development
 .PLAN
 .TODO
+
+# Flutter / Dart
+.dart_tool/
+.packages
+pubspec.lock
+*.g.dart
+.flutter-plugins
+.flutter-plugins-dependencies
