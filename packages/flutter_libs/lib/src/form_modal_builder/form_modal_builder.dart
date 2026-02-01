@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide FormFieldBuilder;
 import '../theme/elder_colors.dart';
 import 'form_field_config.dart';
 import 'form_field_builder.dart';
