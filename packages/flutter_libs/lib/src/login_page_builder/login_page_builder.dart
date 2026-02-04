@@ -315,11 +315,11 @@ class _LoginPageBuilderState extends State<LoginPageBuilder> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Logo
+          // Logo — 300px height on desktop, shrinks responsively on smaller screens
           if (widget.branding.logo != null)
             Center(
-              child: SizedBox(
-                width: widget.branding.logoWidth,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: widget.branding.logoHeight),
                 child: widget.branding.logo,
               ),
             ),

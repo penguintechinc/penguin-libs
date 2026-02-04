@@ -104,14 +104,17 @@ class BrandingConfig {
   const BrandingConfig({
     required this.appName,
     this.logo,
-    this.logoWidth = 300,
+    this.logoHeight = 300,
     this.tagline,
     this.githubRepo,
   });
 
   final String appName;
   final Widget? logo;
-  final double logoWidth;
+
+  /// Logo height in logical pixels (default 300). Width scales automatically.
+  /// Shrinks responsively on smaller screens.
+  final double logoHeight;
   final String? tagline;
   final String? githubRepo;
 }

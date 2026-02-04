@@ -423,20 +423,20 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
   const renderLogo = () => {
     if (!branding.logo) return null;
 
-    const logoWidth = branding.logoWidth ?? 300;
+    const logoHeight = branding.logoHeight ?? 300;
 
     if (typeof branding.logo === 'string') {
       return (
         <img
           src={branding.logo}
           alt={`${branding.appName} logo`}
-          style={{ width: logoWidth, height: 'auto' }}
-          className="mx-auto"
+          style={{ maxHeight: logoHeight, width: 'auto', height: '100%' }}
+          className="mx-auto block"
         />
       );
     }
 
-    return <div style={{ width: logoWidth }} className="mx-auto">{branding.logo}</div>;
+    return <div style={{ maxHeight: logoHeight, width: 'auto' }} className="mx-auto">{branding.logo}</div>;
   };
 
   return (

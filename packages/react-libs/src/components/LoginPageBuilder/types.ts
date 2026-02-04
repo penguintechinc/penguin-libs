@@ -55,8 +55,8 @@ export interface BrandingConfig {
   appName: string;
   /** Logo - can be URL string or React component */
   logo?: ReactNode | string;
-  /** Logo width in pixels (default: 300) */
-  logoWidth?: number;
+  /** Logo height in pixels (default: 300). Width scales automatically. Shrinks responsively on smaller screens. */
+  logoHeight?: number;
   /** Tagline displayed below app name */
   tagline?: string;
   /** GitHub repository for footer link (e.g., "penguintechinc/project-name") */

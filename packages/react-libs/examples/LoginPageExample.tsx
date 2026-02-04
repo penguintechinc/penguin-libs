@@ -61,7 +61,7 @@ export function BrandedLoginExample() {
       branding={{
         appName: 'WaddleBot',
         logo: '/images/waddlebot-logo.png',
-        logoWidth: 250,
+        logoHeight: 250,
         tagline: 'Your AI-powered assistant for everything',
         githubRepo: 'penguintechinc/waddlebot',
       }}
@@ -307,7 +307,7 @@ export function FullFeaturedLoginExample() {
       branding={{
         appName: 'MarchProxy',
         logo: '/images/marchproxy-logo.png',
-        logoWidth: 280,
+        logoHeight: 280,
         tagline: 'Enterprise API Gateway & Load Balancer',
         githubRepo: 'penguintechinc/marchproxy',
       }}
