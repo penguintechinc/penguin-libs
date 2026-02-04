@@ -1,4 +1,4 @@
-import React, { useState, ReactNode } from 'react';
+import React, { useState, useEffect, useCallback, ReactNode } from 'react';
 
 export interface MenuItem {
   name: string;
@@ -53,6 +53,16 @@ export interface SidebarMenuProps {
   colors?: SidebarColorConfig;
   collapseIcon?: React.ComponentType<{ className?: string }>;
   expandIcon?: React.ComponentType<{ className?: string }>;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+  closeOnNavigate?: boolean;
+}
+
+export interface SidebarMenuTriggerProps {
+  onClick: () => void;
+  className?: string;
+  colors?: SidebarColorConfig;
+  isOpen?: boolean;
 }
 
 // Default Elder-inspired color scheme (slate dark with blue accent)
@@ -87,6 +97,38 @@ const DefaultChevronRight: React.FC<{ className?: string }> = ({ className }) =>
   </svg>
 );
 
+/**
+ * Hamburger / X trigger button for mobile sidebar.
+ * Uses `lg:hidden` so it automatically hides on desktop.
+ */
+export const SidebarMenuTrigger: React.FC<SidebarMenuTriggerProps> = ({
+  onClick,
+  className = '',
+  colors,
+  isOpen = false,
+}) => {
+  const theme = colors || DEFAULT_COLORS;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`lg:hidden inline-flex items-center justify-center p-2 rounded-md ${theme.menuItemText} ${theme.menuItemHover} focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white ${className}`}
+      aria-label={isOpen ? 'Close sidebar' : 'Open sidebar'}
+    >
+      {isOpen ? (
+        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      ) : (
+        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      )}
+    </button>
+  );
+};
+
 export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   logo,
   categories,
@@ -98,6 +140,9 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   colors,
   collapseIcon: CollapseIcon = DefaultChevronDown,
   expandIcon: ExpandIcon = DefaultChevronRight,
+  mobileOpen,
+  onMobileClose,
+  closeOnNavigate = true,
 }) => {
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const theme = colors || DEFAULT_COLORS;
@@ -117,6 +162,9 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
     if (onNavigate) {
       onNavigate(href);
     }
+    if (closeOnNavigate && onMobileClose) {
+      onMobileClose();
+    }
   };
 
   const hasPermission = (item: MenuItem): boolean => {
@@ -125,8 +173,51 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
     return item.roles.includes(userRole);
   };
 
-  return (
-    <div className={`fixed inset-y-0 left-0 ${width} ${theme.sidebarBackground} border-r ${theme.sidebarBorder} flex flex-col`}>
+  // Body scroll lock for mobile overlay
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
+
+  // Escape key handler for mobile overlay
+  const handleEscape = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && mobileOpen && onMobileClose) {
+        onMobileClose();
+      }
+    },
+    [mobileOpen, onMobileClose]
+  );
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [handleEscape]);
+
+  const scrollbarStyles = (id: string) => `
+    #${id}::-webkit-scrollbar {
+      width: 10px;
+    }
+    #${id}::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #${id}::-webkit-scrollbar-thumb {
+      background: ${theme.scrollbarThumb.replace('bg-', '#')};
+      border-radius: 5px;
+    }
+    #${id}::-webkit-scrollbar-thumb:hover {
+      background: ${theme.scrollbarThumbHover.replace('hover:bg-', '#')};
+    }
+  `;
+
+  const renderSidebarContent = (navId: string) => (
+    <>
       {/* Logo Section */}
       {logo && (
         <div className={`flex items-center justify-center h-16 px-6 border-b ${theme.logoSectionBorder}`}>
@@ -135,24 +226,8 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
       )}
 
       {/* Navigation - Scrollable */}
-      <nav className="flex-1 px-4 py-6 overflow-y-auto">
-        <style>
-          {`
-            nav::-webkit-scrollbar {
-              width: 10px;
-            }
-            nav::-webkit-scrollbar-track {
-              background: transparent;
-            }
-            nav::-webkit-scrollbar-thumb {
-              background: ${theme.scrollbarThumb.replace('bg-', '#')};
-              border-radius: 5px;
-            }
-            nav::-webkit-scrollbar-thumb:hover {
-              background: ${theme.scrollbarThumbHover.replace('hover:bg-', '#')};
-            }
-          `}
-        </style>
+      <nav id={navId} className="flex-1 px-4 py-6 overflow-y-auto">
+        <style>{scrollbarStyles(navId)}</style>
 
         <div className="space-y-6">
           {categories.map((category, categoryIndex) => {
@@ -234,6 +309,42 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
           })}
         </div>
       )}
-    </div>
+    </>
+  );
+
+  const hasMobileSupport = mobileOpen !== undefined && onMobileClose !== undefined;
+
+  return (
+    <>
+      {/* Desktop sidebar - always rendered, hidden below lg */}
+      <div className={`hidden lg:flex fixed inset-y-0 left-0 ${width} ${theme.sidebarBackground} border-r ${theme.sidebarBorder} flex-col`}>
+        {renderSidebarContent('sidebar-nav-desktop')}
+      </div>
+
+      {/* Mobile overlay - only when mobileOpen/onMobileClose are provided */}
+      {hasMobileSupport && (
+        <div
+          className={`lg:hidden fixed inset-0 z-40 ${mobileOpen ? '' : 'pointer-events-none'}`}
+          aria-hidden={!mobileOpen}
+        >
+          {/* Backdrop */}
+          <div
+            className={`fixed inset-0 bg-black/50 transition-opacity duration-300 ${
+              mobileOpen ? 'opacity-100' : 'opacity-0'
+            }`}
+            onClick={onMobileClose}
+          />
+
+          {/* Sidebar panel */}
+          <div
+            className={`fixed inset-y-0 left-0 ${width} ${theme.sidebarBackground} border-r ${theme.sidebarBorder} flex flex-col z-50 transform transition-transform duration-300 ease-in-out ${
+              mobileOpen ? 'translate-x-0' : '-translate-x-full'
+            }`}
+          >
+            {renderSidebarContent('sidebar-nav-mobile')}
+          </div>
+        </div>
+      )}
+    </>
   );
 };

@@ -92,7 +92,7 @@ export const MFAModal: React.FC<MFAModalProps> = ({
       aria-modal="true"
     >
       {/* Backdrop */}
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex min-h-screen items-center justify-center p-0 sm:p-4">
         <div
           className="fixed inset-0 bg-black/60 transition-opacity"
           aria-hidden="true"
@@ -101,7 +101,7 @@ export const MFAModal: React.FC<MFAModalProps> = ({
 
         {/* Modal */}
         <div
-          className={`relative w-full max-w-md transform rounded-xl ${theme.cardBackground} border ${theme.cardBorder} p-6 shadow-2xl transition-all`}
+          className={`relative w-full h-full sm:h-auto sm:max-w-md transform sm:rounded-xl ${theme.cardBackground} border ${theme.cardBorder} p-4 sm:p-6 shadow-2xl transition-all`}
         >
           {/* Header */}
           <div className="text-center mb-6">

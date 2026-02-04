@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import type { CookieConsentProps, CookieConsentState, LoginColorConfig } from '../types';
 import { ELDER_LOGIN_THEME } from '../themes/elderTheme';
 
@@ -33,6 +33,18 @@ const PreferencesModal: React.FC<{
     onSave({ functional, analytics, marketing });
   }, [functional, analytics, marketing, onSave]);
 
+  // Body scroll lock when preferences modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -42,7 +54,7 @@ const PreferencesModal: React.FC<{
       role="dialog"
       aria-modal="true"
     >
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex min-h-screen items-center justify-center p-0 sm:p-4">
         <div
           className="fixed inset-0 bg-black/60 transition-opacity"
           aria-hidden="true"
@@ -50,7 +62,7 @@ const PreferencesModal: React.FC<{
         />
 
         <div
-          className={`relative w-full max-w-lg transform rounded-xl ${theme.cardBackground} border ${theme.cardBorder} p-6 shadow-2xl`}
+          className={`relative w-full h-full sm:h-auto sm:max-w-lg transform sm:rounded-xl ${theme.cardBackground} border ${theme.cardBorder} p-4 sm:p-6 shadow-2xl`}
         >
           <h2 id="cookie-preferences-title" className={`text-lg font-semibold ${theme.titleText} mb-4`}>
             Cookie Preferences
@@ -284,23 +296,23 @@ export const CookieConsent: React.FC<CookieConsentProps> = ({
             </div>
 
             {/* Action buttons */}
-            <div className="flex flex-wrap gap-2 shrink-0">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 shrink-0">
               <button
                 onClick={handleAcceptAll}
-                className={`px-4 py-2 text-sm font-medium rounded-lg ${theme.primaryButton} ${theme.primaryButtonText} ${theme.primaryButtonHover} transition-colors`}
+                className={`w-full sm:w-auto px-4 py-2 text-sm font-medium rounded-lg ${theme.primaryButton} ${theme.primaryButtonText} ${theme.primaryButtonHover} transition-colors`}
               >
                 Accept All
               </button>
               <button
                 onClick={handleAcceptEssential}
-                className={`px-4 py-2 text-sm font-medium rounded-lg border ${theme.secondaryButton} ${theme.secondaryButtonText} ${theme.secondaryButtonBorder} ${theme.secondaryButtonHover} transition-colors`}
+                className={`w-full sm:w-auto px-4 py-2 text-sm font-medium rounded-lg border ${theme.secondaryButton} ${theme.secondaryButtonText} ${theme.secondaryButtonBorder} ${theme.secondaryButtonHover} transition-colors`}
               >
                 Essential Only
               </button>
               {gdpr.showPreferences !== false && (
                 <button
                   onClick={() => setShowPreferences(true)}
-                  className={`px-4 py-2 text-sm font-medium ${theme.linkText} ${theme.linkHoverText} transition-colors`}
+                  className={`w-full sm:w-auto px-4 py-2 text-sm font-medium ${theme.linkText} ${theme.linkHoverText} transition-colors`}
                 >
                   Manage Preferences
                 </button>

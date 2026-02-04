@@ -620,6 +620,8 @@ npm install @penguintechinc/react-libs
 yarn add @penguintechinc/react-libs
 ```
 
+> **Note:** `zod` is a direct dependency of `react-libs` and is installed automatically. It is required by `FormModalBuilder` for field validation. The library re-exports `z` from zod for convenience (`import { z } from '@penguintechinc/react-libs'`), so consuming apps do not need to install zod separately.
+
 **For CI/CD (GitHub Actions)**:
 
 ```yaml

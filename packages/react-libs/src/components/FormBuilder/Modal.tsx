@@ -49,10 +49,10 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-0 sm:p-4"
       onClick={handleOverlayClick}
     >
-      <div className={`card w-full max-w-2xl max-h-[90vh] overflow-y-auto ${className}`}>
+      <div className={`card w-full h-full sm:h-auto sm:max-w-2xl sm:max-h-[90vh] sm:rounded-lg overflow-y-auto ${className}`}>
         {(title || showCloseButton) && (
           <div className="flex justify-between items-center mb-4">
             {title && <h2 className="text-xl font-bold text-gold-400">{title}</h2>}

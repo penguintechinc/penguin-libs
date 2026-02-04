@@ -455,6 +455,18 @@ export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
     }
   }, [isOpen, title, fields.length, manualTabs]);
 
+  // Body scroll lock when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   const widthClasses = {
     sm: 'max-w-sm',
     md: 'max-w-md',
@@ -1030,7 +1042,7 @@ export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
           &#8203;
         </span>
 
-        <div className={`inline-block align-bottom ${theme.modalBackground} rounded-lg text-left shadow-xl transform transition-all sm:my-8 sm:align-middle ${widthClasses[width]} sm:w-full ${maxHeight} flex flex-col`}>
+        <div className={`inline-block align-bottom ${theme.modalBackground} text-left shadow-xl transform transition-all w-full h-full sm:h-auto sm:rounded-lg sm:my-8 sm:align-middle ${widthClasses[width]} sm:w-full sm:${maxHeight} flex flex-col`}>
           {/* Fixed header */}
           <div className={`px-4 pt-5 pb-4 sm:p-6 sm:pb-4 border-b ${theme.tabBorder} ${theme.headerBackground}`}>
             <h3 className={`text-lg leading-6 font-medium ${theme.titleText}`} id="modal-title">
@@ -1040,7 +1052,8 @@ export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
             {/* Tab navigation */}
             {tabs && tabs.length > 1 && (
               <div className={`mt-4 border-b ${theme.tabBorder}`}>
-                <nav className="-mb-px flex space-x-4 overflow-x-auto" aria-label="Tabs">
+                <nav className="-mb-px flex space-x-4 overflow-x-auto scrollbar-hide" aria-label="Tabs" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+                  <style>{`.scrollbar-hide::-webkit-scrollbar { display: none; }`}</style>
                   {tabs.map((tab, index) => {
                     const tabHasError = tab.fields.some((field) => errors[field.name]);
                     return (
@@ -1093,7 +1106,7 @@ export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
           </div>
 
           {/* Fixed footer with buttons */}
-          <div className={`px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-3 border-t ${theme.tabBorder} ${theme.footerBackground}`}>
+          <div className={`px-4 py-3 sm:px-6 flex flex-col sm:flex-row-reverse gap-3 border-t ${theme.tabBorder} ${theme.footerBackground}`}>
             {tabs && tabs.length > 1 ? (
               <>
                 {activeTab === tabs.length - 1 ? (

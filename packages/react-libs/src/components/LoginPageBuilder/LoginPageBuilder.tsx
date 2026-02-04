@@ -440,7 +440,7 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
   };
 
   return (
-    <div className={`min-h-screen ${theme.pageBackground} flex flex-col justify-center py-12 sm:px-6 lg:px-8 ${className || ''}`}>
+    <div className={`min-h-screen ${theme.pageBackground} flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 ${className || ''}`}>
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         {/* Logo */}
         {branding.logo && <div className="mb-6">{renderLogo()}</div>}
@@ -533,7 +533,7 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
             </div>
 
             {/* Remember me / Forgot password row */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               {showRememberMe && (
                 <div className="flex items-center">
                   <input
