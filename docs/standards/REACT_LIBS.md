@@ -94,7 +94,7 @@ interface LoginApiConfig {
 interface BrandingConfig {
   appName: string;            // Displayed as page title
   logo?: ReactNode | string;  // Image URL or React component
-  logoHeight?: number;        // Default: 300px height, width auto
+  logoWidth?: number;         // Default: 300px
   tagline?: string;           // Subtitle below app name
   githubRepo?: string;        // For LICENSE link (e.g., 'penguintechinc/app')
 }
