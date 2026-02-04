@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "penguin-sal"
+version = "0.1.0"
+description = "PyDAL-inspired unified secrets management - one API, multiple backends"
+readme = "README.md"
+license = {text = "AGPL-3.0"}
+requires-python = ">=3.11"
+authors = [{name = "Penguin Tech Inc", email = "dev@penguintech.io"}]
+keywords = ["secrets", "vault", "aws", "gcp", "azure", "kubernetes", "penguintech"]
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+]
+dependencies = [
+    "typing-extensions>=4.5.0",
+]
+
+[project.optional-dependencies]
+vault = ["hvac>=2.0.0"]
+infisical = ["infisicalsdk>=1.0.0"]
+cyberark = ["conjur>=7.0.0"]
+aws = ["boto3>=1.26.0"]
+gcp = ["google-cloud-secret-manager>=2.16.0"]
+azure = ["azure-keyvault-secrets>=4.7.0", "azure-identity>=1.12.0"]
+oci = ["oci>=2.100.0"]
+k8s = ["kubernetes>=25.0.0"]
+onepassword = ["onepasswordconnectsdk>=1.0.0"]
+passbolt = ["passbolt-python-api>=0.3.0"]
+doppler = ["dopplersdk>=7.0.0"]
+all = [
+    "hvac>=2.0.0",
+    "infisicalsdk>=1.0.0",
+    "conjur>=7.0.0",
+    "boto3>=1.26.0",
+    "google-cloud-secret-manager>=2.16.0",
+    "azure-keyvault-secrets>=4.7.0",
+    "azure-identity>=1.12.0",
+    "oci>=2.100.0",
+    "kubernetes>=25.0.0",
+    "onepasswordconnectsdk>=1.0.0",
+    "passbolt-python-api>=0.3.0",
+    "dopplersdk>=7.0.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+    "bandit>=1.7.0",
+]
+
+[project.urls]
+Homepage = "https://www.penguintech.io"
+Repository = "https://github.com/penguintechinc/penguin-libs"
+Issues = "https://github.com/penguintechinc/penguin-libs/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ['py311', 'py312', 'py313']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

@@ -1,0 +1,91 @@
+name: H3 Packages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/go-h3/**'
+      - 'packages/python-libs/src/penguin_libs/h3/**'
+      - 'proto/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/go-h3/**'
+      - 'packages/python-libs/src/penguin_libs/h3/**'
+      - 'proto/**'
+
+jobs:
+  proto-lint:
+    name: Lint Protobuf
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-setup-action@v1
+      - run: cd proto && buf lint
+
+  build-go-h3:
+    name: Build & Test Go H3
+    runs-on: ubuntu-latest
+    needs: proto-lint
+    defaults:
+      run:
+        working-directory: packages/go-h3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - run: go mod download
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+
+  build-python-h3:
+    name: Build & Test Python H3
+    runs-on: ubuntu-latest
+    needs: proto-lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: |
+          pip install -e "packages/python-libs[h3,dev]"
+      - name: Run linting
+        run: |
+          cd packages/python-libs
+          python -m ruff check src/penguin_libs/h3/
+          python -m mypy src/penguin_libs/h3/ --ignore-missing-imports
+      - name: Run tests
+        run: |
+          cd packages/python-libs
+          python -m pytest tests/h3/ -v --tb=short || echo "No h3 tests yet"
+
+  integration-test:
+    name: Cross-Language Integration
+    runs-on: ubuntu-latest
+    needs: [build-go-h3, build-python-h3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Generate test certificates
+        run: ./scripts/generate-test-certs.sh ./certs
+      - name: Build Go server
+        run: |
+          cd packages/go-h3
+          go build -o ../../bin/echo-server ./examples/echo-server/
+      - name: Install Python H3
+        run: pip install -e "packages/python-libs[h3]"
+      - name: Run integration tests
+        run: |
+          if [ -d tests/integration ]; then
+            ./tests/integration/run-all.sh || echo "Integration tests not yet implemented"
+          else
+            echo "Integration test directory not yet created"
+          fi

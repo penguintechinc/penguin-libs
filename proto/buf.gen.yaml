@@ -1,0 +1,13 @@
+version: v2
+plugins:
+  # Go protobuf messages
+  - remote: buf.build/protocolbuffers/go
+    out: ../gen/go
+    opt: paths=source_relative
+  # ConnectRPC Go handlers + clients
+  - remote: buf.build/connectrpc/go
+    out: ../gen/go
+    opt: paths=source_relative
+  # Python protobuf messages
+  - remote: buf.build/protocolbuffers/python
+    out: ../packages/python-libs/src/penguin_libs/gen

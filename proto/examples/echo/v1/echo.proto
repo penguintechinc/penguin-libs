@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package examples.echo.v1;
+
+option go_package = "github.com/penguintechinc/penguin-libs/gen/go/examples/echo/v1;echov1";
+
+// EchoService demonstrates all four RPC patterns over HTTP/3 + ConnectRPC.
+service EchoService {
+  // Unary: single request, single response.
+  rpc Echo(EchoRequest) returns (EchoResponse) {}
+
+  // Server streaming: single request, stream of responses.
+  rpc ServerStream(ServerStreamRequest) returns (stream ServerStreamResponse) {}
+
+  // Client streaming: stream of requests, single response.
+  rpc ClientStream(stream ClientStreamRequest) returns (ClientStreamResponse) {}
+
+  // Bidirectional streaming: stream of requests, stream of responses.
+  rpc BidiStream(stream BidiStreamRequest) returns (stream BidiStreamResponse) {}
+}
+
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoResponse {
+  string message = 1;
+}
+
+message ServerStreamRequest {
+  string message = 1;
+  int32 count = 2;
+}
+
+message ServerStreamResponse {
+  string message = 1;
+  int32 sequence = 2;
+}
+
+message ClientStreamRequest {
+  string message = 1;
+}
+
+message ClientStreamResponse {
+  string combined_message = 1;
+  int32 message_count = 2;
+}
+
+message BidiStreamRequest {
+  string message = 1;
+}
+
+message BidiStreamResponse {
+  string message = 1;
+}
