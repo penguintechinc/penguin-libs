@@ -28,6 +28,7 @@
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "prepublishOnly": "npm run clean && npm run build",
     "version:patch": "npm version patch",
     "version:minor": "npm version minor",
@@ -69,6 +70,8 @@
     "react-dom": ">=18.0.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
@@ -78,8 +81,10 @@
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react": "^7.33.0",
     "eslint-plugin-react-hooks": "^4.6.0",
+    "jsdom": "^28.0.0",
     "prettier": "^3.2.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "zod": "^3.22.0"

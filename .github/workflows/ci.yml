@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-react:
-    name: Build React Libs
+    name: Build & Test React Libs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,31 +18,37 @@ jobs:
       - run: npm ci
       - run: npm run build -w @penguintechinc/react-libs
       - run: npm run typecheck -w @penguintechinc/react-libs
+      - run: npm run test -w @penguintechinc/react-libs
 
   build-python:
-    name: Build Python Utils
+    name: Build & Test Python Packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - run: pip install build
-      - run: python -m build packages/python-utils
+      - run: pip install build pytest pytest-asyncio requests
+      - run: pip install -e "packages/python-libs[dev]"
+      - run: pytest packages/python-libs/tests -v
+      - run: pip install -e "packages/python-licensing[dev]"
+      - run: pytest packages/python-licensing/tests -v
+      - run: cd packages/python-secrets && pip install -e ".[dev]" && pytest tests -v
 
   build-go:
-    name: Build Go Common
+    name: Build & Test Go Packages
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/go-common
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+      - run: go test ./...
+        working-directory: packages/go-common
       - run: go mod download
-      - run: go build ./...
+        working-directory: packages/go-h3
+      - run: go test -race ./...
+        working-directory: packages/go-h3
 
   build-flutter:
     name: Build Flutter Libs
