@@ -1,0 +1,13 @@
+README.md
+pyproject.toml
+src/penguin_licensing/__init__.py
+src/penguin_licensing/client.py
+src/penguin_licensing/decorators.py
+src/penguin_licensing/python_client.py
+src/penguin_licensing.egg-info/PKG-INFO
+src/penguin_licensing.egg-info/SOURCES.txt
+src/penguin_licensing.egg-info/dependency_links.txt
+src/penguin_licensing.egg-info/requires.txt
+src/penguin_licensing.egg-info/top_level.txt
+tests/test_client.py
+tests/test_decorators.py

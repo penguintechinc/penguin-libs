@@ -1,0 +1,15 @@
+pyproject.toml
+src/penguin_sal/__init__.py
+src/penguin_sal/py.typed
+src/penguin_sal.egg-info/PKG-INFO
+src/penguin_sal.egg-info/SOURCES.txt
+src/penguin_sal.egg-info/dependency_links.txt
+src/penguin_sal.egg-info/requires.txt
+src/penguin_sal.egg-info/top_level.txt
+src/penguin_sal/adapters/__init__.py
+src/penguin_sal/core/__init__.py
+src/penguin_sal/core/base_adapter.py
+src/penguin_sal/core/exceptions.py
+src/penguin_sal/core/types.py
+src/penguin_sal/core/uri_parser.py
+src/penguin_sal/utils/__init__.py
