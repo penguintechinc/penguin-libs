@@ -10,17 +10,27 @@ Shared libraries for Penguin Tech applications across all languages.
 |---------|---------|-------------|
 | [@penguintechinc/react-libs](./packages/react-libs) | 1.1.0 | React components (LoginPageBuilder, FormModalBuilder, SidebarMenu) |
 
-### Python (Future)
+### Python
 
 | Package | Version | Description |
 |---------|---------|-------------|
-| `penguintechinc-utils` | - | Python utilities (coming soon) |
+| [penguin-libs](./packages/python-libs) | - | Python H3 client libraries (middleware, auth, logging) |
+| [penguin-licensing](./packages/python-licensing) | - | PenguinTech License Server integration |
+| [penguin-sal](./packages/python-secrets) | - | Secrets and authentication library |
+| [penguintechinc-utils](./packages/python-utils) | 0.1.0 | Sanitized logging and Flask utilities |
 
-### Go (Future)
+### Go
 
 | Package | Version | Description |
 |---------|---------|-------------|
-| `github.com/penguintechinc/penguin-libs/go-common` | - | Go utilities (coming soon) |
+| [go-common](./packages/go-common) | - | Common Go utilities and helpers |
+| [go-h3](./packages/go-h3) | - | Go H3 protocol interceptors and middleware |
+
+### Flutter/Dart
+
+| Package | Version | Description |
+|---------|---------|-------------|
+| [flutter_libs](./packages/flutter_libs) | - | Flutter UI components and utilities |
 
 ## Installation
 
@@ -41,6 +51,43 @@ npm install @penguintechinc/react-libs
 
 # Or with yarn
 yarn add @penguintechinc/react-libs
+```
+
+### Python Packages
+
+All Python packages are published to PyPI:
+
+```bash
+# Install Python libraries
+pip install penguin-libs penguin-licensing penguin-sal penguintechinc-utils
+
+# Or install specific packages
+pip install penguin-libs              # H3 client libraries
+pip install penguin-licensing         # License server integration
+pip install penguin-sal               # Secrets management
+pip install penguintechinc-utils      # Logging and Flask utilities
+```
+
+### Go Packages
+
+Go packages are consumed directly from the repository:
+
+```bash
+# Install Go packages
+go get github.com/penguintechinc/penguin-libs/packages/go-common
+go get github.com/penguintechinc/penguin-libs/packages/go-h3
+```
+
+### Flutter/Dart Packages
+
+Add to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  flutter_libs:
+    git:
+      url: https://github.com/penguintechinc/penguin-libs.git
+      path: packages/flutter_libs
 ```
 
 ## Usage
@@ -104,15 +151,39 @@ npm run build:react-libs
 
 ### Publishing
 
-Publishing is automated via GitHub Actions on version tags. To publish manually:
+Publishing is automated via GitHub Actions on version tags:
 
 ```bash
-# Bump version
-cd packages/react-libs
-npm version patch  # or minor, major
+# Tag format: {package}-v{version}
+git tag react-libs-v1.1.0
+git tag python-libs-v0.2.0
+git tag python-licensing-v0.1.5
+git tag python-secrets-v0.1.0
+git tag python-utils-v0.1.1
+git tag flutter-libs-v0.1.0
 
-# Publish (requires authentication)
-npm publish
+# Or use v* tag to publish all packages
+git tag v1.0.0
+
+# Push tags to trigger publishing
+git push origin --tags
+```
+
+**Manual publishing (not recommended):**
+
+```bash
+# JavaScript/TypeScript
+cd packages/react-libs
+npm version patch && npm publish
+
+# Python
+cd packages/python-libs  # or python-licensing, python-secrets, python-utils
+python -m build && twine upload dist/*
+
+# Go (no publishing needed - use via go get)
+# Flutter (requires pub.dev credentials)
+cd packages/flutter_libs
+dart pub publish
 ```
 
 ## Repository Structure
@@ -120,12 +191,20 @@ npm publish
 ```
 penguin-libs/
 ├── packages/
-│   ├── react-libs/          # @penguintechinc/react-libs (npm)
-│   ├── python-utils/        # penguintechinc-utils (PyPI) - future
-│   └── go-common/           # Go module - future
+│   ├── react-libs/          # @penguintechinc/react-libs (GitHub Packages)
+│   ├── python-libs/         # penguin-libs (PyPI)
+│   ├── python-licensing/    # penguin-licensing (PyPI)
+│   ├── python-secrets/      # penguin-sal (PyPI)
+│   ├── python-utils/        # penguintechinc-utils (PyPI)
+│   ├── go-common/           # Go module (via go get)
+│   ├── go-h3/               # Go module (via go get)
+│   └── flutter_libs/        # Flutter package (pub.dev)
 ├── .github/
 │   └── workflows/
 │       └── publish.yml      # Automated publishing
+├── proto/                   # Protocol buffer definitions
+├── scripts/                 # Build and utility scripts
+├── docs/                    # Documentation
 ├── package.json             # Workspace root
 └── README.md
 ```
