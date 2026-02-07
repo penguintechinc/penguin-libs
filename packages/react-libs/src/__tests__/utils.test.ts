@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   generateState,
   validateState,
@@ -66,13 +66,13 @@ describe('OAuth utilities', () => {
   });
 
   it('getProviderLabel returns custom label when provided', () => {
-    const config: BuiltInOAuth2Provider = {
-      provider: 'google',
+    const config = {
+      provider: 'google' as const,
       clientId: 'test-client-id',
       redirectUri: 'http://localhost/callback',
       label: 'Custom Label',
     };
-    const label = getProviderLabel(config);
+    const label = getProviderLabel(config as BuiltInOAuth2Provider);
     expect(label).toBe('Custom Label');
   });
 
