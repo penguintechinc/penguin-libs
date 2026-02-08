@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "penguin-licensing"
-version = "0.1.0"
+version = "0.1.1"
 description = "PenguinTech License Server Python client"
 readme = "README.md"
 license = {text = "AGPL-3.0"}

@@ -491,6 +491,8 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
                 type="email"
                 autoComplete="email"
                 required
+                pattern="[^\s@]+@[^\s@]+\.[^\s@]+"
+                title="Enter a valid email address (e.g., user@example.com or user@localhost.local)"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={!canInteract || isSubmitting}

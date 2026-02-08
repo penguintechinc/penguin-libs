@@ -62,6 +62,9 @@ export const useFormBuilder = ({
     }
 
     if (field.type === 'email' && value) {
+      // Email validation regex - ReDoS-safe (no nested quantifiers, uses character classes only)
+      // Allows standard TLDs and development TLDs (.local, .localhost, .test, .example)
+      // Pattern: local-part @ domain . tld
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(value)) {
         return 'Invalid email address';

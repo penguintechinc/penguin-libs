@@ -1,6 +1,6 @@
 {
   "name": "@penguintechinc/react-libs",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Shared React components for Penguin Tech applications - LoginPageBuilder, FormModalBuilder, SidebarMenu, and more",
   "type": "module",
   "main": "./dist/index.js",
