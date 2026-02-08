@@ -1,6 +1,6 @@
 name: flutter_libs
 description: Shared Flutter widgets for Penguin Tech applications — Elder dark theme, forms, login, sidebar, versioning.
-version: 0.1.1
+version: 0.1.0
 repository: https://github.com/penguintechinc/penguin-libs
 publish_to: none
 

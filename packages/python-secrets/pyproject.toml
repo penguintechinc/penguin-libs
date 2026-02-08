@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "penguin-sal"
-version = "0.1.1"
+version = "0.1.0"
 description = "PyDAL-inspired unified secrets management - one API, multiple backends"
 readme = "README.md"
 license = {text = "AGPL-3.0"}

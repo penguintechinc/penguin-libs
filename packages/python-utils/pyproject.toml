@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "penguintechinc-utils"
-version = "0.1.1"
+version = "0.1.0"
 description = "Shared Python utilities for Penguin Tech applications"
 readme = "README.md"
 license = {text = "AGPL-3.0"}
