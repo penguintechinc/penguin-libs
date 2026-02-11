@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "penguintechinc-utils"
+name = "penguin-utils"
 version = "0.1.0"
 description = "Shared Python utilities for Penguin Tech applications"
 readme = "README.md"

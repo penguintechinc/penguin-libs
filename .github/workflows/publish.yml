@@ -190,7 +190,7 @@ jobs:
   publish-python-secrets:
     name: Publish Python Secrets
     runs-on: ubuntu-latest
-    environment: pypi
+    environment: pypi-secrets
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-secrets' || github.event.inputs.package == 'all') ||
@@ -236,12 +236,12 @@ jobs:
           echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
-  # Python Utils (penguintechinc-utils) - PyPI
+  # Python Utils (penguin-utils) - PyPI
   # ============================================
   publish-python-utils:
     name: Publish Python Utils
     runs-on: ubuntu-latest
-    environment: pypi
+    environment: pypi-utils
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-utils' || github.event.inputs.package == 'all') ||
@@ -282,7 +282,7 @@ jobs:
           VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
           echo "## Published Package" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Package**: penguintechinc-utils" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: penguin-utils" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
           echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
 

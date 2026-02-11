@@ -65,7 +65,7 @@ packages/go-common: → new version     ❌ (no changes, don't bump)
 | python-libs | PyPI | penguin-libs | Planned |
 | python-licensing | PyPI | penguin-licensing | Planned |
 | python-secrets | PyPI | penguin-sal | Planned |
-| python-utils | PyPI | penguintechinc-utils | Planned |
+| python-utils | PyPI | penguin-utils | Planned |
 | go-common | GitHub (go get) | N/A - direct import | Active |
 | go-h3 | GitHub (go get) | N/A - direct import | Active |
 | flutter_libs | pub.dev | flutter_libs | Planned |

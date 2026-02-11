@@ -5,10 +5,10 @@ Shared Python utilities for Penguin Tech applications.
 ## Installation
 
 ```bash
-pip install penguintechinc-utils
+pip install penguin-utils
 
 # With Flask extras
-pip install penguintechinc-utils[flask]
+pip install penguin-utils[flask]
 ```
 
 ## Usage

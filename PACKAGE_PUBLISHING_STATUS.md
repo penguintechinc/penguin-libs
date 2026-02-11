@@ -15,7 +15,7 @@ All 8 packages in the penguin-libs monorepo are now properly configured for auto
 | 2 | python-libs | PyPI | penguin-libs | `python-libs-v*` | `publish-python-libs` | ✅ Configured |
 | 3 | python-licensing | PyPI | penguin-licensing | `python-licensing-v*` | `publish-python-licensing` | ✅ Configured |
 | 4 | python-secrets | PyPI | penguin-sal | `python-secrets-v*` | `publish-python-secrets` | ✅ Configured |
-| 5 | python-utils | PyPI | penguintechinc-utils | `python-utils-v*` | `publish-python-utils` | ✅ **NEWLY ADDED** |
+| 5 | python-utils | PyPI | penguin-utils | `python-utils-v*` | `publish-python-utils` | ✅ **NEWLY ADDED** |
 | 6 | go-common | GitHub (go get) | github.com/.../go-common | `v*` | `validate-go-common` | ✅ Configured |
 | 7 | go-h3 | GitHub (go get) | github.com/.../go-h3 | `v*` | `validate-go-common` | ✅ Configured |
 | 8 | flutter_libs | pub.dev | flutter_libs | `flutter-libs-v*` | `publish-flutter-libs` | ✅ Configured (dry-run) |
@@ -47,7 +47,7 @@ workflow_dispatch:
 - Working directory: `packages/python-utils`
 - Python version: 3.13
 - Registry: PyPI
-- Package name: `penguintechinc-utils`
+- Package name: `penguin-utils`
 - Publishing method: OIDC trusted publishing
 
 ### 2. Updated `README.md`
@@ -118,7 +118,7 @@ GitHub UI: **Actions → Publish Packages → Run workflow → Select package**
 - `penguin-libs` (python-libs)
 - `penguin-licensing` (python-licensing)
 - `penguin-sal` (python-secrets)
-- `penguintechinc-utils` (python-utils) ← **NEWLY ADDED**
+- `penguin-utils` (python-utils) ← **NEWLY ADDED**
 
 ### GitHub Packages (npm)
 
@@ -178,11 +178,11 @@ gh workflow run publish.yml -f package=python-utils
    git push origin python-utils-v0.1.0
    ```
 
-2. **Verify on PyPI**: https://pypi.org/project/penguintechinc-utils/
+2. **Verify on PyPI**: https://pypi.org/project/penguin-utils/
 
 3. **Test installation**:
    ```bash
-   pip install penguintechinc-utils
+   pip install penguin-utils
    ```
 
 ### For flutter_libs (Future)

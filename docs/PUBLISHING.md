@@ -14,7 +14,7 @@ All packages are published automatically via GitHub Actions when version tags ar
 | python-libs | PyPI | penguin-libs | `python-libs-v*` | ✅ Active |
 | python-licensing | PyPI | penguin-licensing | `python-licensing-v*` | ✅ Active |
 | python-secrets | PyPI | penguin-sal | `python-secrets-v*` | ✅ Active |
-| python-utils | PyPI | penguintechinc-utils | `python-utils-v*` | ✅ Active |
+| python-utils | PyPI | penguin-utils | `python-utils-v*` | ✅ Active |
 | go-common | GitHub (go get) | github.com/penguintechinc/penguin-libs/packages/go-common | `v*` (validation only) | ✅ Active |
 | go-h3 | GitHub (go get) | github.com/penguintechinc/penguin-libs/packages/go-h3 | `v*` (validation only) | ✅ Active |
 | flutter_libs | pub.dev | flutter_libs | `flutter-libs-v*` | ⚠️ Dry-run only |
@@ -117,7 +117,7 @@ git push origin python-libs-vX.Y.Z
 - `packages/python-libs` → `penguin-libs`
 - `packages/python-licensing` → `penguin-licensing`
 - `packages/python-secrets` → `penguin-sal`
-- `packages/python-utils` → `penguintechinc-utils`
+- `packages/python-utils` → `penguin-utils`
 
 ### Go Packages
 

@@ -17,7 +17,7 @@ Shared libraries for Penguin Tech applications across all languages.
 | [penguin-libs](./packages/python-libs) | - | Python H3 client libraries (middleware, auth, logging) |
 | [penguin-licensing](./packages/python-licensing) | - | PenguinTech License Server integration |
 | [penguin-sal](./packages/python-secrets) | - | Secrets and authentication library |
-| [penguintechinc-utils](./packages/python-utils) | 0.1.0 | Sanitized logging and Flask utilities |
+| [penguin-utils](./packages/python-utils) | 0.1.0 | Sanitized logging and Flask utilities |
 
 ### Go
 
@@ -59,13 +59,13 @@ All Python packages are published to PyPI:
 
 ```bash
 # Install Python libraries
-pip install penguin-libs penguin-licensing penguin-sal penguintechinc-utils
+pip install penguin-libs penguin-licensing penguin-sal penguin-utils
 
 # Or install specific packages
 pip install penguin-libs              # H3 client libraries
 pip install penguin-licensing         # License server integration
 pip install penguin-sal               # Secrets management
-pip install penguintechinc-utils      # Logging and Flask utilities
+pip install penguin-utils      # Logging and Flask utilities
 ```
 
 ### Go Packages
@@ -195,7 +195,7 @@ penguin-libs/
 │   ├── python-libs/         # penguin-libs (PyPI)
 │   ├── python-licensing/    # penguin-licensing (PyPI)
 │   ├── python-secrets/      # penguin-sal (PyPI)
-│   ├── python-utils/        # penguintechinc-utils (PyPI)
+│   ├── python-utils/        # penguin-utils (PyPI)
 │   ├── go-common/           # Go module (via go get)
 │   ├── go-h3/               # Go module (via go get)
 │   └── flutter_libs/        # Flutter package (pub.dev)
