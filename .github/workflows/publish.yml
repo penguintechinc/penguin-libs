@@ -88,6 +88,7 @@ jobs:
   publish-python-libs:
     name: Publish Python Libs
     runs-on: ubuntu-latest
+    environment: pypi
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-libs' || github.event.inputs.package == 'all') ||
@@ -119,10 +120,9 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: twine upload dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/python-libs/dist/
 
       - name: Create release summary
         run: |
@@ -131,7 +131,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: penguin-libs" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry**: PyPI" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
   # Python Licensing - PyPI
@@ -139,6 +139,7 @@ jobs:
   publish-python-licensing:
     name: Publish Python Licensing
     runs-on: ubuntu-latest
+    environment: pypi
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-licensing' || github.event.inputs.package == 'all') ||
@@ -170,10 +171,9 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: twine upload dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/python-licensing/dist/
 
       - name: Create release summary
         run: |
@@ -182,7 +182,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: penguin-licensing" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry**: PyPI" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
   # Python Secrets (penguin-sal) - PyPI
@@ -190,6 +190,7 @@ jobs:
   publish-python-secrets:
     name: Publish Python Secrets
     runs-on: ubuntu-latest
+    environment: pypi
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-secrets' || github.event.inputs.package == 'all') ||
@@ -221,10 +222,9 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: twine upload dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/python-secrets/dist/
 
       - name: Create release summary
         run: |
@@ -233,7 +233,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: penguin-sal" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry**: PyPI" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
   # Python Utils (penguintechinc-utils) - PyPI
@@ -241,6 +241,7 @@ jobs:
   publish-python-utils:
     name: Publish Python Utils
     runs-on: ubuntu-latest
+    environment: pypi
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-utils' || github.event.inputs.package == 'all') ||
@@ -272,10 +273,9 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: twine upload dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/python-utils/dist/
 
       - name: Create release summary
         run: |
@@ -284,7 +284,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: penguintechinc-utils" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry**: PyPI" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
   # Go Common - No publish needed (go get from repo)
