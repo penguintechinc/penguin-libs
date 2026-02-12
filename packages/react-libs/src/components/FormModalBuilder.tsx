@@ -1036,7 +1036,7 @@ export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
   return (
     <div className="fixed inset-0 overflow-y-auto" style={{ zIndex }} aria-labelledby="modal-title" role="dialog" aria-modal="true">
       <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-        <div className={`fixed inset-0 ${theme.overlayBackground} transition-opacity`} aria-hidden="true" onClick={handleClose}></div>
+        <div className={`fixed inset-0 ${theme.overlayBackground} transition-opacity`} aria-hidden="true" onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose(); }}></div>
 
         <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">
           &#8203;
