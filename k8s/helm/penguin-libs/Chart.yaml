@@ -1,0 +1,9 @@
+apiVersion: v2
+name: penguin-libs
+description: Build and publish validation chart for NPM package library
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+maintainers:
+  - name: Penguin Tech Inc
+    email: support@penguintech.io

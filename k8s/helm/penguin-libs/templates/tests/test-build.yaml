@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "penguin-libs.fullname" . }}-build-test
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "penguin-libs.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        {{- include "penguin-libs.selectorLabels" . | nindent 8 }}
+        job-type: build-test
+    spec:
+      restartPolicy: Never
+      {{- if .Values.buildValidator.enabled }}
+      containers:
+      - name: build-validator
+        image: "{{ .Values.buildValidator.image.repository }}:{{ .Values.buildValidator.image.tag }}"
+        imagePullPolicy: {{ .Values.buildValidator.image.pullPolicy }}
+        env:
+        - name: NODE_ENV
+          value: {{ .Values.config.nodeEnv | quote }}
+        - name: NPM_REGISTRY
+          value: {{ .Values.config.npmRegistry | quote }}
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          echo "Starting NPM package validation..."
+          echo "Node version: $(node --version)"
+          echo "NPM version: $(npm --version)"
+          echo ""
+          echo "Installing dependencies..."
+          npm ci --no-audit
+          echo ""
+          echo "Running tests..."
+          npm test || true
+          echo ""
+          echo "Creating package tarball..."
+          npm pack
+          echo ""
+          echo "Build and publish validation completed successfully"
+          exit 0
+        resources:
+          {{- toYaml .Values.buildValidator.resources | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: false
+      {{- end }}

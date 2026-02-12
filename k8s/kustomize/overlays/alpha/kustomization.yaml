@@ -1,0 +1,55 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: penguin-libs-alpha
+
+namespace: penguin-libs-alpha
+
+bases:
+  - ../../base
+
+namePrefix: alpha-
+nameSuffix: ""
+
+commonLabels:
+  environment: alpha
+  tier: testing
+
+commonAnnotations:
+  deployment.penguin-libs/environment: alpha
+
+replicas:
+  - name: build-validator
+    count: 1
+
+patches:
+  - target:
+      kind: Namespace
+      name: penguin-libs
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: penguin-libs-alpha
+  - target:
+      kind: Deployment
+      name: alpha-build-validator
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: "debug"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "128Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "100m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "256Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "250m"

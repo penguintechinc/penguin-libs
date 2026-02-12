@@ -1,0 +1,19 @@
+namespace: penguin-libs
+
+buildValidator:
+  enabled: true
+  image:
+    repository: node
+    tag: "20-alpine"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+config:
+  nodeEnv: "test"
+  npmRegistry: "https://registry.npmjs.org"

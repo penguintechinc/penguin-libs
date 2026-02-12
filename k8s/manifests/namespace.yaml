@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: penguin-libs
+  labels:
+    app: penguin-libs
+    managed-by: kustomize
