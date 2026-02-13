@@ -28,7 +28,8 @@ export type {
 } from './types';
 
 // Theme exports
-export { ELDER_LOGIN_THEME, mergeWithElderTheme } from './themes/elderTheme';
+export { ELDER_LOGIN_THEME, mergeWithElderTheme, resolveLoginTheme } from './themes/elderTheme';
+export type { ThemeMode } from './types';
 
 // Hook exports (for advanced usage)
 export { useCaptcha } from './hooks/useCaptcha';

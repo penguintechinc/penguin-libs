@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+export type { ThemeMode } from '../../theme';
 
 /**
  * API configuration for login endpoint
@@ -254,7 +255,9 @@ export interface LoginPageBuilderProps {
   mfa?: MFAConfig;
 
   // UI options
-  /** Custom color theme */
+  /** Theme mode preset: 'dark' (default) or 'light'. Sets base colors. */
+  themeMode?: import('../../theme').ThemeMode;
+  /** Custom color overrides merged on top of the theme preset. */
   colors?: Partial<LoginColorConfig>;
   /** Show "Forgot Password" link (default: true) */
   showForgotPassword?: boolean;

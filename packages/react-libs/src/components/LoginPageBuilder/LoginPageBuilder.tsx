@@ -7,7 +7,7 @@ import type {
   SocialLoginConfig,
   CookieConsentState,
 } from './types';
-import { mergeWithElderTheme } from './themes/elderTheme';
+import { resolveLoginTheme } from './themes/elderTheme';
 import { useCaptcha } from './hooks/useCaptcha';
 import { useCookieConsent } from './hooks/useCookieConsent';
 import { MFAModal } from './components/MFAModal';
@@ -77,6 +77,7 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
   gdpr,
   captcha,
   mfa,
+  themeMode = 'dark',
   colors,
   showForgotPassword = true,
   forgotPasswordUrl,
@@ -90,7 +91,7 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
   onError,
   transformErrorMessage,
 }) => {
-  const theme: LoginColorConfig = mergeWithElderTheme(colors);
+  const theme: LoginColorConfig = resolveLoginTheme(themeMode, colors);
 
   // Form state
   const [email, setEmail] = useState('');

@@ -7,6 +7,8 @@
 
 import React, { useEffect } from 'react';
 import { ModalProps } from './types';
+import { resolveTheme } from '../../theme';
+import { THEME_PRESETS } from './themes';
 
 export const Modal: React.FC<ModalProps> = ({
   isOpen,
@@ -16,7 +18,11 @@ export const Modal: React.FC<ModalProps> = ({
   className = '',
   closeOnOverlayClick = true,
   showCloseButton = true,
+  themeMode = 'dark',
+  colors,
 }) => {
+  const theme = resolveTheme(THEME_PRESETS, themeMode, colors);
+
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -49,18 +55,18 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-0 sm:p-4"
+      className={`fixed inset-0 ${theme.overlayBackground} flex items-center justify-center z-50 p-0 sm:p-4`}
       onClick={handleOverlayClick}
     >
-      <div className={`card w-full h-full sm:h-auto sm:max-w-2xl sm:max-h-[90vh] sm:rounded-lg overflow-y-auto ${className}`}>
+      <div className={`relative z-10 ${theme.modalBackground} w-full h-full sm:h-auto sm:max-w-2xl sm:max-h-[90vh] sm:rounded-lg overflow-y-auto p-6 ${className}`}>
         {(title || showCloseButton) && (
           <div className="flex justify-between items-center mb-4">
-            {title && <h2 className="text-xl font-bold text-gold-400">{title}</h2>}
+            {title && <h2 className={`text-xl font-bold ${theme.titleText}`}>{title}</h2>}
             {showCloseButton && (
               <button
                 type="button"
                 onClick={onClose}
-                className="text-gray-400 hover:text-white transition-colors"
+                className={`${theme.closeButtonText} ${theme.closeButtonHover} transition-colors`}
                 aria-label="Close modal"
               >
                 <svg

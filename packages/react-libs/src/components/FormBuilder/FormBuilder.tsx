@@ -10,7 +10,7 @@
  * - Built-in validation
  * - Error handling
  * - Loading states
- * - Customizable styling
+ * - Customizable styling via themeMode + colors
  */
 
 import React from 'react';
@@ -18,6 +18,8 @@ import { FormBuilderProps } from './types';
 import { Modal } from './Modal';
 import { FormField } from './FormField';
 import { useFormBuilder } from '../../hooks/useFormBuilder';
+import { resolveTheme } from '../../theme';
+import { THEME_PRESETS } from './themes';
 
 export const FormBuilder: React.FC<FormBuilderProps> = ({
   mode = 'inline',
@@ -36,7 +38,11 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
   closeOnOverlayClick = true,
   showCloseButton = true,
   className = '',
+  themeMode = 'dark',
+  colors,
 }) => {
+  const theme = resolveTheme(THEME_PRESETS, themeMode, colors);
+
   const {
     values,
     errors,
@@ -56,7 +62,7 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
   const renderForm = () => (
     <form onSubmit={handleSubmit} className={`space-y-4 ${className}`}>
       {error && (
-        <div className="p-3 bg-red-900/20 border border-red-500 rounded text-red-400 text-sm">
+        <div className={`p-3 ${theme.errorBannerBackground} border ${theme.errorBannerBorder} rounded ${theme.errorText} text-sm`}>
           {error}
         </div>
       )}
@@ -69,6 +75,8 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
           error={touched[field.name] ? errors[field.name] : undefined}
           onChange={handleChange}
           onBlur={handleBlur}
+          themeMode={themeMode}
+          colors={colors}
         />
       ))}
 
@@ -78,7 +86,7 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
             type="button"
             onClick={onCancel}
             disabled={isSubmitting || loading}
-            className="btn-secondary"
+            className={`px-4 py-2 rounded-md border ${theme.secondaryButtonBorder} ${theme.secondaryButton} ${theme.secondaryButtonText} ${theme.secondaryButtonHover} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {cancelLabel}
           </button>
@@ -86,7 +94,7 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
         <button
           type="submit"
           disabled={isSubmitting || loading}
-          className="btn-primary"
+          className={`px-4 py-2 rounded-md ${theme.primaryButton} ${theme.primaryButtonText} ${theme.primaryButtonHover} disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           {isSubmitting || loading ? (
             <span className="flex items-center gap-2">
@@ -128,6 +136,8 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
         title={title}
         closeOnOverlayClick={closeOnOverlayClick}
         showCloseButton={showCloseButton}
+        themeMode={themeMode}
+        colors={colors}
       >
         {renderForm()}
       </Modal>
@@ -136,7 +146,7 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
 
   return (
     <div className={className}>
-      {title && <h2 className="text-xl font-bold text-gold-400 mb-4">{title}</h2>}
+      {title && <h2 className={`text-xl font-bold ${theme.titleText} mb-4`}>{title}</h2>}
       {renderForm()}
     </div>
   );

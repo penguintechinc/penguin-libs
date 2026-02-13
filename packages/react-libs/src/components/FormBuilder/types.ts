@@ -6,6 +6,7 @@
  */
 
 import { ReactNode } from 'react';
+export type { ThemeMode } from '../../theme';
 
 export type FieldType =
   | 'text'
@@ -64,6 +65,53 @@ export interface FormConfig {
   className?: string;
 }
 
+/**
+ * Color configuration for FormBuilder theming
+ */
+export interface FormBuilderColorConfig {
+  // Background
+  formBackground: string;
+  modalBackground: string;
+  overlayBackground: string;
+
+  // Text
+  titleText: string;
+  labelText: string;
+  helperText: string;
+  errorText: string;
+
+  // Fields
+  fieldBackground: string;
+  fieldBorder: string;
+  fieldText: string;
+  fieldPlaceholder: string;
+  focusRing: string;
+  focusBorder: string;
+
+  // Buttons
+  primaryButton: string;
+  primaryButtonHover: string;
+  primaryButtonText: string;
+  secondaryButton: string;
+  secondaryButtonHover: string;
+  secondaryButtonText: string;
+  secondaryButtonBorder: string;
+
+  // Checkbox/Radio accent
+  accentColor: string;
+
+  // Close button (modal)
+  closeButtonText: string;
+  closeButtonHover: string;
+
+  // Error banner
+  errorBannerBackground: string;
+  errorBannerBorder: string;
+
+  // Radio/Checkbox option text
+  optionText: string;
+}
+
 export interface FormBuilderProps extends FormConfig {
   mode?: 'inline' | 'modal';
   isOpen?: boolean;
@@ -71,6 +119,10 @@ export interface FormBuilderProps extends FormConfig {
   error?: string | null;
   closeOnOverlayClick?: boolean;
   showCloseButton?: boolean;
+  /** Theme mode preset: 'dark' (default) or 'light'. Sets base colors. */
+  themeMode?: import('../../theme').ThemeMode;
+  /** Custom color overrides merged on top of the theme preset. */
+  colors?: Partial<FormBuilderColorConfig>;
 }
 
 export interface ModalProps {
@@ -81,6 +133,10 @@ export interface ModalProps {
   className?: string;
   closeOnOverlayClick?: boolean;
   showCloseButton?: boolean;
+  /** Theme mode preset: 'dark' (default) or 'light'. */
+  themeMode?: import('../../theme').ThemeMode;
+  /** Custom color overrides. */
+  colors?: Partial<FormBuilderColorConfig>;
 }
 
 export interface FormFieldProps {
@@ -89,4 +145,8 @@ export interface FormFieldProps {
   error?: string;
   onChange: (name: string, value: any) => void;
   onBlur?: (name: string) => void;
+  /** Theme mode preset: 'dark' (default) or 'light'. */
+  themeMode?: import('../../theme').ThemeMode;
+  /** Custom color overrides. */
+  colors?: Partial<FormBuilderColorConfig>;
 }

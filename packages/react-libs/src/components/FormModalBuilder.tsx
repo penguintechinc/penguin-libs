@@ -329,6 +329,10 @@ export interface ColorConfig {
   errorTabBorder: string;
 }
 
+export type { ThemeMode } from '../theme';
+import type { ThemeMode } from '../theme';
+import { resolveTheme } from '../theme';
+
 export interface FormModalBuilderProps {
   title: string;
   fields: FormField[];
@@ -339,12 +343,16 @@ export interface FormModalBuilderProps {
   submitButtonText?: string;
   cancelButtonText?: string;
   width?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  /** @deprecated Use `themeMode` and `colors` instead */
   backgroundColor?: string;
   maxHeight?: string;
   zIndex?: number;
   autoTabThreshold?: number;
   fieldsPerTab?: number;
-  colors?: ColorConfig;
+  /** Theme mode preset: 'dark' (default) or 'light'. Sets base colors. */
+  themeMode?: ThemeMode;
+  /** Custom color overrides merged on top of the theme preset. Pass a full ColorConfig or partial overrides. */
+  colors?: Partial<ColorConfig>;
 }
 
 /**
@@ -360,39 +368,28 @@ export function generatePassword(length = 14): string {
   return password;
 }
 
-// Default dark mode theme with navy background and gold accents
-const DEFAULT_COLORS: ColorConfig = {
-  // Background colors - Navy dark mode
+/** Dark theme - navy background with gold accents */
+export const DARK_THEME: ColorConfig = {
   modalBackground: 'bg-slate-800',
   headerBackground: 'bg-slate-800',
   footerBackground: 'bg-slate-900',
   overlayBackground: 'bg-gray-900/75',
-
-  // Text colors - Gold and white
   titleText: 'text-amber-400',
   labelText: 'text-amber-300',
   descriptionText: 'text-slate-400',
   errorText: 'text-red-400',
   buttonText: 'text-slate-900',
-
-  // Field colors - White backgrounds for contrast
-  fieldBackground: 'bg-white',
+  fieldBackground: 'bg-slate-900',
   fieldBorder: 'border-slate-600',
-  fieldText: 'text-slate-900',
+  fieldText: 'text-amber-300',
   fieldPlaceholder: 'placeholder-slate-500',
-
-  // Focus/Ring colors - Gold accents
   focusRing: 'focus:ring-amber-500',
   focusBorder: 'focus:border-amber-500',
-
-  // Button colors - Gold primary
   primaryButton: 'bg-amber-500',
   primaryButtonHover: 'hover:bg-amber-600',
   secondaryButton: 'bg-slate-700',
   secondaryButtonHover: 'hover:bg-slate-600',
   secondaryButtonBorder: 'border-slate-600',
-
-  // Tab colors - Gold active, slate inactive
   activeTab: 'text-amber-400',
   activeTabBorder: 'border-amber-500',
   inactiveTab: 'text-slate-400',
@@ -400,6 +397,42 @@ const DEFAULT_COLORS: ColorConfig = {
   tabBorder: 'border-slate-700',
   errorTabText: 'text-red-400',
   errorTabBorder: 'border-red-500',
+};
+
+/** Light theme - white background with blue accents */
+export const LIGHT_THEME: ColorConfig = {
+  modalBackground: 'bg-white',
+  headerBackground: 'bg-gray-50',
+  footerBackground: 'bg-gray-100',
+  overlayBackground: 'bg-gray-500/75',
+  titleText: 'text-gray-900',
+  labelText: 'text-gray-700',
+  descriptionText: 'text-gray-500',
+  errorText: 'text-red-600',
+  buttonText: 'text-white',
+  fieldBackground: 'bg-white',
+  fieldBorder: 'border-gray-300',
+  fieldText: 'text-gray-900',
+  fieldPlaceholder: 'placeholder-gray-400',
+  focusRing: 'focus:ring-blue-500',
+  focusBorder: 'focus:border-blue-500',
+  primaryButton: 'bg-blue-600',
+  primaryButtonHover: 'hover:bg-blue-700',
+  secondaryButton: 'bg-white',
+  secondaryButtonHover: 'hover:bg-gray-50',
+  secondaryButtonBorder: 'border-gray-300',
+  activeTab: 'text-blue-600',
+  activeTabBorder: 'border-blue-500',
+  inactiveTab: 'text-gray-500',
+  inactiveTabHover: 'hover:text-gray-700 hover:border-gray-300',
+  tabBorder: 'border-gray-200',
+  errorTabText: 'text-red-600',
+  errorTabBorder: 'border-red-500',
+};
+
+const THEME_PRESETS: Record<ThemeMode, ColorConfig> = {
+  dark: DARK_THEME,
+  light: LIGHT_THEME,
 };
 
 export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
@@ -412,16 +445,17 @@ export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
   submitButtonText = 'Submit',
   cancelButtonText = 'Cancel',
   width = 'md',
-  // backgroundColor kept for backwards compatibility but replaced by colors.modalBackground
-  backgroundColor: _backgroundColor = 'bg-white',
+  backgroundColor: _backgroundColor,
   maxHeight = 'max-h-[80vh]',
   zIndex = 9999,
   autoTabThreshold = 8,
   fieldsPerTab = 6,
+  themeMode = 'dark',
   colors,
 }) => {
-  void _backgroundColor; // Suppress unused variable warning
-  const theme = colors || DEFAULT_COLORS;
+  void _backgroundColor; // Deprecated, kept for backwards compatibility
+  const theme = resolveTheme(THEME_PRESETS, themeMode, colors);
+  const isDark = themeMode === 'dark';
   const [formData, setFormData] = useState<Record<string, any>>(() => {
     const initial: Record<string, any> = {};
     fields.forEach((field) => {
@@ -833,6 +867,7 @@ export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
             required={field.required}
             disabled={field.disabled}
             className={`${commonClasses} ${errorClasses} ${field.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            style={isDark ? { colorScheme: 'dark' } : undefined}
           >
             <option value="">Select...</option>
             {field.options?.map((option) => (
@@ -1026,6 +1061,7 @@ export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
             pattern={field.pattern}
             accept={field.accept}
             className={`${commonClasses} ${errorClasses} ${field.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            {...(['date', 'time', 'datetime-local'].includes(field.type) && isDark ? { style: { colorScheme: 'dark' } } : {})}
           />
         );
     }

@@ -1,10 +1,11 @@
 import type { LoginColorConfig } from '../types';
+import type { ThemeMode } from '../../../theme';
+import { resolveTheme } from '../../../theme';
 
 /**
- * Elder-style dark theme with gold/amber accents.
- * Matches the project template's default dark mode styling.
+ * Dark theme - Elder-style with gold/amber accents on dark slate.
  */
-export const ELDER_LOGIN_THEME: LoginColorConfig = {
+export const DARK_THEME: LoginColorConfig = {
   // Page colors - dark-950 background
   pageBackground: 'bg-slate-950',
   cardBackground: 'bg-slate-800',
@@ -56,11 +57,82 @@ export const ELDER_LOGIN_THEME: LoginColorConfig = {
 };
 
 /**
- * Merge partial color config with Elder theme defaults
+ * Light theme - white/gray background with blue accents.
+ */
+export const LIGHT_THEME: LoginColorConfig = {
+  // Page colors
+  pageBackground: 'bg-gray-50',
+  cardBackground: 'bg-white',
+  cardBorder: 'border-gray-200',
+
+  // Text colors
+  titleText: 'text-gray-900',
+  subtitleText: 'text-gray-500',
+  labelText: 'text-gray-700',
+  inputText: 'text-gray-900',
+  placeholderText: 'placeholder-gray-400',
+  errorText: 'text-red-600',
+  linkText: 'text-blue-600',
+  linkHoverText: 'hover:text-blue-500',
+
+  // Input colors
+  inputBackground: 'bg-white',
+  inputBorder: 'border-gray-300',
+  inputFocusBorder: 'focus:border-blue-500',
+  inputFocusRing: 'focus:ring-blue-500',
+
+  // Button colors
+  primaryButton: 'bg-blue-600',
+  primaryButtonHover: 'hover:bg-blue-700',
+  primaryButtonText: 'text-white',
+  secondaryButton: 'bg-white',
+  secondaryButtonHover: 'hover:bg-gray-50',
+  secondaryButtonText: 'text-gray-700',
+  secondaryButtonBorder: 'border-gray-300',
+
+  // Social button colors
+  socialButtonBackground: 'bg-white',
+  socialButtonBorder: 'border-gray-300',
+  socialButtonText: 'text-gray-700',
+  socialButtonHover: 'hover:bg-gray-50',
+
+  // Divider
+  dividerColor: 'border-gray-300',
+  dividerText: 'text-gray-400',
+
+  // Footer
+  footerText: 'text-gray-400',
+  footerLinkText: 'text-blue-600',
+
+  // GDPR banner
+  bannerBackground: 'bg-white',
+  bannerText: 'text-gray-700',
+  bannerBorder: 'border-gray-200',
+};
+
+/** @deprecated Use themeMode='dark' instead */
+export const ELDER_LOGIN_THEME = DARK_THEME;
+
+const THEME_PRESETS: Record<ThemeMode, LoginColorConfig> = {
+  dark: DARK_THEME,
+  light: LIGHT_THEME,
+};
+
+/**
+ * Resolve login theme from mode + optional overrides.
+ */
+export function resolveLoginTheme(
+  mode: ThemeMode = 'dark',
+  overrides?: Partial<LoginColorConfig>,
+): LoginColorConfig {
+  return resolveTheme(THEME_PRESETS, mode, overrides);
+}
+
+/**
+ * @deprecated Use resolveLoginTheme instead
  */
 export function mergeWithElderTheme(
   partial?: Partial<LoginColorConfig>
 ): LoginColorConfig {
-  if (!partial) return ELDER_LOGIN_THEME;
-  return { ...ELDER_LOGIN_THEME, ...partial };
+  return resolveLoginTheme('dark', partial);
 }

@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useCallback, ReactNode } from 'react';
+import type { ThemeMode } from '../theme';
+import { resolveTheme } from '../theme';
+export type { ThemeMode } from '../theme';
 
 export interface MenuItem {
   name: string;
@@ -50,7 +53,10 @@ export interface SidebarMenuProps {
   footerItems?: MenuItem[];
   userRole?: string;
   width?: string;
-  colors?: SidebarColorConfig;
+  /** Theme mode preset: 'dark' (default) or 'light'. Sets base colors. */
+  themeMode?: ThemeMode;
+  /** Custom color overrides merged on top of the theme preset. */
+  colors?: Partial<SidebarColorConfig>;
   collapseIcon?: React.ComponentType<{ className?: string }>;
   expandIcon?: React.ComponentType<{ className?: string }>;
   mobileOpen?: boolean;
@@ -61,12 +67,15 @@ export interface SidebarMenuProps {
 export interface SidebarMenuTriggerProps {
   onClick: () => void;
   className?: string;
-  colors?: SidebarColorConfig;
+  /** Theme mode preset: 'dark' (default) or 'light'. */
+  themeMode?: ThemeMode;
+  /** Custom color overrides merged on top of the theme preset. */
+  colors?: Partial<SidebarColorConfig>;
   isOpen?: boolean;
 }
 
-// Default Elder-inspired color scheme (slate dark with blue accent)
-const DEFAULT_COLORS: SidebarColorConfig = {
+/** Dark theme - slate background with blue accent */
+const DARK_THEME: SidebarColorConfig = {
   sidebarBackground: 'bg-slate-800',
   sidebarBorder: 'border-slate-700',
   logoSectionBorder: 'border-slate-700',
@@ -82,6 +91,30 @@ const DEFAULT_COLORS: SidebarColorConfig = {
   scrollbarTrack: 'bg-slate-800',
   scrollbarThumb: 'bg-slate-600',
   scrollbarThumbHover: 'hover:bg-slate-500',
+};
+
+/** Light theme - white/gray background with blue accent */
+const LIGHT_THEME: SidebarColorConfig = {
+  sidebarBackground: 'bg-white',
+  sidebarBorder: 'border-gray-200',
+  logoSectionBorder: 'border-gray-200',
+  categoryHeaderText: 'text-gray-500',
+  menuItemText: 'text-gray-700',
+  menuItemHover: 'hover:bg-gray-100 hover:text-gray-900',
+  menuItemActive: 'bg-blue-600',
+  menuItemActiveText: 'text-white',
+  collapseIndicator: 'text-gray-400',
+  footerBorder: 'border-gray-200',
+  footerButtonText: 'text-gray-700',
+  footerButtonHover: 'hover:bg-gray-100 hover:text-gray-900',
+  scrollbarTrack: 'bg-gray-100',
+  scrollbarThumb: 'bg-gray-300',
+  scrollbarThumbHover: 'hover:bg-gray-400',
+};
+
+const THEME_PRESETS: Record<ThemeMode, SidebarColorConfig> = {
+  dark: DARK_THEME,
+  light: LIGHT_THEME,
 };
 
 // Default collapse/expand icons (simple chevron)
@@ -104,10 +137,11 @@ const DefaultChevronRight: React.FC<{ className?: string }> = ({ className }) =>
 export const SidebarMenuTrigger: React.FC<SidebarMenuTriggerProps> = ({
   onClick,
   className = '',
+  themeMode = 'dark',
   colors,
   isOpen = false,
 }) => {
-  const theme = colors || DEFAULT_COLORS;
+  const theme = resolveTheme(THEME_PRESETS, themeMode, colors);
 
   return (
     <button
@@ -137,6 +171,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   footerItems = [],
   userRole,
   width = 'w-64',
+  themeMode = 'dark',
   colors,
   collapseIcon: CollapseIcon = DefaultChevronDown,
   expandIcon: ExpandIcon = DefaultChevronRight,
@@ -145,7 +180,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   closeOnNavigate = true,
 }) => {
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
-  const theme = colors || DEFAULT_COLORS;
+  const theme = resolveTheme(THEME_PRESETS, themeMode, colors);
 
   const toggleCategory = (header: string) => {
     setCollapsedCategories((prev) => ({
