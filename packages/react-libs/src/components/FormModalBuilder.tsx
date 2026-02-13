@@ -366,7 +366,7 @@ const DEFAULT_COLORS: ColorConfig = {
   modalBackground: 'bg-slate-800',
   headerBackground: 'bg-slate-800',
   footerBackground: 'bg-slate-900',
-  overlayBackground: 'bg-gray-900 bg-opacity-75',
+  overlayBackground: 'bg-gray-900/75',
 
   // Text colors - Gold and white
   titleText: 'text-amber-400',
@@ -1042,7 +1042,7 @@ export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
           &#8203;
         </span>
 
-        <div className={`inline-block align-bottom ${theme.modalBackground} text-left shadow-xl transform transition-all w-full h-full sm:h-auto sm:rounded-lg sm:my-8 sm:align-middle ${widthClasses[width]} sm:w-full sm:${maxHeight} flex flex-col`}>
+        <div className={`relative z-10 inline-block align-bottom ${theme.modalBackground} text-left shadow-xl transform transition-all w-full h-full sm:h-auto sm:rounded-lg sm:my-8 sm:align-middle ${widthClasses[width]} sm:w-full sm:${maxHeight} flex flex-col`}>
           {/* Fixed header */}
           <div className={`px-4 pt-5 pb-4 sm:p-6 sm:pb-4 border-b ${theme.tabBorder} ${theme.headerBackground}`}>
             <h3 className={`text-lg leading-6 font-medium ${theme.titleText}`} id="modal-title">
