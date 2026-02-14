@@ -349,6 +349,8 @@ export interface FormModalBuilderProps {
   zIndex?: number;
   autoTabThreshold?: number;
   fieldsPerTab?: number;
+  /** Custom labels for auto-generated tabs. If provided, overrides default "General", "Step 2", etc. */
+  tabLabels?: string[];
   /** Theme mode preset: 'dark' (default) or 'light'. Sets base colors. */
   themeMode?: ThemeMode;
   /** Custom color overrides merged on top of the theme preset. Pass a full ColorConfig or partial overrides. */
@@ -450,6 +452,7 @@ export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
   zIndex = 9999,
   autoTabThreshold = 8,
   fieldsPerTab = 6,
+  tabLabels,
   themeMode = 'dark',
   colors,
 }) => {
@@ -542,9 +545,13 @@ export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
       for (let i = 0; i < numTabs; i++) {
         const start = i * fieldsPerTab;
         const end = Math.min(start + fieldsPerTab, fields.length);
+        // Use custom label if provided, otherwise use default
+        const defaultLabel = i === 0 ? 'General' : `Step ${i + 1}`;
+        const label = tabLabels && tabLabels[i] ? tabLabels[i] : defaultLabel;
+
         generatedTabs.push({
           id: `tab-${i}`,
-          label: i === 0 ? 'General' : `Step ${i + 1}`,
+          label,
           fields: fields.slice(start, end),
         });
       }
@@ -554,7 +561,7 @@ export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
 
     // No tabs needed
     return null;
-  }, [fields, manualTabs, autoTabThreshold, fieldsPerTab]);
+  }, [fields, manualTabs, autoTabThreshold, fieldsPerTab, tabLabels]);
 
   // Filter fields based on conditional visibility (showWhen, triggerField, hidden)
   const isFieldVisible = useCallback((field: FormField): boolean => {

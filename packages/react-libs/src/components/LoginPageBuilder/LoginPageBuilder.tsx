@@ -650,12 +650,13 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
         />
       )}
 
-      {/* GDPR Cookie Consent Banner */}
-      {gdpr && showBanner && (
+      {/* GDPR Cookie Consent Banner / Settings Button */}
+      {gdpr && (
         <CookieConsent
           gdpr={gdpr}
           onAccept={handleCookieAccept}
           colors={colors}
+          showBanner={showBanner}
         />
       )}
     </div>

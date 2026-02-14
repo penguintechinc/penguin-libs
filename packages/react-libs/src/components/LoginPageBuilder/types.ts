@@ -373,6 +373,8 @@ export interface CookieConsentProps {
   gdpr: GDPRConfig;
   onAccept: (consent: CookieConsentState) => void;
   colors?: Partial<LoginColorConfig>;
+  /** If false, shows only the floating settings button instead of the full banner */
+  showBanner?: boolean;
 }
 
 /**

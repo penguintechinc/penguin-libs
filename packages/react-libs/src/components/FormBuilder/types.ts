@@ -29,6 +29,12 @@ export interface SelectOption {
   disabled?: boolean;
 }
 
+export interface FormTab {
+  id: string;
+  label: string;
+  fields: FieldConfig[];
+}
+
 export interface FieldConfig {
   name: string;
   label: string;
@@ -50,6 +56,8 @@ export interface FieldConfig {
   validate?: (value: any) => string | null;
   onChange?: (value: any) => void;
   className?: string;
+  /** Optional tab assignment for grouping fields */
+  tab?: string;
 }
 
 export interface FormConfig {
@@ -63,6 +71,14 @@ export interface FormConfig {
   validateOnChange?: boolean;
   validateOnBlur?: boolean;
   className?: string;
+  /** Optional tabs for grouping fields */
+  tabs?: FormTab[];
+  /** Custom labels for auto-generated tabs (when fields exceed threshold) */
+  tabLabels?: string[];
+  /** Number of fields before auto-generating tabs (default: 8) */
+  autoTabThreshold?: number;
+  /** Fields per tab when auto-generating (default: 6) */
+  fieldsPerTab?: number;
 }
 
 /**

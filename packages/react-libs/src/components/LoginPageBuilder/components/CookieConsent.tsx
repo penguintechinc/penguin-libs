@@ -191,11 +191,13 @@ const PreferencesModal: React.FC<{
  * - Options: Accept All, Essential Only, Manage Preferences
  * - Preferences modal for granular control
  * - Consent stored in localStorage with timestamp
+ * - Floating settings button (magnifying glass) after acceptance for changing preferences
  */
 export const CookieConsent: React.FC<CookieConsentProps> = ({
   gdpr,
   onAccept,
   colors,
+  showBanner = true,
 }) => {
   const theme: LoginColorConfig = { ...ELDER_LOGIN_THEME, ...colors };
   const [showPreferences, setShowPreferences] = useState(false);
@@ -244,83 +246,107 @@ export const CookieConsent: React.FC<CookieConsentProps> = ({
 
   return (
     <>
-      {/* Cookie consent banner */}
-      <div
-        className={`fixed bottom-0 left-0 right-0 z-50 ${theme.bannerBackground} border-t ${theme.bannerBorder} shadow-lg`}
-      >
-        <div className="max-w-4xl mx-auto px-4 py-4 sm:px-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            {/* Cookie icon */}
-            <div className="hidden sm:flex shrink-0 w-10 h-10 rounded-full bg-amber-500/10 items-center justify-center">
-              <svg
-                className="w-5 h-5 text-amber-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
-
-            {/* Text content */}
-            <div className="flex-1">
-              <p className={`text-sm ${theme.bannerText}`}>
-                {consentText}{' '}
-                <a
-                  href={gdpr.privacyPolicyUrl}
-                  className={`${theme.linkText} ${theme.linkHoverText} underline`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+      {showBanner ? (
+        /* Cookie consent banner */
+        <div
+          className={`fixed bottom-0 left-0 right-0 z-50 ${theme.bannerBackground} border-t ${theme.bannerBorder} shadow-lg`}
+        >
+          <div className="max-w-4xl mx-auto px-4 py-4 sm:px-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              {/* Cookie icon */}
+              <div className="hidden sm:flex shrink-0 w-10 h-10 rounded-full bg-amber-500/10 items-center justify-center">
+                <svg
+                  className="w-5 h-5 text-amber-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
                 >
-                  Privacy Policy
-                </a>
-                {gdpr.cookiePolicyUrl && (
-                  <>
-                    {' | '}
-                    <a
-                      href={gdpr.cookiePolicyUrl}
-                      className={`${theme.linkText} ${theme.linkHoverText} underline`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Cookie Policy
-                    </a>
-                  </>
-                )}
-              </p>
-            </div>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
 
-            {/* Action buttons */}
-            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 shrink-0">
-              <button
-                onClick={handleAcceptAll}
-                className={`w-full sm:w-auto px-4 py-2 text-sm font-medium rounded-lg ${theme.primaryButton} ${theme.primaryButtonText} ${theme.primaryButtonHover} transition-colors`}
-              >
-                Accept All
-              </button>
-              <button
-                onClick={handleAcceptEssential}
-                className={`w-full sm:w-auto px-4 py-2 text-sm font-medium rounded-lg border ${theme.secondaryButton} ${theme.secondaryButtonText} ${theme.secondaryButtonBorder} ${theme.secondaryButtonHover} transition-colors`}
-              >
-                Essential Only
-              </button>
-              {gdpr.showPreferences !== false && (
+              {/* Text content */}
+              <div className="flex-1">
+                <p className={`text-sm ${theme.bannerText}`}>
+                  {consentText}{' '}
+                  <a
+                    href={gdpr.privacyPolicyUrl}
+                    className={`${theme.linkText} ${theme.linkHoverText} underline`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Privacy Policy
+                  </a>
+                  {gdpr.cookiePolicyUrl && (
+                    <>
+                      {' | '}
+                      <a
+                        href={gdpr.cookiePolicyUrl}
+                        className={`${theme.linkText} ${theme.linkHoverText} underline`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Cookie Policy
+                      </a>
+                    </>
+                  )}
+                </p>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 shrink-0">
                 <button
-                  onClick={() => setShowPreferences(true)}
-                  className={`w-full sm:w-auto px-4 py-2 text-sm font-medium ${theme.linkText} ${theme.linkHoverText} transition-colors`}
+                  onClick={handleAcceptAll}
+                  className={`w-full sm:w-auto px-4 py-2 text-sm font-medium rounded-lg ${theme.primaryButton} ${theme.primaryButtonText} ${theme.primaryButtonHover} transition-colors`}
                 >
-                  Manage Preferences
+                  Accept All
                 </button>
-              )}
+                <button
+                  onClick={handleAcceptEssential}
+                  className={`w-full sm:w-auto px-4 py-2 text-sm font-medium rounded-lg border ${theme.secondaryButton} ${theme.secondaryButtonText} ${theme.secondaryButtonBorder} ${theme.secondaryButtonHover} transition-colors`}
+                >
+                  Essential Only
+                </button>
+                {gdpr.showPreferences !== false && (
+                  <button
+                    onClick={() => setShowPreferences(true)}
+                    className={`w-full sm:w-auto px-4 py-2 text-sm font-medium ${theme.linkText} ${theme.linkHoverText} transition-colors`}
+                  >
+                    Manage Preferences
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        /* Floating settings button - shown after consent accepted */
+        <button
+          onClick={() => setShowPreferences(true)}
+          className={`fixed bottom-4 left-4 z-50 w-12 h-12 rounded-full ${theme.primaryButton} ${theme.primaryButtonText} shadow-lg ${theme.primaryButtonHover} transition-all hover:scale-110 flex items-center justify-center group`}
+          aria-label="Cookie Settings"
+          title="Cookie Settings"
+        >
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </button>
+      )}
 
       {/* Preferences modal */}
       <PreferencesModal
