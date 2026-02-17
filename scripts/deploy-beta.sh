@@ -16,7 +16,7 @@ NAMESPACE="penguin-libs"
 CHART_PATH="k8s/helm/penguin-libs"
 IMAGE_REGISTRY="registry-dal2.penguintech.io"
 KUBE_CONTEXT="dal2-beta"
-APP_HOST="penguin-libs.penguintech.io"
+APP_HOST="penguin-libs.penguintech.cloud"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TIMESTAMP=$(date +%s)
 BUILD_TAG="${TIMESTAMP}"
@@ -483,7 +483,7 @@ CONFIGURATION:
   Namespace:        penguin-libs
   Kube Context:     dal2-beta
   Image Registry:   registry-dal2.penguintech.io
-  App Host:         penguin-libs.penguintech.io
+  App Host:         penguin-libs.penguintech.cloud
   Helm Chart:       k8s/helm/penguin-libs
   Kustomize Base:   k8s/kustomize/base
   Kustomize Overlay: k8s/kustomize/overlays/beta
