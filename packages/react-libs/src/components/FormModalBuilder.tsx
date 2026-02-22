@@ -136,11 +136,11 @@ function buildFieldSchema(field: FormField): ZodType {
 
   switch (field.type) {
     case 'email':
-      schema = z.email(`${field.label} must be a valid email`);
+      schema = z.string().email(`${field.label} must be a valid email`);
       break;
 
     case 'url':
-      schema = z.url(`${field.label} must be a valid URL`);
+      schema = z.string().url(`${field.label} must be a valid URL`);
       break;
 
     case 'number': {
