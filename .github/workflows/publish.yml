@@ -4,11 +4,14 @@ on:
   push:
     tags:
       - 'react-libs-v*'
+      - 'react-aaa-v*'
       - 'python-libs-v*'
       - 'python-licensing-v*'
       - 'python-secrets-v*'
       - 'python-utils-v*'
+      - 'python-aaa-v*'
       - 'flutter-libs-v*'
+      - 'go-aaa-v*'
       - 'v*'
   workflow_dispatch:
     inputs:
@@ -19,10 +22,12 @@ on:
         type: choice
         options:
           - react-libs
+          - react-aaa
           - python-libs
           - python-licensing
           - python-secrets
           - python-utils
+          - python-aaa
           - flutter-libs
           - all
 
@@ -382,3 +387,145 @@ jobs:
           echo "**Package**: flutter_libs" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
           echo "**Registry**: pub.dev (dry-run)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # Python AAA - PyPI
+  # ============================================
+  publish-python-aaa:
+    name: Publish Python AAA
+    runs-on: ubuntu-latest
+    environment: pypi-aaa
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      (github.event.inputs.package == 'python-aaa' || github.event.inputs.package == 'all') ||
+      startsWith(github.ref, 'refs/tags/python-aaa-v') ||
+      startsWith(github.ref, 'refs/tags/v')
+
+    defaults:
+      run:
+        working-directory: packages/python-aaa
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Check package
+        run: twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/python-aaa/dist/
+
+      - name: Create release summary
+        run: |
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "## Published Package" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: penguin-aaa" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # React AAA - GitHub Packages (npm)
+  # ============================================
+  publish-react-aaa:
+    name: Publish React AAA
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      (github.event.inputs.package == 'react-aaa' || github.event.inputs.package == 'all') ||
+      startsWith(github.ref, 'refs/tags/react-aaa-v') ||
+      startsWith(github.ref, 'refs/tags/v')
+
+    defaults:
+      run:
+        working-directory: packages/react-aaa
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@penguintechinc'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      - name: Build package
+        run: npm run build
+
+      - name: Run type check
+        run: npm run typecheck
+
+      - name: Publish to GitHub Packages
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release summary
+        run: |
+          echo "## Published Package" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: @penguintechinc/react-aaa" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: GitHub Packages (npm)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # Go AAA - No publish needed (go get from repo)
+  # ============================================
+  validate-go-aaa:
+    name: Validate Go AAA
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/')
+
+    defaults:
+      run:
+        working-directory: packages/go-aaa
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test -race ./...
+
+      - name: Create release summary
+        run: |
+          echo "## Go Module Validated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**go-aaa**: Ready for use via \`go get\`" >> $GITHUB_STEP_SUMMARY

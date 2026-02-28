@@ -3,11 +3,19 @@ Sanitized logging utilities for Penguin Tech applications.
 
 Provides logging helpers that automatically sanitize sensitive data
 to prevent accidental exposure of passwords, tokens, emails, etc.
+Built on structlog for structured, production-ready logging.
 """
 
 import logging
 import re
-from typing import Any
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
+
+import structlog
+from structlog.types import EventDict, Processor
+
+if TYPE_CHECKING:
+    from .sinks import Sink
 
 # Keys that should never be logged
 SENSITIVE_KEYS = frozenset({
@@ -60,7 +68,7 @@ def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
         if key_lower in SENSITIVE_KEYS or any(s in key_lower for s in SENSITIVE_KEYS):
             sanitized[key] = "[REDACTED]"
         elif isinstance(value, str):
-            # Check for email addresses - only log domain
+            # Check for email addresses — only log domain
             if "@" in value and EMAIL_REGEX.match(value):
                 parts = value.split("@")
                 if len(parts) == 2:
@@ -82,68 +90,115 @@ def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
     return sanitized
 
 
-def get_logger(name: str, level: int = logging.INFO) -> logging.Logger:
+def _sanitize_processor(logger: Any, method: str, event_dict: EventDict) -> EventDict:
+    """structlog processor that sanitizes all dict values in the event."""
+    return sanitize_log_data(event_dict)  # type: ignore[return-value]
+
+
+class _SinkProcessor:
+    """structlog processor that forwards events to registered sinks."""
+
+    def __init__(self, sinks: Sequence["Sink"]) -> None:
+        self._sinks = list(sinks)
+
+    def __call__(self, logger: Any, method: str, event_dict: EventDict) -> EventDict:
+        for sink in self._sinks:
+            sink.emit(dict(event_dict))
+        return event_dict
+
+
+def configure_logging(
+    level: int = logging.INFO,
+    json_output: bool = False,
+    sinks: Sequence["Sink"] | None = None,
+) -> None:
     """
-    Get a logger with Penguin Tech standard formatting.
+    Configure structlog for the application.
+
+    Sets up a processor chain that adds log level, ISO timestamps, sanitizes
+    sensitive fields, and renders output as JSON or a human-readable console
+    format. Optionally forwards events to additional sinks.
 
     Args:
-        name: Logger name (usually __name__ or component name)
-        level: Logging level (default: INFO)
+        level: Minimum logging level (default: INFO).
+        json_output: Render as JSON lines when True, console format when False.
+        sinks: Optional sequence of Sink instances to receive every event.
+    """
+    processors: list[Processor] = [
+        structlog.stdlib.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        _sanitize_processor,
+    ]
+
+    if sinks:
+        processors.append(_SinkProcessor(sinks))
+
+    if json_output:
+        processors.append(structlog.processors.JSONRenderer())
+    else:
+        processors.append(structlog.dev.ConsoleRenderer())
+
+    structlog.configure(
+        processors=processors,
+        wrapper_class=structlog.stdlib.BoundLogger,
+        context_class=dict,
+        logger_factory=structlog.PrintLoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+    logging.basicConfig(level=level)
+
+
+def get_logger(name: str, level: int = logging.INFO) -> structlog.stdlib.BoundLogger:
+    """
+    Get a structlog BoundLogger with Penguin Tech standard configuration.
+
+    Args:
+        name: Logger name (usually __name__ or component name).
+        level: Logging level (default: INFO).
 
     Returns:
-        Configured logger instance
+        Configured structlog BoundLogger instance.
     """
-    logger = logging.getLogger(name)
-
-    if not logger.handlers:
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            fmt="[%(name)s] %(levelname)s: %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-
-    logger.setLevel(level)
-    return logger
+    logging.getLogger(name).setLevel(level)
+    return structlog.get_logger(name)
 
 
 class SanitizedLogger:
     """
-    A logger wrapper that automatically sanitizes data before logging.
+    A logger that automatically sanitizes data before emitting log events.
+
+    Delegates to a structlog BoundLogger internally while preserving the
+    original (msg, data) method signature for backward compatibility.
 
     Usage:
         log = SanitizedLogger("MyComponent")
         log.info("User login", {"email": "user@example.com", "password": "secret"})
-        # Logs: [MyComponent] INFO: User login {'email': '[email]@example.com', 'password': '[REDACTED]'}
     """
 
     def __init__(self, name: str, level: int = logging.INFO) -> None:
         self._logger = get_logger(name, level)
 
-    def _log(self, level: int, message: str, data: dict[str, Any] | None = None) -> None:
-        if data:
-            sanitized = sanitize_log_data(data)
-            self._logger.log(level, f"{message} {sanitized}")
-        else:
-            self._logger.log(level, message)
+    def _log(self, method: str, message: str, data: dict[str, Any] | None = None) -> None:
+        sanitized = sanitize_log_data(data) if data else {}
+        getattr(self._logger, method)(message, **sanitized)
 
     def debug(self, message: str, data: dict[str, Any] | None = None) -> None:
         """Log a debug message with optional sanitized data."""
-        self._log(logging.DEBUG, message, data)
+        self._log("debug", message, data)
 
     def info(self, message: str, data: dict[str, Any] | None = None) -> None:
         """Log an info message with optional sanitized data."""
-        self._log(logging.INFO, message, data)
+        self._log("info", message, data)
 
     def warning(self, message: str, data: dict[str, Any] | None = None) -> None:
         """Log a warning message with optional sanitized data."""
-        self._log(logging.WARNING, message, data)
+        self._log("warning", message, data)
 
     def error(self, message: str, data: dict[str, Any] | None = None) -> None:
         """Log an error message with optional sanitized data."""
-        self._log(logging.ERROR, message, data)
+        self._log("error", message, data)
 
     def critical(self, message: str, data: dict[str, Any] | None = None) -> None:
         """Log a critical message with optional sanitized data."""
-        self._log(logging.CRITICAL, message, data)
+        self._log("critical", message, data)

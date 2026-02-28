@@ -20,6 +20,27 @@ jobs:
       - run: npm run typecheck -w @penguintechinc/react-libs
       - run: npm run test -w @penguintechinc/react-libs
 
+  build-react-aaa:
+    name: Build & Test React AAA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build -w @penguintechinc/react-aaa
+      - name: Typecheck
+        run: npm run typecheck -w @penguintechinc/react-aaa
+      - name: Lint
+        run: npm run lint -w @penguintechinc/react-aaa
+      - name: Test
+        run: npm test -w @penguintechinc/react-aaa
+      - name: Security
+        run: cd packages/react-aaa && npm audit --omit=dev
+
   build-python:
     name: Build & Test Python Packages
     runs-on: ubuntu-latest
@@ -34,6 +55,35 @@ jobs:
       - run: pip install -e "packages/python-licensing[dev]"
       - run: pytest packages/python-licensing/tests -v
       - run: cd packages/python-secrets && pip install -e ".[dev]" && pytest tests -v
+      - name: Lint - python-utils
+        run: cd packages/python-utils && ruff check src/ tests/
+      - name: Security - bandit
+        run: cd packages/python-utils && bandit -r src/ -c pyproject.toml
+      - name: Security - pip-audit
+        run: cd packages/python-utils && pip-audit
+
+  build-python-aaa:
+    name: Build & Test Python AAA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install
+        run: cd packages/python-aaa && pip install -e ".[dev]"
+      - name: Lint
+        run: cd packages/python-aaa && ruff check src/ tests/
+      - name: Format check
+        run: cd packages/python-aaa && ruff format --check src/ tests/
+      - name: Type check
+        run: cd packages/python-aaa && mypy src/
+      - name: Security - bandit
+        run: cd packages/python-aaa && bandit -r src/ -c pyproject.toml
+      - name: Security - pip-audit
+        run: cd packages/python-aaa && pip-audit
+      - name: Test
+        run: cd packages/python-aaa && pytest tests/ -v --tb=short --cov=penguin_aaa
 
   build-go:
     name: Build & Test Go Packages
@@ -49,6 +99,45 @@ jobs:
         working-directory: packages/go-h3
       - run: go test -race ./...
         working-directory: packages/go-h3
+      - name: Lint - go-common
+        uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: packages/go-common
+      - name: Security - govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          cd packages/go-common && govulncheck ./...
+      - name: Security - gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          cd packages/go-common && gosec -quiet ./...
+
+  build-go-aaa:
+    name: Build & Test Go AAA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Build
+        run: cd packages/go-aaa && go build ./...
+      - name: Vet
+        run: cd packages/go-aaa && go vet ./...
+      - name: Test
+        run: cd packages/go-aaa && go test -race -v ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: packages/go-aaa
+      - name: Security - govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          cd packages/go-aaa && govulncheck ./...
+      - name: Security - gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          cd packages/go-aaa && gosec -quiet ./...
 
   build-flutter:
     name: Build Flutter Libs
