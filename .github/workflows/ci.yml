@@ -50,7 +50,7 @@ jobs:
         with:
           python-version: '3.13'
       - run: pip install build pytest pytest-asyncio requests
-      - run: pip install -e "packages/python-libs[dev]"
+      - run: pip install -e "packages/python-libs[all,dev]"
       - run: pytest packages/python-libs/tests -v
       - run: pip install -e "packages/python-licensing[dev]"
       - run: pytest packages/python-licensing/tests -v

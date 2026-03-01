@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from penguin_aaa.audit.emitter import Emitter
 from penguin_aaa.audit.event import AuditEvent, EventType, Outcome
@@ -19,14 +20,16 @@ ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 async def _send_json_error(send: Send, status: int, message: str) -> None:
     """Send a minimal JSON error response without invoking the wrapped app."""
     body = json.dumps({"error": message}).encode()
-    await send({
-        "type": "http.response.start",
-        "status": status,
-        "headers": [
-            (b"content-type", b"application/json"),
-            (b"content-length", str(len(body)).encode()),
-        ],
-    })
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+            ],
+        }
+    )
     await send({"type": "http.response.body", "body": body})
 
 

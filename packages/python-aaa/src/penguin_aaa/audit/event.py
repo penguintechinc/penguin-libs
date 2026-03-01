@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -37,7 +37,7 @@ def _default_id() -> str:
 
 
 def _default_timestamp() -> datetime:
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 class AuditEvent(BaseModel):
@@ -57,9 +57,9 @@ class AuditEvent(BaseModel):
     action: str
     resource: str
     outcome: Outcome
-    ip: Optional[str] = None
-    user_agent: Optional[str] = None
-    correlation_id: Optional[str] = None
+    ip: str | None = None
+    user_agent: str | None = None
+    correlation_id: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:

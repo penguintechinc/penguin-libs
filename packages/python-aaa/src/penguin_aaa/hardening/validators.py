@@ -49,12 +49,10 @@ def validate_spiffe_id(spiffe_id: str) -> None:
         raise ValueError("SPIFFE ID must not be empty")
 
     if not spiffe_id.startswith("spiffe://"):
-        raise ValueError(
-            f"SPIFFE ID must start with 'spiffe://', got: {spiffe_id!r}"
-        )
+        raise ValueError(f"SPIFFE ID must start with 'spiffe://', got: {spiffe_id!r}")
 
     # spiffe://trust-domain/...  — trust domain must be non-empty
-    remainder = spiffe_id[len("spiffe://"):]
+    remainder = spiffe_id[len("spiffe://") :]
     if not remainder or remainder.startswith("/"):
         raise ValueError(
             f"SPIFFE ID must include a non-empty trust domain after 'spiffe://', got: {spiffe_id!r}"
@@ -77,11 +75,7 @@ def validate_algorithm(alg: str, allowed: frozenset[str]) -> None:
     """
     explicitly_forbidden = {"none", "HS256"}
     if alg in explicitly_forbidden:
-        raise ValueError(
-            f"Algorithm {alg!r} is explicitly forbidden for security reasons"
-        )
+        raise ValueError(f"Algorithm {alg!r} is explicitly forbidden for security reasons")
 
     if alg not in allowed:
-        raise ValueError(
-            f"Algorithm {alg!r} is not in the permitted set: {sorted(allowed)}"
-        )
+        raise ValueError(f"Algorithm {alg!r} is not in the permitted set: {sorted(allowed)}")

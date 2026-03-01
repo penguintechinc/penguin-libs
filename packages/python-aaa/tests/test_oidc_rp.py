@@ -1,17 +1,13 @@
 """Tests for penguin_aaa.authn.oidc_rp."""
 
-import json
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock, patch
 
 import jwt
 import pytest
 
-from penguin_aaa.authn.oidc_provider import OIDCProvider, OIDCProviderConfig
-from penguin_aaa.authn.oidc_rp import OIDCRPConfig, OIDCRelyingParty, _normalise_list_fields
-from penguin_aaa.authn.types import Claims
+from penguin_aaa.authn.oidc_rp import OIDCRelyingParty, OIDCRPConfig, _normalise_list_fields
 from penguin_aaa.crypto.keystore import MemoryKeyStore
-
 
 ISSUER = "https://idp.example.com"
 CLIENT_ID = "my-client"
@@ -47,7 +43,7 @@ def _issue_test_token(
     extra_claims: dict | None = None,
 ) -> str:
     signing_key, kid = keystore.get_signing_key()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": sub,
         "iss": ISSUER,

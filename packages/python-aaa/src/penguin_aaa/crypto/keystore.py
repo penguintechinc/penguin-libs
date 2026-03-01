@@ -205,8 +205,7 @@ class FileKeyStore:
 
     def _save(self) -> None:
         entries = [
-            {"kid": kid, "pem": _private_key_to_pem(key).decode("utf-8")}
-            for key, kid in self._keys
+            {"kid": kid, "pem": _private_key_to_pem(key).decode("utf-8")} for key, kid in self._keys
         ]
         data: _FileStoreData = {"keys": entries}
         self._path.parent.mkdir(parents=True, exist_ok=True)

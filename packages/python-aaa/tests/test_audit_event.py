@@ -1,6 +1,6 @@
 """Tests for penguin_aaa.audit.event — AuditEvent, EventType, Outcome."""
 
-from datetime import datetime, timezone
+from datetime import UTC
 
 import pytest
 from pydantic import ValidationError
@@ -55,13 +55,14 @@ class TestAuditEvent:
 
     def test_id_generated_as_uuid(self):
         import uuid
+
         event = AuditEvent(**self._minimal())
         uuid.UUID(event.id)  # raises if not valid UUID
 
     def test_timestamp_defaults_to_utc_now(self):
         event = AuditEvent(**self._minimal())
         assert event.timestamp.tzinfo is not None
-        assert event.timestamp.tzinfo == timezone.utc
+        assert event.timestamp.tzinfo == UTC
 
     def test_optional_fields_default_to_none(self):
         event = AuditEvent(**self._minimal())
@@ -89,6 +90,7 @@ class TestAuditEvent:
 
     def test_event_is_immutable(self):
         from pydantic import ValidationError
+
         event = AuditEvent(**self._minimal())
         with pytest.raises((ValidationError, TypeError)):
             event.subject = "changed"  # type: ignore[misc]
@@ -107,8 +109,17 @@ class TestAuditEvent:
         event = AuditEvent(**self._minimal())
         keys = set(event.to_dict().keys())
         expected = {
-            "id", "timestamp", "type", "subject", "action",
-            "resource", "outcome", "ip", "user_agent", "correlation_id", "details",
+            "id",
+            "timestamp",
+            "type",
+            "subject",
+            "action",
+            "resource",
+            "outcome",
+            "ip",
+            "user_agent",
+            "correlation_id",
+            "details",
         }
         assert keys == expected
 

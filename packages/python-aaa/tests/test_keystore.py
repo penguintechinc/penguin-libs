@@ -76,7 +76,7 @@ class TestMemoryKeyStoreEC:
 class TestFileKeyStore:
     def test_creates_key_file_on_init(self, tmp_path: Path):
         key_file = tmp_path / "keys.json"
-        store = FileKeyStore(key_file, algorithm="RS256")
+        FileKeyStore(key_file, algorithm="RS256")
         assert key_file.exists()
 
     def test_key_file_contains_valid_json(self, tmp_path: Path):

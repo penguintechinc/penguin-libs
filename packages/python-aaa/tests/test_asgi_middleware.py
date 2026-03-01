@@ -1,4 +1,4 @@
-"""Tests for penguin_aaa.middleware.asgi — OIDCAuthMiddleware, SPIFFEAuthMiddleware, AuditMiddleware."""
+"""Tests for penguin_aaa.middleware.asgi — OIDC, SPIFFE, and Audit middleware."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ import pytest
 
 from penguin_aaa.audit.emitter import Emitter
 from penguin_aaa.middleware.asgi import AuditMiddleware, OIDCAuthMiddleware, SPIFFEAuthMiddleware
-
 
 # ---------------------------------------------------------------------------
 # ASGI test helpers

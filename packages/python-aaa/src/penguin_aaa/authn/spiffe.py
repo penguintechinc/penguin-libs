@@ -73,6 +73,6 @@ class SPIFFEAuthenticator:
             return False
 
         # spiffe://trust-domain/path
-        without_scheme = spiffe_id[len("spiffe://"):]
+        without_scheme = spiffe_id[len("spiffe://") :]
         peer_domain = without_scheme.split("/")[0]
         return peer_domain == self._config.trust_domain

@@ -1,6 +1,6 @@
 """Tests for penguin_aaa.authn.oidc_provider."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
@@ -11,7 +11,7 @@ from penguin_aaa.crypto.keystore import MemoryKeyStore
 
 
 def _make_claims() -> Claims:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return Claims.model_validate(
         {
             "sub": "user-abc",

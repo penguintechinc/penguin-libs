@@ -4,10 +4,10 @@ import base64
 from typing import Any
 
 from cryptography.hazmat.primitives.asymmetric.ec import (
-    EllipticCurvePublicKey,
     SECP256R1,
     SECP384R1,
     SECP521R1,
+    EllipticCurvePublicKey,
 )
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 

@@ -1,6 +1,6 @@
 """Tests for penguin_aaa.authn.types."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -17,7 +17,7 @@ from penguin_aaa.authn.types import (
 
 def _make_claims(**overrides):
     """Return a valid Claims dict, optionally overriding fields."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     base = {
         "sub": "user-123",
         "iss": "https://idp.example.com",

@@ -2,7 +2,7 @@
 
 import secrets
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
@@ -56,7 +56,7 @@ class OIDCProvider:
             A TokenSet with signed access/id tokens and an opaque refresh token.
         """
         signing_key, kid = self._keystore.get_signing_key()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         access_exp = now + self._config.token_ttl
 
         base_payload: dict[str, Any] = {
@@ -119,8 +119,15 @@ class OIDCProvider:
             "scopes_supported": ["openid", "profile", "email"],
             "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post"],
             "claims_supported": [
-                "sub", "iss", "aud", "iat", "exp",
-                "scope", "roles", "tenant", "teams",
+                "sub",
+                "iss",
+                "aud",
+                "iat",
+                "exp",
+                "scope",
+                "roles",
+                "tenant",
+                "teams",
             ],
         }
 

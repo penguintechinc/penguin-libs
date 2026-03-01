@@ -7,7 +7,8 @@ scope or role requirements, raising PermissionError on failure.
 from __future__ import annotations
 
 import functools
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 
 def _extract_request(args: tuple[Any, ...]) -> Any:

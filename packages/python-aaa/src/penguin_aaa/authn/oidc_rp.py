@@ -4,7 +4,7 @@ import hmac
 import secrets
 import urllib.parse
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import UTC, timedelta
 from typing import Any
 
 import httpx
@@ -33,8 +33,7 @@ class OIDCRPConfig:
         for alg in self.algorithms:
             if alg not in ALLOWED_RP_ALGORITHMS:
                 raise ValueError(
-                    f"Algorithm '{alg}' is not allowed. "
-                    f"Permitted: {sorted(ALLOWED_RP_ALGORITHMS)}"
+                    f"Algorithm '{alg}' is not allowed. Permitted: {sorted(ALLOWED_RP_ALGORITHMS)}"
                 )
 
 
@@ -65,9 +64,7 @@ class OIDCRelyingParty:
         if self._discovery is not None:
             return self._discovery
 
-        discovery_url = (
-            self._config.issuer_url.rstrip("/") + "/.well-known/openid-configuration"
-        )
+        discovery_url = self._config.issuer_url.rstrip("/") + "/.well-known/openid-configuration"
         async with httpx.AsyncClient() as client:
             response = await client.get(discovery_url, timeout=10.0)
             response.raise_for_status()
@@ -119,12 +116,12 @@ class OIDCRelyingParty:
         _normalise_list_fields(payload, ("aud", "scope", "roles", "teams"))
 
         # JWT iat/exp are Unix timestamps (int) — convert to datetime for pydantic strict mode
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        for field in ("iat", "exp"):
-            val = payload.get(field)
+        for field_name in ("iat", "exp"):
+            val = payload.get(field_name)
             if isinstance(val, (int, float)):
-                payload[field] = datetime.fromtimestamp(val, tz=timezone.utc)
+                payload[field_name] = datetime.fromtimestamp(val, tz=UTC)
 
         return Claims.model_validate(payload)
 
