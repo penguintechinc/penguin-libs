@@ -24,7 +24,6 @@ from penguintechinc_utils import (
 )
 from penguintechinc_utils.logging import SENSITIVE_KEYS
 
-
 # ---------------------------------------------------------------------------
 # sanitize_log_data — backward compatibility
 # ---------------------------------------------------------------------------
@@ -80,10 +79,10 @@ class TestSanitizeLogData:
 
 class TestGetLogger:
     def test_returns_bound_logger(self) -> None:
-        import structlog
 
         log = get_logger("test.component")
         from structlog._config import BoundLoggerLazyProxy
+
         assert isinstance(log, BoundLoggerLazyProxy)
 
     def test_accepts_level_parameter(self) -> None:

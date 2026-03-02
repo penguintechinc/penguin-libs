@@ -3,17 +3,14 @@ Tests for the KillKrill log aggregation sink.
 """
 
 import json
-import threading
 import time
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import httpx
-import pytest
 
 from penguintechinc_utils import KillKrillConfig, KillKrillSink
 from penguintechinc_utils.sinks import Sink
-
 
 # ---------------------------------------------------------------------------
 # KillKrillConfig
@@ -165,10 +162,10 @@ class TestKillKrillSinkEmitAndFlush:
         mock_client = MagicMock()
         mock_client.post.return_value = _ok_response()
         config = _make_config(api_key="my-secret-key")
-        with patch("penguintechinc_utils.killkrill.httpx.Client") as MockClient:
-            MockClient.return_value = mock_client
+        with patch("penguintechinc_utils.killkrill.httpx.Client") as mock_client_cls:
+            mock_client_cls.return_value = mock_client
             KillKrillSink(config).close()
-            _, kwargs = MockClient.call_args
+            _, kwargs = mock_client_cls.call_args
             headers = kwargs.get("headers", {})
             assert headers.get("Authorization") == "Bearer my-secret-key"
 
@@ -308,14 +305,14 @@ class TestKillKrillPayloadFormat:
         mock_client.post.return_value = _ok_response()
         config = _make_config(api_key="k")
 
-        with patch("penguintechinc_utils.killkrill.httpx.Client") as MockClient:
-            MockClient.return_value = mock_client
+        with patch("penguintechinc_utils.killkrill.httpx.Client") as mock_client_cls:
+            mock_client_cls.return_value = mock_client
             sink = KillKrillSink(config)
             sink.emit({"event": "ct-test"})
             sink.flush()
             sink.close()
 
-            _, kwargs = MockClient.call_args
+            _, kwargs = mock_client_cls.call_args
             assert kwargs["headers"]["Content-Type"] == "application/json"
 
 

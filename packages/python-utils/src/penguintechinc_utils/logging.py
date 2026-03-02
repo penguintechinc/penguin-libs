@@ -18,28 +18,30 @@ if TYPE_CHECKING:
     from .sinks import Sink
 
 # Keys that should never be logged
-SENSITIVE_KEYS = frozenset({
-    "password",
-    "passwd",
-    "secret",
-    "token",
-    "api_key",
-    "apikey",
-    "auth_token",
-    "authtoken",
-    "access_token",
-    "refresh_token",
-    "credential",
-    "credentials",
-    "mfa_code",
-    "totp_code",
-    "otp",
-    "captcha_token",
-    "session_id",
-    "sessionid",
-    "cookie",
-    "authorization",
-})
+SENSITIVE_KEYS = frozenset(
+    {
+        "password",
+        "passwd",
+        "secret",
+        "token",
+        "api_key",
+        "apikey",
+        "auth_token",
+        "authtoken",
+        "access_token",
+        "refresh_token",
+        "credential",
+        "credentials",
+        "mfa_code",
+        "totp_code",
+        "otp",
+        "captcha_token",
+        "session_id",
+        "sessionid",
+        "cookie",
+        "authorization",
+    }
+)
 
 # Regex for email detection
 EMAIL_REGEX = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
@@ -81,8 +83,7 @@ def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
             sanitized[key] = sanitize_log_data(value)
         elif isinstance(value, list):
             sanitized[key] = [
-                sanitize_log_data(item) if isinstance(item, dict) else item
-                for item in value
+                sanitize_log_data(item) if isinstance(item, dict) else item for item in value
             ]
         else:
             sanitized[key] = value
