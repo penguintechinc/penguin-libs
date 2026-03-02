@@ -190,7 +190,7 @@ class _LoginPageBuilderState extends State<LoginPageBuilder> {
       }
     } catch (e) {
       _captchaNotifier.recordFailure();
-      final error = 'Connection error. Please try again.';
+      const error = 'Connection error. Please try again.';
       setState(() => _errorMessage = error);
       widget.onLoginError?.call(e.toString());
     } finally {

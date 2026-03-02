@@ -50,11 +50,6 @@ class LoginUser {
     this.roles = const [],
   });
 
-  final String id;
-  final String email;
-  final String? name;
-  final List<String> roles;
-
   factory LoginUser.fromJson(Map<String, dynamic> json) => LoginUser(
         id: json['id'] as String,
         email: json['email'] as String,
@@ -64,6 +59,11 @@ class LoginUser {
                 .toList() ??
             const [],
       );
+
+  final String id;
+  final String email;
+  final String? name;
+  final List<String> roles;
 }
 
 /// Response from the login API.
@@ -78,14 +78,6 @@ class LoginResponse {
     this.errorCode,
   });
 
-  final bool success;
-  final LoginUser? user;
-  final String? token;
-  final String? refreshToken;
-  final bool mfaRequired;
-  final String? error;
-  final String? errorCode;
-
   factory LoginResponse.fromJson(Map<String, dynamic> json) => LoginResponse(
         success: json['success'] as bool,
         user: json['user'] != null
@@ -97,6 +89,14 @@ class LoginResponse {
         error: json['error'] as String?,
         errorCode: json['errorCode'] as String?,
       );
+
+  final bool success;
+  final LoginUser? user;
+  final String? token;
+  final String? refreshToken;
+  final bool mfaRequired;
+  final String? error;
+  final String? errorCode;
 }
 
 /// Branding configuration for the login page.

@@ -8,7 +8,7 @@ void main() {
       expect(v.major, 1);
       expect(v.minor, 2);
       expect(v.patch, 3);
-      expect(v.buildEpoch, '1234567890');
+      expect(v.buildEpoch, 1234567890);
       expect(v.semver, '1.2.3');
     });
 
@@ -35,25 +35,27 @@ void main() {
   });
 
   group('VersionInfo', () {
-    test('buildDate returns DateTime for epoch', () {
-      final v = VersionInfo(
+    test('buildDate is set when parsed with epoch', () {
+      final v = parseVersion('v1.0.0.1700000000');
+      expect(v.buildDate, isNotNull);
+      expect(v.buildDate, isA<String>());
+    });
+
+    test('buildDate is null for missing epoch', () {
+      final v = parseVersion('v1.0.0');
+      expect(v.buildDate, isNull);
+    });
+
+    test('constructor with buildEpoch but no buildDate', () {
+      const v = VersionInfo(
         full: 'v1.0.0.1700000000',
         major: 1,
         minor: 0,
         patch: 0,
-        buildEpoch: '1700000000',
+        buildEpoch: 1700000000,
       );
-      expect(v.buildDate, isA<DateTime>());
-    });
-
-    test('buildDate returns null for missing epoch', () {
-      final v = VersionInfo(
-        full: 'v1.0.0',
-        major: 1,
-        minor: 0,
-        patch: 0,
-      );
-      expect(v.buildDate, isNull);
+      expect(v.buildEpoch, 1700000000);
+      expect(v.semver, '1.0.0');
     });
   });
 }

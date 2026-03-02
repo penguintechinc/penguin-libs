@@ -12,6 +12,17 @@ class CookieConsentData {
     this.timestamp,
   });
 
+  factory CookieConsentData.fromJson(Map<String, dynamic> json) {
+    return CookieConsentData(
+      accepted: json['accepted'] as bool? ?? false,
+      essential: true,
+      functional: json['functional'] as bool? ?? false,
+      analytics: json['analytics'] as bool? ?? false,
+      marketing: json['marketing'] as bool? ?? false,
+      timestamp: json['timestamp'] as int?,
+    );
+  }
+
   final bool accepted;
   final bool essential;
   final bool functional;
@@ -45,17 +56,6 @@ class CookieConsentData {
         'marketing': marketing,
         'timestamp': timestamp,
       };
-
-  factory CookieConsentData.fromJson(Map<String, dynamic> json) {
-    return CookieConsentData(
-      accepted: json['accepted'] as bool? ?? false,
-      essential: true,
-      functional: json['functional'] as bool? ?? false,
-      analytics: json['analytics'] as bool? ?? false,
-      marketing: json['marketing'] as bool? ?? false,
-      timestamp: json['timestamp'] as int?,
-    );
-  }
 }
 
 /// State management for GDPR cookie consent.

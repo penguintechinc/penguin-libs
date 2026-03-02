@@ -6,7 +6,7 @@
 /// - [LoginPageBuilder] — Full login pages with OAuth, MFA, CAPTCHA
 /// - [SidebarMenu] — Navigation sidebar with role-based filtering
 /// - [ConsoleVersion] — Version logging utilities
-library flutter_libs;
+library;
 
 // Theme
 export 'src/theme/elder_colors.dart';
