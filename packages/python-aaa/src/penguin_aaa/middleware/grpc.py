@@ -44,16 +44,17 @@ class OIDCAuthInterceptor:
 
     def intercept_service(
         self,
-        continuation: Callable[[grpc.HandlerCallDetails], grpc.RpcMethodHandler],
+        continuation: Callable[[grpc.HandlerCallDetails], grpc.RpcMethodHandler[Any]],
         handler_call_details: grpc.HandlerCallDetails,
-    ) -> grpc.RpcMethodHandler:
+    ) -> grpc.RpcMethodHandler[Any]:
         """Intercept an incoming call and enforce token authentication."""
         method = handler_call_details.method
         if method in self._public_methods:
             return continuation(handler_call_details)
 
         metadata = dict(handler_call_details.invocation_metadata)
-        auth_header = metadata.get("authorization", "")
+        auth_value = metadata.get("authorization", "")
+        auth_header = auth_value if isinstance(auth_value, str) else auth_value.decode()
 
         if not auth_header.startswith("Bearer "):
             logger.warning("gRPC call to %s rejected: missing Bearer token", method)
@@ -78,7 +79,7 @@ class OIDCAuthInterceptor:
     def _abort_handler(
         code: grpc.StatusCode,
         details: str,
-    ) -> grpc.RpcMethodHandler:
+    ) -> grpc.RpcMethodHandler[Any]:
         """Return an RPC handler that aborts the call with the given status."""
 
         def abort(request: Any, context: grpc.ServicerContext) -> None:
