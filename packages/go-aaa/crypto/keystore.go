@@ -240,7 +240,7 @@ func (fks *FileKeyStore) saveToDisk() error {
 		Algorithm:  fks.algorithm,
 		PrivateKey: json.RawMessage(keyJSON),
 	}
-	data, err := json.MarshalIndent(stored, "", "  ")
+	data, err := json.MarshalIndent(stored, "", "  ") // #nosec G117 -- keystore legitimately serializes private key material
 	if err != nil {
 		return fmt.Errorf("marshal key data: %w", err)
 	}

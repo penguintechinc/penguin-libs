@@ -122,7 +122,7 @@ class MemoryKeyStore:
         """Return a JWKS dict containing all active public keys."""
         jwk_list: list[dict[str, Any]] = []
         for private_key, kid in self._keys:
-            public_key: PublicKey = private_key.public_key()  # type: ignore[assignment]
+            public_key: PublicKey = private_key.public_key()
             jwk_list.append(public_key_to_jwk(public_key, kid, self._algorithm))
         return {"keys": jwk_list}
 
@@ -170,7 +170,7 @@ class FileKeyStore:
         """Return a JWKS dict containing all active public keys."""
         jwk_list: list[dict[str, Any]] = []
         for private_key, kid in self._keys:
-            public_key: PublicKey = private_key.public_key()  # type: ignore[assignment]
+            public_key: PublicKey = private_key.public_key()
             jwk_list.append(public_key_to_jwk(public_key, kid, self._algorithm))
         return {"keys": jwk_list}
 

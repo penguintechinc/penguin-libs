@@ -174,7 +174,7 @@ class OIDCRelyingParty:
         if nonce is not None:
             params["nonce"] = nonce
 
-        base = self._discovery["authorization_endpoint"]
+        base: str = self._discovery["authorization_endpoint"]
         return base + "?" + urllib.parse.urlencode(params)
 
 

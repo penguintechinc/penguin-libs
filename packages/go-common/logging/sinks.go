@@ -54,7 +54,7 @@ type FileSink struct {
 // NewFileSink opens (or creates) the file at path and returns a FileSink.
 // maxSizeMB controls when rotation occurs; zero disables rotation.
 func NewFileSink(path string, maxSizeMB int64) (*FileSink, error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600) // #nosec G304 -- path is caller-provided log file location
 	if err != nil {
 		return nil, fmt.Errorf("open log file: %w", err)
 	}

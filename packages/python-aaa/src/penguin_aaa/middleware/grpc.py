@@ -4,22 +4,22 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 try:
     import grpc
 
     _GRPC_AVAILABLE = True
 except ImportError:
-    grpc = None  # type: ignore[assignment]
     _GRPC_AVAILABLE = False
+
+if TYPE_CHECKING:
+    import grpc
 
 logger = logging.getLogger(__name__)
 
-_ServerInterceptorBase = grpc.ServerInterceptor if _GRPC_AVAILABLE else object
 
-
-class OIDCAuthInterceptor(_ServerInterceptorBase):  # type: ignore[misc]
+class OIDCAuthInterceptor:
     """Validate OIDC Bearer tokens on incoming gRPC calls.
 
     Token validation is performed synchronously via the relying party's

@@ -47,6 +47,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.4",
     "mypy>=1.10",
+    "types-grpcio>=1.60",
     "bandit>=1.7",
     "pip-audit>=2.6",
     "hypothesis>=6.0",
