@@ -9,6 +9,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "build:react-libs": "npm run build -w @penguintechinc/react-libs",
+    "build:react-aaa": "npm run build -w @penguintechinc/react-aaa",
     "clean": "npm run clean --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "lint:fix": "npm run lint:fix --workspaces --if-present",

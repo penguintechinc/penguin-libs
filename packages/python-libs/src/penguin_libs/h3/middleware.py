@@ -85,6 +85,11 @@ class LoggingMiddleware:
 class AuthMiddleware:
     """ASGI middleware that validates Bearer tokens.
 
+    .. deprecated::
+        Use ``penguin_aaa.middleware.asgi.OIDCAuthMiddleware`` for production
+        OIDC token validation. This callback-based middleware remains available for
+        simple use cases but will not receive new features.
+
     Args:
         app: The ASGI application to wrap.
         validate_fn: Async callable that receives a token string and raises

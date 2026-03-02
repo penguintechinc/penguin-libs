@@ -51,6 +51,10 @@ func NewLoggingInterceptor(logger *zap.Logger) connect.UnaryInterceptorFunc {
 	}
 }
 
+// Deprecated: Use github.com/penguintechinc/penguin-libs/packages/go-aaa/middleware.NewOIDCInterceptor
+// for production OIDC token validation. This callback-based interceptor remains available for
+// simple use cases but will not receive new features.
+//
 // NewAuthInterceptor returns a ConnectRPC interceptor that validates JWT tokens.
 // validateFn receives the raw Bearer token and returns an error if invalid.
 func NewAuthInterceptor(validateFn func(token string) error, publicProcedures map[string]bool) connect.UnaryInterceptorFunc {
