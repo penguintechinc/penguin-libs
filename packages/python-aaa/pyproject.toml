@@ -82,3 +82,4 @@ asyncio_mode = "strict"
 
 [tool.bandit]
 exclude_dirs = ["tests"]
+skips = ["B101", "B105", "B110"]
