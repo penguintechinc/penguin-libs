@@ -5,6 +5,13 @@ modules:
 lint:
   use:
     - STANDARD
+  ignore_only:
+    RPC_REQUEST_STANDARD_NAME:
+      - examples/health/v1/health.proto
+    RPC_RESPONSE_STANDARD_NAME:
+      - examples/health/v1/health.proto
+    RPC_REQUEST_RESPONSE_UNIQUE:
+      - examples/health/v1/health.proto
 breaking:
   use:
     - FILE

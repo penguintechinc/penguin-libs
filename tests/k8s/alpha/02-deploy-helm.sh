@@ -13,12 +13,10 @@ NAMESPACE="penguin-libs-alpha"
 echo "Deploying Helm chart to namespace: $NAMESPACE"
 echo "Chart location: $HELM_DIR"
 
-# Create namespace if it doesn't exist
-kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-
-# Deploy the chart
+# Deploy the chart (--create-namespace handles namespace creation)
 helm upgrade --install "$PROJECT_NAME" "$HELM_DIR" \
     --namespace "$NAMESPACE" \
+    --create-namespace \
     --values "$HELM_DIR/values-alpha.yaml" \
     --wait \
     --timeout 5m
