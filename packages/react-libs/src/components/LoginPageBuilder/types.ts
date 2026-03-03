@@ -22,6 +22,7 @@ export interface LoginPayload {
   rememberMe?: boolean;
   captchaToken?: string;
   mfaCode?: string;
+  tenant?: string;
 }
 
 /**
@@ -279,6 +280,21 @@ export interface LoginPageBuilderProps {
   // Social/SSO logins
   /** Social login provider configurations */
   socialLogins?: SocialLoginConfig[];
+
+  // Tenant field configuration
+  /** Tenant field configuration for multi-tenant deployments */
+  tenantField?: {
+    /** Show tenant field (default: false) */
+    show?: boolean;
+    /** Label for tenant field (default: "Tenant") */
+    label?: string;
+    /** Placeholder text for tenant field */
+    placeholder?: string;
+    /** Help text displayed below tenant field */
+    helpText?: string;
+    /** Default value for tenant field */
+    defaultValue?: string;
+  };
 
   // Error handling
   /** Callback when login fails */

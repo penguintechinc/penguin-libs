@@ -103,7 +103,7 @@ export function useCaptcha(config?: CaptchaConfig): UseCaptchaReturn {
 
     // Reset CAPTCHA token on new failed attempt
     setCaptchaToken(null);
-  }, [enabled, threshold]);
+  }, [enabled]);
 
   const resetFailedAttempts = useCallback(() => {
     if (!enabled) return;
