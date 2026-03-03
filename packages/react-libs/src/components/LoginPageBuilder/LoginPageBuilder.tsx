@@ -52,10 +52,7 @@ function sanitizeLogData(data: Record<string, unknown>): Record<string, unknown>
       sanitized[key] = '[REDACTED]';
     }
   }
-  // Show email domain only for troubleshooting
-  if (typeof sanitized.emailDomain === 'string') {
-    sanitized.emailDomain = sanitized.emailDomain;
-  }
+  // Email domain is already part of the sanitized object if present
   return sanitized;
 }
 
@@ -88,6 +85,7 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
   showRememberMe = true,
   className,
   socialLogins,
+  tenantField,
   onError,
   transformErrorMessage,
 }) => {
@@ -96,6 +94,7 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
   // Form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [tenant, setTenant] = useState(tenantField?.defaultValue || '');
   const [rememberMe, setRememberMe] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -172,6 +171,7 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
         password,
         rememberMe,
         captchaToken: captchaToken ?? undefined,
+        tenant: tenant || undefined,
       };
 
       try {
@@ -230,7 +230,7 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
       }
     },
     [
-      email, password, rememberMe, canInteract, showCaptcha, captchaVerified,
+      email, password, tenant, rememberMe, canInteract, showCaptcha, captchaVerified,
       captchaToken, api, mfa?.enabled, incrementFailedAttempts, resetFailedAttempts,
       onSuccess, onError, transformErrorMessage,
     ]
@@ -252,6 +252,7 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
           password,
           rememberMe,
           mfaCode: code,
+          tenant: tenant || undefined,
         };
 
         const response = await fetch(api.loginUrl, {
@@ -288,7 +289,7 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
         setIsSubmitting(false);
       }
     },
-    [email, password, rememberMe, api, resetFailedAttempts, onSuccess]
+    [email, password, tenant, rememberMe, api, resetFailedAttempts, onSuccess]
   );
 
   /**
@@ -508,6 +509,37 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
                 placeholder="you@example.com"
               />
             </div>
+
+            {/* Tenant field */}
+            {tenantField?.show && (
+              <div>
+                <label htmlFor="tenant" className={`block text-sm font-medium ${theme.labelText}`}>
+                  {tenantField.label || 'Tenant'}
+                </label>
+                <input
+                  id="tenant"
+                  name="tenant"
+                  type="text"
+                  value={tenant}
+                  onChange={(e) => setTenant(e.target.value)}
+                  disabled={!canInteract || isSubmitting}
+                  className={`
+                    mt-1 block w-full rounded-lg border px-3 py-2.5
+                    ${theme.inputBackground} ${theme.inputBorder} ${theme.inputText} ${theme.placeholderText}
+                    ${theme.inputFocusBorder} ${theme.inputFocusRing}
+                    focus:outline-none focus:ring-2
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    transition-colors duration-200
+                  `}
+                  placeholder={tenantField.placeholder || ''}
+                />
+                {tenantField.helpText && (
+                  <p className={`mt-1 text-xs ${theme.subtitleText}`}>
+                    {tenantField.helpText}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Password field */}
             <div>
