@@ -9,7 +9,8 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,11 @@ class LoggingMiddleware:
 
 class AuthMiddleware:
     """ASGI middleware that validates Bearer tokens.
+
+    .. deprecated::
+        Use ``penguin_aaa.middleware.asgi.OIDCAuthMiddleware`` for production
+        OIDC token validation. This callback-based middleware remains available for
+        simple use cases but will not receive new features.
 
     Args:
         app: The ASGI application to wrap.

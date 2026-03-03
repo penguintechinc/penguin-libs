@@ -24,6 +24,11 @@ class AuthInterceptor(grpc.ServerInterceptor):
     JWT authentication interceptor for gRPC servers.
 
     Validates JWT tokens in metadata and sets user context.
+
+    .. deprecated::
+        Use ``penguin_aaa.middleware.grpc.OIDCAuthInterceptor`` for production
+        OIDC token validation. This JWT-based interceptor remains available but will
+        not receive new features.
     """
 
     def __init__(

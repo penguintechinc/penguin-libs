@@ -47,24 +47,22 @@ void main() {
 
     group('validateNumber', () {
       test('validates min', () {
-        final v = FormValidators.validateNumber(min: 5);
-        expect(v(3), isNotNull);
-        expect(v(5), isNull);
-        expect(v(10), isNull);
+        expect(FormValidators.validateNumber('3', min: 5), isNotNull);
+        expect(FormValidators.validateNumber('5', min: 5), isNull);
+        expect(FormValidators.validateNumber('10', min: 5), isNull);
       });
       test('validates max', () {
-        final v = FormValidators.validateNumber(max: 10);
-        expect(v(15), isNotNull);
-        expect(v(10), isNull);
+        expect(FormValidators.validateNumber('15', max: 10), isNotNull);
+        expect(FormValidators.validateNumber('10', max: 10), isNull);
       });
     });
 
     group('validatePassword', () {
       test('rejects short password', () {
-        expect(FormValidators.validatePassword('ab', minLength: 8), isNotNull);
+        expect(FormValidators.validatePassword('ab'), isNotNull);
       });
       test('accepts valid password', () {
-        expect(FormValidators.validatePassword('password123', minLength: 8), isNull);
+        expect(FormValidators.validatePassword('password123'), isNull);
       });
     });
 

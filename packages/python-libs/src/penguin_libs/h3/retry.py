@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from .config import RetryConfig
 

@@ -66,19 +66,19 @@ class ExampleHome extends StatelessWidget {
       context: context,
       title: 'Create Item',
       fields: [
-        FormFieldConfig(
+        const FormFieldConfig(
           name: 'name',
           label: 'Name',
           type: FormFieldType.text,
           required: true,
           placeholder: 'Enter item name',
         ),
-        FormFieldConfig(
+        const FormFieldConfig(
           name: 'description',
           label: 'Description',
           type: FormFieldType.textarea,
         ),
-        FormFieldConfig(
+        const FormFieldConfig(
           name: 'category',
           label: 'Category',
           type: FormFieldType.select,
@@ -101,10 +101,10 @@ class LoginExample extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LoginPageBuilder(
-      apiConfig: LoginApiConfig(
+      apiConfig: const LoginApiConfig(
         loginUrl: 'https://api.example.com/auth/login',
       ),
-      branding: BrandingConfig(
+      branding: const BrandingConfig(
         appName: 'Example App',
         tagline: 'Welcome back! Please sign in.',
       ),

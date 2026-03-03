@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/elder_colors.dart';
 import 'sidebar_types.dart';
 import 'sidebar_color_config.dart';
 

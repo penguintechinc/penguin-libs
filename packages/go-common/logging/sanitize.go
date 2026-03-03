@@ -85,6 +85,8 @@ func SanitizeField(field zap.Field) zap.Field {
 		if sanitizedValue != field.String {
 			return zap.String(field.Key, sanitizedValue.(string))
 		}
+	default:
+		// Non-string field types are passed through unsanitized
 	}
 	return field
 }

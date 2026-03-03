@@ -231,7 +231,7 @@ class _FormModalBuilderState extends State<FormModalBuilder>
       backgroundColor: colors.modalBackground,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: ElderColors.slate700),
+        side: const BorderSide(color: ElderColors.slate700),
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -283,7 +283,7 @@ class _FormModalBuilderState extends State<FormModalBuilder>
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: colors.headerBackground,
-        border: Border(
+        border: const Border(
           bottom: BorderSide(color: ElderColors.slate700),
         ),
         borderRadius: const BorderRadius.only(
@@ -398,7 +398,7 @@ class _FormModalBuilderState extends State<FormModalBuilder>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colors.footerBackground,
-        border: Border(
+        border: const Border(
           top: BorderSide(color: ElderColors.slate700),
         ),
         borderRadius: const BorderRadius.only(

@@ -1,7 +1,7 @@
 namespace: penguin-libs-alpha
 buildValidator:
   image:
-    pullPolicy: Never
+    pullPolicy: IfNotPresent
   resources:
     requests:
       memory: "128Mi"

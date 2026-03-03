@@ -47,7 +47,7 @@ void main() {
 
     test('setTouched marks field as touched', () {
       controller.setTouched('name');
-      expect(controller.touched.contains('name'), isTrue);
+      expect(controller.touched.containsKey('name'), isTrue);
     });
 
     test('setSubmitting toggles submitting state', () {

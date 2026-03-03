@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 /// Field types for [FormBuilder].
 enum FieldType {
   text,

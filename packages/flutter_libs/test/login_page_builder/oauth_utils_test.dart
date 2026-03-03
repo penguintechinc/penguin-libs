@@ -52,7 +52,7 @@ void main() {
 
     group('buildOAuth2Url', () {
       test('builds valid URL for built-in provider', () {
-        final provider = BuiltInOAuth2Provider(
+        const provider = BuiltInOAuth2Provider(
           provider: BuiltInProviderType.google,
           clientId: 'test-client-id',
           redirectUri: 'https://example.com/callback',

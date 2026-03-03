@@ -18,21 +18,24 @@ void main() {
 
     group('buildSAMLRequest', () {
       test('builds valid SAML request', () {
-        final request = buildSAMLRequest(
-          issuer: 'https://app.example.com',
+        const config = SAMLProvider(
+          idpSsoUrl: 'https://idp.example.com/sso',
+          entityId: 'https://app.example.com',
           acsUrl: 'https://app.example.com/acs',
         );
+        final request = buildSAMLRequest(config);
         expect(request, isNotEmpty);
       });
     });
 
     group('buildSAMLRedirectUrl', () {
       test('builds redirect URL with SAML request', () {
-        final url = buildSAMLRedirectUrl(
-          ssoUrl: 'https://idp.example.com/sso',
-          samlRequest: 'base64encodedrequest',
-          relayState: 'state123',
+        const config = SAMLProvider(
+          idpSsoUrl: 'https://idp.example.com/sso',
+          entityId: 'https://app.example.com',
+          acsUrl: 'https://app.example.com/acs',
         );
+        final url = buildSAMLRedirectUrl(config, relayState: 'state123');
         expect(url, contains('idp.example.com'));
         expect(url, contains('SAMLRequest'));
         expect(url, contains('RelayState'));
@@ -48,10 +51,10 @@ void main() {
 
     group('initiateSAMLLogin', () {
       test('builds complete SAML login URL', () {
-        final provider = SAMLProvider(
-          ssoUrl: 'https://idp.example.com/sso',
-          issuer: 'https://app.example.com',
-          callbackUrl: 'https://app.example.com/acs',
+        const provider = SAMLProvider(
+          idpSsoUrl: 'https://idp.example.com/sso',
+          entityId: 'https://app.example.com',
+          acsUrl: 'https://app.example.com/acs',
         );
         final url = initiateSAMLLogin(provider);
         expect(url, contains('idp.example.com'));
