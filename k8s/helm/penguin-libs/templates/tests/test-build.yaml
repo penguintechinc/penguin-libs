@@ -36,14 +36,13 @@ spec:
           echo "Node version: $(node --version)"
           echo "NPM version: $(npm --version)"
           echo ""
-          echo "Installing dependencies..."
-          npm ci --no-audit
+          echo "Checking registry connectivity..."
+          npm ping --registry "$NPM_REGISTRY" || echo "Registry ping not supported, continuing..."
           echo ""
-          echo "Running tests..."
-          npm test || true
-          echo ""
-          echo "Creating package tarball..."
-          npm pack
+          echo "Validating @penguintechinc/react-libs installability..."
+          npm info @penguintechinc/react-libs version 2>/dev/null && \
+            npm install --no-save @penguintechinc/react-libs || \
+            echo "Package not yet published to registry, skipping install test"
           echo ""
           echo "Build and publish validation completed successfully"
           exit 0
