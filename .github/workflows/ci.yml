@@ -49,7 +49,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - run: pip install build pytest pytest-asyncio requests
+      - run: pip install build pytest pytest-asyncio requests bandit pip-audit
       - run: pip install -e "packages/python-libs[all,dev]"
       - run: pytest packages/python-libs/tests -v
       - run: pip install -e "packages/python-licensing[dev]"

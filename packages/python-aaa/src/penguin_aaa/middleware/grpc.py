@@ -44,9 +44,9 @@ class OIDCAuthInterceptor:
 
     def intercept_service(
         self,
-        continuation: Callable[[grpc.HandlerCallDetails], grpc.RpcMethodHandler[Any]],
+        continuation: Callable[[grpc.HandlerCallDetails], grpc.RpcMethodHandler[Any, Any]],
         handler_call_details: grpc.HandlerCallDetails,
-    ) -> grpc.RpcMethodHandler[Any]:
+    ) -> grpc.RpcMethodHandler[Any, Any]:
         """Intercept an incoming call and enforce token authentication."""
         method = handler_call_details.method
         if method in self._public_methods:
@@ -79,7 +79,7 @@ class OIDCAuthInterceptor:
     def _abort_handler(
         code: grpc.StatusCode,
         details: str,
-    ) -> grpc.RpcMethodHandler[Any]:
+    ) -> grpc.RpcMethodHandler[Any, Any]:
         """Return an RPC handler that aborts the call with the given status."""
 
         def abort(request: Any, context: grpc.ServicerContext) -> None:
