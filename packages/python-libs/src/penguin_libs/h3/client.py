@@ -20,7 +20,6 @@ import httpx
 from .config import ClientConfig
 from .exceptions import H3ClientError
 from .protocol import Protocol
-from .retry import async_retry
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +55,9 @@ class H3Client:
 
         if self._h3_client is None and self._cfg.h3_enabled:
             try:
-                from httpx_h3 import AsyncH3Client as _H3  # type: ignore[import-untyped]
+                from httpx_h3 import AsyncH3Client  # type: ignore[import-untyped]
 
-                self._h3_client = _H3(
+                self._h3_client = AsyncH3Client(
                     base_url=self._cfg.base_url,
                     timeout=self._cfg.request_timeout,
                     verify=self._cfg.verify_ssl,
