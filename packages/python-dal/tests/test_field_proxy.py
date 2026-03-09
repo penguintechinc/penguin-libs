@@ -72,5 +72,21 @@ class TestFieldProxy:
     def test_name(self, db):
         assert db.users.email.name == "email"
 
+    def test_lower(self, db):
+        lowered = db.users.name.lower()
+        assert isinstance(lowered, FieldProxy)
+
+    def test_upper(self, db):
+        uppered = db.users.name.upper()
+        assert isinstance(uppered, FieldProxy)
+
+    def test_asc(self, db):
+        asc_col = db.users.id.asc()
+        assert asc_col is not None
+
+    def test_desc(self, db):
+        desc_col = db.users.id.desc()
+        assert desc_col is not None
+
     def test_repr(self, db):
         assert "FieldProxy" in repr(db.users.id)

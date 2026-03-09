@@ -253,6 +253,210 @@ class TestLicenseClientKeepalive:
         assert result["success"] is True
 
 
+class TestLicenseClientCheckFeatureInvalid:
+    """Tests for check_feature when validation is invalid."""
+
+    @patch('penguin_licensing.client.requests.Session.post')
+    def test_check_feature_returns_false_when_invalid(self, mock_post):
+        """check_feature returns False when license validation is invalid."""
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_response.text = "Forbidden"
+        mock_post.return_value = mock_response
+
+        client = LicenseClient(license_key="PENG-INVALID-KEY")
+        assert client.check_feature("sso") is False
+
+
+class TestLicenseClientKeepaliveExtended:
+    """Extended keepalive tests for missed coverage paths."""
+
+    @patch('penguin_licensing.client.requests.Session.post')
+    def test_keepalive_no_server_id_validates_first(self, mock_post):
+        """keepalive validates to get server_id when missing, returns failure if still none."""
+        # validate returns valid=True but no server_id
+        validate_response = MagicMock()
+        validate_response.status_code = 200
+        validate_response.json.return_value = {
+            "customer": "Test Co",
+            "product": "elder",
+            "license_version": "2.0",
+            "license_key": "PENG-TEST-1234",
+            "expires_at": "2030-01-01T00:00:00Z",
+            "issued_at": "2024-01-01T00:00:00Z",
+            "tier": "enterprise",
+            "features": [],
+            "limits": {},
+            "metadata": {},
+        }
+        mock_post.return_value = validate_response
+
+        client = LicenseClient(license_key="PENG-TEST-1234")
+        # server_id is None, validate won't set it either
+        result = client.keepalive()
+        assert result["success"] is False
+        assert "No server ID" in result["message"]
+
+    @patch('penguin_licensing.client.requests.Session.post')
+    def test_keepalive_with_usage_data(self, mock_post):
+        """keepalive includes usage_data in payload."""
+        keepalive_response = MagicMock()
+        keepalive_response.status_code = 200
+        keepalive_response.json.return_value = {"success": True}
+        mock_post.return_value = keepalive_response
+
+        client = LicenseClient(license_key="PENG-TEST-1234")
+        client.server_id = "srv-123"
+        result = client.keepalive(usage_data={"active_users": 5})
+
+        assert result["success"] is True
+        call_args = mock_post.call_args
+        payload = call_args[1]["json"]
+        assert payload["active_users"] == 5
+
+    @patch('penguin_licensing.client.requests.Session.post')
+    def test_keepalive_non_200_response(self, mock_post):
+        """keepalive returns failure dict on non-200 status."""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
+        mock_post.return_value = mock_response
+
+        client = LicenseClient(license_key="PENG-TEST-1234")
+        client.server_id = "srv-123"
+        result = client.keepalive()
+
+        assert result["success"] is False
+        assert "500" in result["message"]
+
+    @patch('penguin_licensing.client.requests.Session.post')
+    def test_keepalive_exception(self, mock_post):
+        """keepalive returns failure dict on request exception."""
+        mock_post.side_effect = ConnectionError("network down")
+
+        client = LicenseClient(license_key="PENG-TEST-1234")
+        client.server_id = "srv-123"
+        result = client.keepalive()
+
+        assert result["success"] is False
+        assert "error" in result["message"].lower()
+
+    @patch('penguin_licensing.client.requests.Session.post')
+    def test_keepalive_no_server_id_invalid_validation(self, mock_post):
+        """keepalive returns failure when validate returns invalid and no server_id."""
+        validate_response = MagicMock()
+        validate_response.status_code = 403
+        validate_response.text = "Forbidden"
+        mock_post.return_value = validate_response
+
+        client = LicenseClient(license_key="PENG-TEST-1234")
+        result = client.keepalive()
+
+        assert result["success"] is False
+
+
+class TestInitLicenseClient:
+    """Tests for init_license_client function."""
+
+    def setup_method(self):
+        import penguin_licensing.client
+        penguin_licensing.client._license_client = None
+
+    def teardown_method(self):
+        import penguin_licensing.client
+        penguin_licensing.client._license_client = None
+
+    @patch('penguin_licensing.client.requests.Session.post')
+    def test_init_license_client_from_app_config(self, mock_post):
+        """init_license_client reads from Flask app config."""
+        from penguin_licensing.client import init_license_client
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "customer": "Test Co",
+            "product": "elder",
+            "license_version": "2.0",
+            "license_key": "PENG-TEST-1234",
+            "expires_at": "2030-01-01T00:00:00Z",
+            "issued_at": "2024-01-01T00:00:00Z",
+            "tier": "enterprise",
+            "features": [],
+            "limits": {},
+            "metadata": {"server_id": "srv-123"},
+        }
+        mock_post.return_value = mock_response
+
+        mock_app = MagicMock()
+        mock_app.config = {
+            "LICENSE_KEY": "PENG-TEST-1234",
+            "LICENSE_SERVER_URL": "https://custom.license.io",
+        }
+
+        client = init_license_client(mock_app)
+
+        assert client is not None
+        assert client.license_key == "PENG-TEST-1234"
+        assert client.base_url == "https://custom.license.io"
+
+    @patch('penguin_licensing.client.requests.Session.post')
+    @patch.dict("os.environ", {"LICENSE_KEY": "PENG-ENV-1234", "LICENSE_SERVER_URL": "https://env.license.io"})
+    def test_init_license_client_falls_back_to_env(self, mock_post):
+        """init_license_client falls back to env vars when app config empty."""
+        from penguin_licensing.client import init_license_client
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "customer": "Env Co",
+            "product": "elder",
+            "license_version": "2.0",
+            "license_key": "PENG-ENV-1234",
+            "expires_at": "2030-01-01T00:00:00Z",
+            "issued_at": "2024-01-01T00:00:00Z",
+            "tier": "professional",
+            "features": [],
+            "limits": {},
+            "metadata": {},
+        }
+        mock_post.return_value = mock_response
+
+        mock_app = MagicMock()
+        mock_app.config = {}
+
+        client = init_license_client(mock_app)
+        assert client is not None
+        assert client.license_key == "PENG-ENV-1234"
+
+    @patch('penguin_licensing.client.requests.Session.post')
+    def test_init_license_client_sets_global(self, mock_post):
+        """init_license_client sets the global _license_client."""
+        from penguin_licensing.client import init_license_client
+        import penguin_licensing.client as mod
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "customer": "Test Co",
+            "product": "elder",
+            "license_version": "2.0",
+            "license_key": "PENG-TEST-1234",
+            "expires_at": "2030-01-01T00:00:00Z",
+            "issued_at": "2024-01-01T00:00:00Z",
+            "tier": "enterprise",
+            "features": [],
+            "limits": {},
+            "metadata": {},
+        }
+        mock_post.return_value = mock_response
+
+        mock_app = MagicMock()
+        mock_app.config = {"LICENSE_KEY": "PENG-TEST-1234"}
+
+        client = init_license_client(mock_app)
+        assert mod._license_client is client
+
+
 class TestGetLicenseClient:
     """Tests for get_license_client singleton."""
 

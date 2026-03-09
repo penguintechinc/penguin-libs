@@ -104,3 +104,44 @@ class TestAsyncDB:
 
     async def test_repr(self, async_db):
         assert "AsyncDB(" in repr(async_db)
+
+    async def test_metadata_property(self, async_db):
+        assert async_db.metadata is not None
+
+    async def test_getattr_private_raises(self, async_db):
+        with pytest.raises(AttributeError):
+            async_db._private
+
+    async def test_getattr_nonexistent_raises(self, async_db):
+        from penguin_dal.exceptions import TableNotFoundError
+        with pytest.raises(TableNotFoundError):
+            async_db.nonexistent_table
+
+    async def test_extract_table_no_table(self, async_db):
+        q = (async_db.users.id > 0)
+        q._table = None
+        with pytest.raises(ValueError, match="Cannot determine table"):
+            async_db(q)
+
+    async def test_register_validators(self, async_db):
+        async_db.register_validators("users", {"name": [lambda x: None]})
+        assert "users" in async_db._validators
+
+    async def test_register_model(self, async_db):
+        class FakeModel:
+            __tablename__ = "users"
+        async_db.register_model(FakeModel)
+        assert "users" in async_db._models
+
+    async def test_register_model_with_validators(self, async_db):
+        class ValidatedModel:
+            __tablename__ = "users"
+            _dal_validators = {"name": [lambda x: None]}
+        async_db.register_model(ValidatedModel)
+        assert "users" in async_db._validators
+
+    async def test_register_model_no_tablename(self, async_db):
+        class NoTable:
+            pass
+        with pytest.raises(ValueError, match="__tablename__"):
+            async_db.register_model(NoTable)

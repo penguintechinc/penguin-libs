@@ -136,3 +136,32 @@ class TestDB:
 
     def test_commit_noop(self, db):
         db.commit()  # Should not raise
+
+    def test_getattr_private_raises(self, db):
+        with pytest.raises(AttributeError):
+            db._private
+
+    def test_extract_table_no_table(self, db):
+        q = (db.users.id > 0)
+        q._table = None
+        with pytest.raises(ValueError, match="Cannot determine table"):
+            db(q)
+
+    def test_register_validators(self, db):
+        db.register_validators("users", {"name": [lambda x: None]})
+        assert "users" in db._validators
+
+    def test_register_model(self, db):
+        class FakeModel:
+            __tablename__ = "users"
+        db.register_model(FakeModel)
+        assert "users" in db._models
+
+    def test_register_model_no_tablename(self, db):
+        class NoTable:
+            pass
+        with pytest.raises(ValueError, match="__tablename__"):
+            db.register_model(NoTable)
+
+    def test_metadata_property(self, db):
+        assert db.metadata is not None

@@ -14,6 +14,8 @@ export interface MenuCategory {
   header?: string;
   collapsible?: boolean;
   items: MenuItem[];
+  key?: string;           // identifier for programmatic control
+  defaultOpen?: boolean;  // initial state — default true (open)
 }
 
 export interface SidebarColorConfig {
@@ -62,6 +64,9 @@ export interface SidebarMenuProps {
   mobileOpen?: boolean;
   onMobileClose?: () => void;
   closeOnNavigate?: boolean;
+  autoCollapse?: boolean;       // opt-in; default false — backward-compatible
+  activeGroupKey?: string;      // key of group to keep open; others collapse
+  onGroupToggle?: (key: string, isOpen: boolean) => void;
 }
 
 export interface SidebarMenuTriggerProps {
@@ -178,15 +183,42 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   mobileOpen,
   onMobileClose,
   closeOnNavigate = true,
+  autoCollapse = false,
+  activeGroupKey,
+  onGroupToggle,
 }) => {
-  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    categories.forEach((cat) => {
+      const k = cat.key ?? cat.header;
+      if (k && cat.defaultOpen === false) init[k] = true; // true = collapsed
+    });
+    return init;
+  });
   const theme = resolveTheme(THEME_PRESETS, themeMode, colors);
 
-  const toggleCategory = (header: string) => {
-    setCollapsedCategories((prev) => ({
-      ...prev,
-      [header]: !prev[header],
-    }));
+  // When autoCollapse is enabled, collapse all groups except the active one
+  useEffect(() => {
+    if (!autoCollapse || !activeGroupKey) return;
+    setCollapsedCategories(() => {
+      const next: Record<string, boolean> = {};
+      categories.forEach((cat) => {
+        const k = cat.key ?? cat.header;
+        if (k) next[k] = k !== activeGroupKey; // false=open for active, true=collapsed for others
+      });
+      return next;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoCollapse, activeGroupKey]); // intentionally omit `categories` — route change drives this
+
+  const toggleCategory = (cat: MenuCategory) => {
+    const k = cat.key ?? cat.header;
+    if (!k) return;
+    setCollapsedCategories((prev) => {
+      const next = { ...prev, [k]: !prev[k] };
+      onGroupToggle?.(k, !next[k]); // isOpen = !collapsed
+      return next;
+    });
   };
 
   const isActive = (itemHref: string) => {
@@ -266,7 +298,8 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
 
         <div className="space-y-6">
           {categories.map((category, categoryIndex) => {
-            const isCollapsed = category.header ? collapsedCategories[category.header] : false;
+            const k = category.key ?? category.header;
+            const isCollapsed = k ? (collapsedCategories[k] ?? false) : false;
             const visibleItems = category.items.filter((item) => hasPermission(item));
 
             if (visibleItems.length === 0) return null;
@@ -276,7 +309,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
                 {/* Category Header */}
                 {category.header && (
                   <button
-                    onClick={() => category.collapsible && toggleCategory(category.header!)}
+                    onClick={() => category.collapsible && toggleCategory(category)}
                     className={`flex items-center justify-between w-full px-4 py-2 text-xs font-semibold uppercase tracking-wider ${theme.categoryHeaderText} ${
                       category.collapsible ? 'cursor-pointer hover:text-slate-300' : ''
                     }`}

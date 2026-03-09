@@ -130,6 +130,60 @@ class TestFileKeyStore:
         assert isinstance(key, EllipticCurvePrivateKey)
 
 
+class TestAlgorithmForKey:
+    def test_rsa_key_returns_rs256(self):
+        from penguin_aaa.crypto.keystore import _algorithm_for_key
+        store = MemoryKeyStore(algorithm="RS256")
+        key, _ = store.get_signing_key()
+        assert _algorithm_for_key(key) == "RS256"
+
+    def test_ec_p256_returns_es256(self):
+        from penguin_aaa.crypto.keystore import _algorithm_for_key
+        store = MemoryKeyStore(algorithm="ES256")
+        key, _ = store.get_signing_key()
+        assert _algorithm_for_key(key) == "ES256"
+
+    def test_ec_p384_returns_es384(self):
+        from penguin_aaa.crypto.keystore import _algorithm_for_key
+        store = MemoryKeyStore(algorithm="ES384")
+        key, _ = store.get_signing_key()
+        assert _algorithm_for_key(key) == "ES384"
+
+    def test_ec_p521_returns_es512(self):
+        from penguin_aaa.crypto.keystore import _algorithm_for_key
+        store = MemoryKeyStore(algorithm="ES512")
+        key, _ = store.get_signing_key()
+        assert _algorithm_for_key(key) == "ES512"
+
+
+class TestGenerateKey:
+    def test_es512_generates_ec_key(self):
+        store = MemoryKeyStore(algorithm="ES512")
+        key, _ = store.get_signing_key()
+        assert isinstance(key, EllipticCurvePrivateKey)
+        assert key.curve.name == "secp521r1"
+
+    def test_unsupported_algorithm_raises(self):
+        from penguin_aaa.crypto.keystore import _generate_key
+        with pytest.raises(ValueError, match="unsupported algorithm"):
+            _generate_key("EdDSA")
+
+
+class TestLoadPrivateKeyFromPem:
+    def test_unsupported_key_type_raises(self):
+        from unittest.mock import patch, MagicMock
+        from penguin_aaa.crypto.keystore import _load_private_key_from_pem
+
+        fake_key = MagicMock()
+        fake_key.__class__.__name__ = "Ed25519PrivateKey"
+        with patch(
+            "penguin_aaa.crypto.keystore.serialization.load_pem_private_key",
+            return_value=fake_key,
+        ):
+            with pytest.raises(TypeError, match="not supported"):
+                _load_private_key_from_pem(b"fake-pem")
+
+
 class TestPublicKeyToJwk:
     def test_rsa_jwk_structure(self):
         store = MemoryKeyStore(algorithm="RS256")

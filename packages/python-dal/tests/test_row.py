@@ -55,6 +55,11 @@ class TestRow:
         assert r1 == r2
         assert r1 != r3
 
+    def test_eq_non_row(self):
+        row = Row({"id": 1})
+        result = row.__eq__("not a row")
+        assert result is NotImplemented
+
     def test_repr(self):
         row = Row({"id": 1})
         assert "Row(" in repr(row)
@@ -72,6 +77,10 @@ class TestRows:
     def test_last(self):
         rows = Rows([Row({"id": 1}), Row({"id": 2})])
         assert rows.last().id == 2
+
+    def test_last_empty(self):
+        rows = Rows([])
+        assert rows.last() is None
 
     def test_len(self):
         rows = Rows([Row({"id": 1}), Row({"id": 2})])
