@@ -156,6 +156,33 @@ class TestParseURIErrors:
             parse_uri("ftp://example.com")
 
 
+class TestParseURIUrlparseFailure:
+    """Test the urlparse exception path (lines 83-84)."""
+
+    def test_urlparse_exception_raises_invalid_uri_error(self) -> None:
+        """When urlparse raises, InvalidURIError wraps it."""
+        from unittest.mock import patch
+
+        with patch(
+            "penguin_sal.core.uri_parser.urlparse",
+            side_effect=ValueError("bad parse"),
+        ):
+            with pytest.raises(InvalidURIError, match="failed to parse"):
+                parse_uri("vault://example.com")
+
+    def test_urlparse_exception_preserves_original_uri(self) -> None:
+        from unittest.mock import patch
+
+        with patch(
+            "penguin_sal.core.uri_parser.urlparse",
+            side_effect=RuntimeError("oops"),
+        ):
+            with pytest.raises(InvalidURIError) as exc_info:
+                parse_uri("vault://example.com")
+            assert exc_info.value.uri == "vault://example.com"
+            assert "oops" in exc_info.value.reason
+
+
 class TestSupportedSchemes:
     """Test the SUPPORTED_SCHEMES constant."""
 

@@ -185,3 +185,26 @@ class TestRequireAnyScope:
 
         result = await handler(req, extra="passed")
         assert result == "passed"
+
+
+# ---------------------------------------------------------------------------
+# _extract_request edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestExtractRequest:
+    @pytest.mark.asyncio
+    async def test_raises_when_no_args(self):
+        """Calling a decorated handler with no arguments raises ValueError."""
+        from penguin_aaa.authz.decorators import _extract_request
+
+        with pytest.raises(ValueError, match="No request argument found"):
+            _extract_request(())
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_first_arg_without_state(self):
+        """When no arg has state.claims, returns the first arg."""
+        from penguin_aaa.authz.decorators import _extract_request
+
+        result = _extract_request(("fallback",))
+        assert result == "fallback"
