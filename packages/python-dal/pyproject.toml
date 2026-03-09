@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "penguin-dal"
+version = "0.1.0"
+description = "SQLAlchemy runtime wrapper with PyDAL ergonomics for Penguin Tech applications"
+readme = "README.md"
+license = {text = "AGPL-3.0"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Penguin Tech Inc", email = "dev@penguintech.io"}
+]
+keywords = ["penguintech", "dal", "database", "sqlalchemy", "orm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "sqlalchemy>=2.0",
+]
+
+[project.optional-dependencies]
+postgresql = ["psycopg2-binary>=2.9"]
+asyncpg = ["asyncpg>=0.29"]
+mysql = ["pymysql>=1.1"]
+aiomysql = ["aiomysql>=0.2"]
+mssql = ["pyodbc>=5.0"]
+firebird = ["sqlalchemy-firebird>=2.0"]
+sqlite-async = ["aiosqlite>=0.20"]
+flask = ["flask>=3.0"]
+quart = ["quart>=0.19"]
+all = [
+    "psycopg2-binary>=2.9",
+    "asyncpg>=0.29",
+    "pymysql>=1.1",
+    "aiomysql>=0.2",
+    "aiosqlite>=0.20",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.0",
+    "aiosqlite>=0.20",
+    "black>=23.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+    "bandit>=1.7",
+]
+
+[project.urls]
+Homepage = "https://www.penguintech.io"
+Repository = "https://github.com/penguintechinc/penguin-libs"
+Issues = "https://github.com/penguintechinc/penguin-libs/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ['py311', 'py312', 'py313']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"

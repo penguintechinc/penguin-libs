@@ -14,6 +14,7 @@ Models:
 # flake8: noqa: E501
 
 
+import warnings
 from typing import Any, Dict, TypeVar
 
 from pydantic import BaseModel, ConfigDict
@@ -34,7 +35,8 @@ class ElderBaseModel(BaseModel):
 
     Methods:
         to_dict: Convert model to dictionary with control over None/unset values
-        from_pydal_row: Convert PyDAL Row objects to model instances
+        from_row: Convert database Row objects (penguin-dal, PyDAL, SQLAlchemy, or dict) to model instances
+        from_pydal_row: Deprecated alias for from_row
     """
 
     model_config = ConfigDict(
@@ -64,35 +66,75 @@ class ElderBaseModel(BaseModel):
         )
 
     @classmethod
-    def from_pydal_row(cls: type[T], row: Any) -> T:
+    def from_row(cls: type[T], row: Any) -> T:
         """
-        Convert a PyDAL Row object to a model instance.
+        Convert a database Row object to a model instance.
 
-        PyDAL Row objects represent database records with attribute access.
-        This method safely converts None values and handles the row's dict representation.
+        Supports multiple row types:
+        - penguin_dal.query.Row (has .as_dict())
+        - PyDAL Row (has __iter__ or .as_dict())
+        - SQLAlchemy Row (has ._mapping)
+        - Plain dict
 
         Args:
-            row: PyDAL Row object from database query
+            row: Database row object or dictionary
 
         Returns:
             Model instance with data from the row
 
         Raises:
             ValidationError: If row data fails model validation
+            TypeError: If row type is not supported
 
         Example:
-            >>> from pydal import DAL
-            >>> db = DAL('sqlite:memory:')
-            >>> # ... assume table and row exist
-            >>> model = MyModel.from_pydal_row(row)
+            >>> model = MyModel.from_row(row)
         """
-        # Convert PyDAL row to dictionary, handling None values
-        row_dict = dict(row) if hasattr(row, "__iter__") else row.as_dict()
+        if isinstance(row, dict):
+            row_dict = row
+        elif hasattr(row, "_mapping"):
+            # SQLAlchemy Row — ._mapping provides a dict-like view
+            row_dict = dict(row._mapping)
+        elif hasattr(row, "as_dict"):
+            # penguin-dal Row or PyDAL Row with .as_dict()
+            row_dict = row.as_dict()
+        elif hasattr(row, "__iter__"):
+            # PyDAL Row fallback — iterable of key/value pairs
+            row_dict = dict(row)
+        else:
+            raise TypeError(
+                f"Unsupported row type: {type(row).__name__}. "
+                "Expected penguin-dal Row, PyDAL Row, SQLAlchemy Row, or dict."
+            )
+
         # Filter out None values that may cause validation issues
         cleaned_dict = {
             k: v for k, v in row_dict.items() if v is not None or k in cls.model_fields
         }
         return cls(**cleaned_dict)
+
+    @classmethod
+    def from_pydal_row(cls: type[T], row: Any) -> T:
+        """
+        Deprecated: Use from_row() instead.
+
+        Convert a PyDAL Row object to a model instance.
+
+        .. deprecated::
+            Use :meth:`from_row` instead, which supports penguin-dal,
+            PyDAL, SQLAlchemy, and plain dict row types.
+
+        Args:
+            row: PyDAL Row object from database query
+
+        Returns:
+            Model instance with data from the row
+        """
+        warnings.warn(
+            "from_pydal_row() is deprecated, use from_row() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return cls.from_row(row)
 
 
 class ImmutableModel(ElderBaseModel):
