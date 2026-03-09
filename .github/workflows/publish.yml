@@ -5,12 +5,12 @@ on:
     tags:
       - 'react-libs-v*'
       - 'react-aaa-v*'
-      - 'python-libs-v*'
-      - 'python-licensing-v*'
-      - 'python-secrets-v*'
-      - 'python-utils-v*'
-      - 'python-aaa-v*'
-      - 'python-dal-v*'
+      - 'penguin-libs-v*'
+      - 'penguin-licensing-v*'
+      - 'penguin-secrets-v*'
+      - 'penguin-utils-v*'
+      - 'penguin-aaa-v*'
+      - 'penguin-dal-v*'
       - 'flutter-libs-v*'
       - 'go-aaa-v*'
       - 'v*'
@@ -99,7 +99,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-libs' || github.event.inputs.package == 'all') ||
-      startsWith(github.ref, 'refs/tags/python-libs-v') ||
+      startsWith(github.ref, 'refs/tags/penguin-libs-v') ||
       startsWith(github.ref, 'refs/tags/v')
 
     defaults:
@@ -150,7 +150,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-licensing' || github.event.inputs.package == 'all') ||
-      startsWith(github.ref, 'refs/tags/python-licensing-v') ||
+      startsWith(github.ref, 'refs/tags/penguin-licensing-v') ||
       startsWith(github.ref, 'refs/tags/v')
 
     defaults:
@@ -201,7 +201,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-secrets' || github.event.inputs.package == 'all') ||
-      startsWith(github.ref, 'refs/tags/python-secrets-v') ||
+      startsWith(github.ref, 'refs/tags/penguin-secrets-v') ||
       startsWith(github.ref, 'refs/tags/v')
 
     defaults:
@@ -252,7 +252,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-utils' || github.event.inputs.package == 'all') ||
-      startsWith(github.ref, 'refs/tags/python-utils-v') ||
+      startsWith(github.ref, 'refs/tags/penguin-utils-v') ||
       startsWith(github.ref, 'refs/tags/v')
 
     defaults:
@@ -400,7 +400,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-aaa' || github.event.inputs.package == 'all') ||
-      startsWith(github.ref, 'refs/tags/python-aaa-v') ||
+      startsWith(github.ref, 'refs/tags/penguin-aaa-v') ||
       startsWith(github.ref, 'refs/tags/v')
 
     defaults:
@@ -451,7 +451,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-dal' || github.event.inputs.package == 'all') ||
-      startsWith(github.ref, 'refs/tags/python-dal-v') ||
+      startsWith(github.ref, 'refs/tags/penguin-dal-v') ||
       startsWith(github.ref, 'refs/tags/v')
 
     defaults:

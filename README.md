@@ -186,12 +186,12 @@ Publishing is automated via GitHub Actions on version tags:
 ```bash
 # Tag format: {package}-v{version}
 git tag react-libs-v1.2.0
-git tag python-aaa-v0.1.0
-git tag python-dal-v0.1.0
-git tag python-libs-v0.1.0
-git tag python-licensing-v0.1.0
-git tag python-secrets-v0.1.0
-git tag python-utils-v0.1.0
+git tag penguin-aaa-v0.1.0
+git tag penguin-dal-v0.1.0
+git tag penguin-libs-v0.1.0
+git tag penguin-licensing-v0.1.0
+git tag penguin-secrets-v0.1.0
+git tag penguin-utils-v0.1.0
 git tag flutter-libs-v0.1.0
 
 # Push tags to trigger publishing
