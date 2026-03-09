@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, patch
 
 from penguin_aaa.audit.sinks import CallbackSink, FileSink, StdoutSink, SyslogSink
 
-
 # ---------------------------------------------------------------------------
 # StdoutSink
 # ---------------------------------------------------------------------------

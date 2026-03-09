@@ -10,7 +10,6 @@ import pytest
 
 from penguin_aaa.audit.killkrill import KillKrillConfig, KillKrillSink
 
-
 # ---------------------------------------------------------------------------
 # KillKrillConfig
 # ---------------------------------------------------------------------------

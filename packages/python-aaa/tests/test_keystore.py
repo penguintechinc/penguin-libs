@@ -171,7 +171,8 @@ class TestGenerateKey:
 
 class TestLoadPrivateKeyFromPem:
     def test_unsupported_key_type_raises(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         from penguin_aaa.crypto.keystore import _load_private_key_from_pem
 
         fake_key = MagicMock()
