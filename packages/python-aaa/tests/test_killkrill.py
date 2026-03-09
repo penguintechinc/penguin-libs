@@ -135,9 +135,7 @@ class TestKillKrillSink:
 
             mock_client.post.assert_called_once()
             call_args = mock_client.post.call_args
-            assert "/api/v1/events" in call_args[0][0] or "/api/v1/events" in str(
-                call_args
-            )
+            assert "/api/v1/events" in call_args[0][0] or "/api/v1/events" in str(call_args)
             assert len(sink._buffer) == 0
         finally:
             sink._stopped.set()

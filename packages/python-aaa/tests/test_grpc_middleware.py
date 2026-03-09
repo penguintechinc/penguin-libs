@@ -39,6 +39,7 @@ def _import_interceptor():
     if mod_name in sys.modules:
         del sys.modules[mod_name]
     from penguin_aaa.middleware.grpc import OIDCAuthInterceptor
+
     return OIDCAuthInterceptor
 
 

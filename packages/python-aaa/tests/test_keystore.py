@@ -133,24 +133,28 @@ class TestFileKeyStore:
 class TestAlgorithmForKey:
     def test_rsa_key_returns_rs256(self):
         from penguin_aaa.crypto.keystore import _algorithm_for_key
+
         store = MemoryKeyStore(algorithm="RS256")
         key, _ = store.get_signing_key()
         assert _algorithm_for_key(key) == "RS256"
 
     def test_ec_p256_returns_es256(self):
         from penguin_aaa.crypto.keystore import _algorithm_for_key
+
         store = MemoryKeyStore(algorithm="ES256")
         key, _ = store.get_signing_key()
         assert _algorithm_for_key(key) == "ES256"
 
     def test_ec_p384_returns_es384(self):
         from penguin_aaa.crypto.keystore import _algorithm_for_key
+
         store = MemoryKeyStore(algorithm="ES384")
         key, _ = store.get_signing_key()
         assert _algorithm_for_key(key) == "ES384"
 
     def test_ec_p521_returns_es512(self):
         from penguin_aaa.crypto.keystore import _algorithm_for_key
+
         store = MemoryKeyStore(algorithm="ES512")
         key, _ = store.get_signing_key()
         assert _algorithm_for_key(key) == "ES512"
@@ -165,6 +169,7 @@ class TestGenerateKey:
 
     def test_unsupported_algorithm_raises(self):
         from penguin_aaa.crypto.keystore import _generate_key
+
         with pytest.raises(ValueError, match="unsupported algorithm"):
             _generate_key("EdDSA")
 
