@@ -2,7 +2,6 @@
 
 import logging
 import uuid
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -15,26 +14,15 @@ from penguin_libs.h3.middleware import (
 
 async def mock_app(scope, receive, send):
     """Mock ASGI application."""
-    await send({
-        "type": "http.response.start",
-        "status": 200,
-        "headers": []
-    })
-    await send({
-        "type": "http.response.body",
-        "body": b"ok"
-    })
+    await send({"type": "http.response.start", "status": 200, "headers": []})
+    await send({"type": "http.response.body", "body": b"ok"})
 
 
 @pytest.mark.asyncio
 async def test_correlation_id_generated():
     """Test that middleware generates correlation ID if not provided."""
     middleware = CorrelationIDMiddleware(mock_app)
-    scope = {
-        "type": "http",
-        "headers": [],
-        "state": {}
-    }
+    scope = {"type": "http", "headers": [], "state": {}}
     messages = []
 
     async def receive():
@@ -61,11 +49,7 @@ async def test_correlation_id_propagated():
     """Test that provided correlation ID is propagated."""
     middleware = CorrelationIDMiddleware(mock_app)
     test_id = "test-correlation-id-123"
-    scope = {
-        "type": "http",
-        "headers": [(b"x-correlation-id", test_id.encode())],
-        "state": {}
-    }
+    scope = {"type": "http", "headers": [(b"x-correlation-id", test_id.encode())], "state": {}}
     messages = []
 
     async def receive():
@@ -89,12 +73,7 @@ async def test_correlation_id_propagated():
 async def test_logging_captures_status(caplog):
     """Test that LoggingMiddleware logs request status."""
     middleware = LoggingMiddleware(mock_app)
-    scope = {
-        "type": "http",
-        "method": "GET",
-        "path": "/test",
-        "state": {}
-    }
+    scope = {"type": "http", "method": "GET", "path": "/test", "state": {}}
 
     async def receive():
         return {}
@@ -114,15 +93,12 @@ async def test_logging_captures_status(caplog):
 @pytest.mark.asyncio
 async def test_auth_blocks_missing_token():
     """Test that AuthMiddleware blocks requests without Authorization header."""
+
     async def validate_fn(token):
         return {"user_id": "123"}
 
     middleware = AuthMiddleware(mock_app, validate_fn)
-    scope = {
-        "type": "http",
-        "headers": [],
-        "state": {}
-    }
+    scope = {"type": "http", "headers": [], "state": {}}
     messages = []
 
     async def receive():
@@ -140,15 +116,12 @@ async def test_auth_blocks_missing_token():
 @pytest.mark.asyncio
 async def test_auth_blocks_invalid_token():
     """Test that AuthMiddleware blocks requests with invalid tokens."""
+
     async def validate_fn(token):
         raise ValueError("Invalid token")
 
     middleware = AuthMiddleware(mock_app, validate_fn)
-    scope = {
-        "type": "http",
-        "headers": [(b"authorization", b"Bearer invalid-token")],
-        "state": {}
-    }
+    scope = {"type": "http", "headers": [(b"authorization", b"Bearer invalid-token")], "state": {}}
     messages = []
 
     async def receive():
@@ -166,6 +139,7 @@ async def test_auth_blocks_invalid_token():
 @pytest.mark.asyncio
 async def test_auth_allows_valid_token():
     """Test that AuthMiddleware allows requests with valid tokens."""
+
     async def validate_fn(token):
         return {"user_id": "123"}
 
@@ -174,22 +148,11 @@ async def test_auth_allows_valid_token():
     async def inner_app(scope, receive, send):
         nonlocal inner_app_called
         inner_app_called = True
-        await send({
-            "type": "http.response.start",
-            "status": 200,
-            "headers": []
-        })
-        await send({
-            "type": "http.response.body",
-            "body": b"ok"
-        })
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
 
     middleware = AuthMiddleware(inner_app, validate_fn)
-    scope = {
-        "type": "http",
-        "headers": [(b"authorization", b"Bearer valid-token")],
-        "state": {}
-    }
+    scope = {"type": "http", "headers": [(b"authorization", b"Bearer valid-token")], "state": {}}
     messages = []
 
     async def receive():
@@ -209,6 +172,7 @@ async def test_auth_allows_valid_token():
 @pytest.mark.asyncio
 async def test_auth_public_path_bypass():
     """Test that AuthMiddleware bypasses auth for public paths."""
+
     async def validate_fn(token):
         raise ValueError("Should not be called")
 
@@ -217,27 +181,11 @@ async def test_auth_public_path_bypass():
     async def inner_app(scope, receive, send):
         nonlocal inner_app_called
         inner_app_called = True
-        await send({
-            "type": "http.response.start",
-            "status": 200,
-            "headers": []
-        })
-        await send({
-            "type": "http.response.body",
-            "body": b"ok"
-        })
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
 
-    middleware = AuthMiddleware(
-        inner_app,
-        validate_fn,
-        public_paths={"/health", "/public"}
-    )
-    scope = {
-        "type": "http",
-        "path": "/health",
-        "headers": [],
-        "state": {}
-    }
+    middleware = AuthMiddleware(inner_app, validate_fn, public_paths={"/health", "/public"})
+    scope = {"type": "http", "path": "/health", "headers": [], "state": {}}
 
     async def receive():
         return {}

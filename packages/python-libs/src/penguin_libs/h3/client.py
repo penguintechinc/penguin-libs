@@ -90,8 +90,7 @@ class H3Client:
         async with self._lock:
             if (
                 not self._use_h3
-                and time.monotonic() - self._last_h3_try
-                >= self._cfg.h3_retry_interval
+                and time.monotonic() - self._last_h3_try >= self._cfg.h3_retry_interval
             ):
                 logger.info("Re-attempting HTTP/3")
                 self._use_h3 = True
@@ -101,9 +100,7 @@ class H3Client:
         if self._use_h3 and self._h3_client is not None:
             return self._h3_client
         if self._h2_client is None:
-            raise H3ClientError(
-                "Client not initialized. Use 'async with H3Client()' context."
-            )
+            raise H3ClientError("Client not initialized. Use 'async with H3Client()' context.")
         return self._h2_client
 
     async def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:

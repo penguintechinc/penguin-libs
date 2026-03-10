@@ -1,6 +1,6 @@
 """Tests for penguin_libs.h3.client module."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -29,9 +29,9 @@ async def test_client_context_manager():
     client = H3Client(config)
 
     # Mock _ensure_clients to avoid real HTTP connections
-    with patch.object(client, '_ensure_clients', new_callable=AsyncMock):
+    with patch.object(client, "_ensure_clients", new_callable=AsyncMock):
         # Mock close to track it was called
-        with patch.object(client, 'close', new_callable=AsyncMock) as mock_close:
+        with patch.object(client, "close", new_callable=AsyncMock) as mock_close:
             async with client as c:
                 assert c is client
             mock_close.assert_called_once()
@@ -45,8 +45,8 @@ async def test_client_fallback_on_h3_import_error():
 
     # Simulate the _ensure_clients path where httpx_h3 import fails
     # by directly calling the method with a patched import
-    with patch.dict('sys.modules', {'httpx_h3': None}):
-        with patch('httpx.AsyncClient') as mock_async_client:
+    with patch.dict("sys.modules", {"httpx_h3": None}):
+        with patch("httpx.AsyncClient") as mock_async_client:
             mock_async_client.return_value = AsyncMock()
             await client._ensure_clients()
 

@@ -16,6 +16,7 @@ class TestRow:
     def test_attribute_error(self):
         row = Row({"id": 1})
         import pytest
+
         with pytest.raises(AttributeError, match="no column"):
             row.nonexistent
 

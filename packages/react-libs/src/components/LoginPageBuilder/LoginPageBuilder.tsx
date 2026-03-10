@@ -17,6 +17,7 @@ import { CookieConsent } from './components/CookieConsent';
 import { Footer } from './components/Footer';
 import { buildOAuth2Url, buildCustomOAuth2Url, buildOIDCUrl } from './utils/oauth';
 import { initiateSAMLLogin } from './utils/saml';
+import { PasskeyButton } from './components/PasskeyButton';
 
 /**
  * Logger utility - sanitizes all sensitive data before logging
@@ -74,6 +75,7 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
   gdpr,
   captcha,
   mfa,
+  passkey,
   themeMode = 'dark',
   colors,
   showForgotPassword = true,
@@ -130,10 +132,12 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
       appName: branding.appName,
       captchaEnabled: captcha?.enabled ?? false,
       mfaEnabled: mfa?.enabled ?? false,
+      passkeyEnabled: passkey?.enabled ?? false,
       socialProviders: socialLogins?.length ?? 0,
       gdprEnabled: gdpr?.enabled ?? true,
     });
-  }, [branding.appName, captcha?.enabled, mfa?.enabled, socialLogins?.length, gdpr?.enabled]);
+    console.log('[LoginPageBuilder] Passkey enabled:', !!(passkey?.enabled));
+  }, [branding.appName, captcha?.enabled, mfa?.enabled, passkey?.enabled, socialLogins?.length, gdpr?.enabled]);
 
   /**
    * Handle form submission
@@ -477,6 +481,34 @@ export const LoginPageBuilder: React.FC<LoginPageBuilderProps> = ({
                 disabled={!canInteract || isSubmitting}
               />
               <LoginDivider colors={colors} />
+            </>
+          )}
+
+          {/* Passkey button (above form) */}
+          {passkey?.enabled && (
+            <>
+              <PasskeyButton
+                config={passkey}
+                onSuccess={onSuccess}
+                onFallback={() => {
+                  // PasskeyButton hides itself on fallback; password form is always visible
+                  log.info('Passkey fell back to password form');
+                }}
+                onError={(err) => {
+                  log.error('Passkey authentication error', err);
+                  setError(err.message);
+                  onError?.(err);
+                }}
+                disabled={!canInteract || isSubmitting}
+              />
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-amber-400/20" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-slate-900 text-amber-400/60">or</span>
+                </div>
+              </div>
             </>
           )}
 

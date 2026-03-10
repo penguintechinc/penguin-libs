@@ -7,12 +7,11 @@ across microservices.
 
 import uuid
 from contextvars import ContextVar
-from typing import Optional
 
 from flask import Flask, Request, g, request
 
 # Context variable for storing correlation ID
-_correlation_id: ContextVar[Optional[str]] = ContextVar("correlation_id", default=None)
+_correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=None)
 
 
 def generate_correlation_id() -> str:
@@ -25,7 +24,7 @@ def generate_correlation_id() -> str:
     return str(uuid.uuid4())
 
 
-def get_correlation_id() -> Optional[str]:
+def get_correlation_id() -> str | None:
     """
     Get the current correlation ID from context.
 
@@ -85,7 +84,7 @@ class CorrelationMiddleware:
             return {"status": "ok"}
     """
 
-    def __init__(self, app: Optional[Flask] = None) -> None:
+    def __init__(self, app: Flask | None = None) -> None:
         """
         Initialize correlation middleware.
 

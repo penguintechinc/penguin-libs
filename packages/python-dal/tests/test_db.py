@@ -1,10 +1,11 @@
 """Tests for DB (sync) entry point."""
 
+import pytest
+
 from penguin_dal.db import DB
 from penguin_dal.exceptions import TableNotFoundError
-from penguin_dal.query import QuerySet, Row, Rows
+from penguin_dal.query import QuerySet, Rows
 from penguin_dal.table_proxy import TableProxy
-import pytest
 
 
 class TestDB:
@@ -121,10 +122,12 @@ class TestDB:
         assert len(rows) == 2
 
     def test_bulk_insert(self, db):
-        db.users.bulk_insert([
-            {"email": "x@example.com", "name": "X", "active": True},
-            {"email": "y@example.com", "name": "Y", "active": True},
-        ])
+        db.users.bulk_insert(
+            [
+                {"email": "x@example.com", "name": "X", "active": True},
+                {"email": "y@example.com", "name": "Y", "active": True},
+            ]
+        )
         assert db(db.users.id > 0).count() == 5
 
     def test_repr(self, db):
@@ -142,7 +145,7 @@ class TestDB:
             db._private
 
     def test_extract_table_no_table(self, db):
-        q = (db.users.id > 0)
+        q = db.users.id > 0
         q._table = None
         with pytest.raises(ValueError, match="Cannot determine table"):
             db(q)
@@ -154,12 +157,14 @@ class TestDB:
     def test_register_model(self, db):
         class FakeModel:
             __tablename__ = "users"
+
         db.register_model(FakeModel)
         assert "users" in db._models
 
     def test_register_model_no_tablename(self, db):
         class NoTable:
             pass
+
         with pytest.raises(ValueError, match="__tablename__"):
             db.register_model(NoTable)
 

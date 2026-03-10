@@ -11,8 +11,9 @@ Provides the foundation for PyDAL-style validators with:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Sequence, TypeVar
+from typing import Any, Generic, TypeVar
 
 T = TypeVar("T")
 V = TypeVar("V")

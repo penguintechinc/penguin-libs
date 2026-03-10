@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # Map PyDAL-style URI prefixes to SQLAlchemy equivalents
 _URI_MAP: dict[str, str] = {
     "postgres://": "postgresql://",
@@ -42,7 +41,7 @@ def normalize_uri(uri: str) -> str:
 
     for old, new in _URI_MAP.items():
         if uri.startswith(old):
-            uri = new + uri[len(old):]
+            uri = new + uri[len(old) :]
             break
 
     return uri
@@ -68,7 +67,7 @@ def ensure_async_uri(uri: str) -> str:
 
     if scheme in _ASYNC_DRIVER_MAP:
         async_scheme = _ASYNC_DRIVER_MAP[scheme]
-        return async_scheme + uri[len(scheme):]
+        return async_scheme + uri[len(scheme) :]
 
     raise ValueError(
         f"No async driver known for scheme '{scheme}'. "

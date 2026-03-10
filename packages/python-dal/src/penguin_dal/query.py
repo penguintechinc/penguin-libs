@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterator, Sequence
+from collections.abc import Iterator
+from typing import Any
 
 from sqlalchemy import ColumnElement, and_, not_, or_
 
@@ -151,7 +152,10 @@ class QuerySet:
         query: Query | None,
         session_factory: Any,
     ) -> None:
-        from sqlalchemy import select as sa_select, delete as sa_delete, update as sa_update
+        from sqlalchemy import delete as sa_delete
+        from sqlalchemy import select as sa_select
+        from sqlalchemy import update as sa_update
+
         self._table = table
         self._query = query
         self._session_factory = session_factory
@@ -282,7 +286,10 @@ class AsyncQuerySet:
         query: Query | None,
         session_factory: Any,
     ) -> None:
-        from sqlalchemy import select as sa_select, delete as sa_delete, update as sa_update
+        from sqlalchemy import delete as sa_delete
+        from sqlalchemy import select as sa_select
+        from sqlalchemy import update as sa_update
+
         self._table = table
         self._query = query
         self._session_factory = session_factory

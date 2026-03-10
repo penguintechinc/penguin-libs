@@ -20,26 +20,34 @@ def is_email(value):
 
 class TestValidators:
     def test_register_validators(self, db):
-        db.register_validators("users", {
-            "email": [is_not_empty, is_email],
-            "name": [is_not_empty],
-        })
+        db.register_validators(
+            "users",
+            {
+                "email": [is_not_empty, is_email],
+                "name": [is_not_empty],
+            },
+        )
         # Should succeed
         pk = db.users.insert(email="valid@test.com", name="Valid", active=True)
         assert pk is not None
 
     def test_validation_failure_on_insert(self, db):
-        db.register_validators("users", {
-            "email": [is_email],
-        })
+        db.register_validators(
+            "users",
+            {
+                "email": [is_email],
+            },
+        )
         with pytest.raises(ValidationError, match="Invalid email"):
             db.users.insert(email="not-an-email", name="Bad", active=True)
 
     def test_validated_columns_decorator(self, db):
-        @validated_columns({
-            "email": [is_email],
-            "name": [is_not_empty],
-        })
+        @validated_columns(
+            {
+                "email": [is_email],
+                "name": [is_not_empty],
+            }
+        )
         class FakeModel:
             __tablename__ = "users"
 

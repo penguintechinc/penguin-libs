@@ -7,7 +7,7 @@ import pytest
 
 from penguin_libs.h3.config import ServerConfig, TLSConfig
 from penguin_libs.h3.exceptions import H3ConfigError
-from penguin_libs.h3.server import _build_ssl_context, serve
+from penguin_libs.h3.server import _build_ssl_context
 
 
 def test_build_ssl_context_no_tls():
@@ -21,14 +21,11 @@ def test_build_ssl_context_no_tls():
 
 def test_build_ssl_context_with_tls():
     """Test that _build_ssl_context creates SSLContext with TLS config."""
-    tls = TLSConfig(
-        cert_path="/path/to/cert.pem",
-        key_path="/path/to/key.pem"
-    )
+    tls = TLSConfig(cert_path="/path/to/cert.pem", key_path="/path/to/key.pem")
     config = ServerConfig(tls=tls)
 
     # Mock ssl.SSLContext to avoid needing real certificates
-    with patch('ssl.SSLContext') as mock_ssl_context_class:
+    with patch("ssl.SSLContext") as mock_ssl_context_class:
         mock_context = MagicMock()
         mock_ssl_context_class.return_value = mock_context
 
@@ -39,8 +36,7 @@ def test_build_ssl_context_with_tls():
 
         # Verify load_cert_chain was called with positional args
         mock_context.load_cert_chain.assert_called_once_with(
-            "/path/to/cert.pem",
-            "/path/to/key.pem"
+            "/path/to/cert.pem", "/path/to/key.pem"
         )
 
         assert ssl_context is mock_context
@@ -50,6 +46,7 @@ def test_build_ssl_context_with_tls():
 async def test_serve_raises_without_hypercorn():
     """Test that serve raises H3ConfigError when hypercorn is not available."""
     import builtins
+
     real_import = builtins.__import__
 
     def mock_import(name, *args, **kwargs):
@@ -60,6 +57,7 @@ async def test_serve_raises_without_hypercorn():
     with patch("builtins.__import__", side_effect=mock_import):
         # Force reload to trigger import error
         import importlib
+
         from penguin_libs.h3 import server as server_module
 
         try:

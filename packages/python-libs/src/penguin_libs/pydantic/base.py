@@ -13,9 +13,8 @@ Models:
 
 # flake8: noqa: E501
 
-
 import warnings
-from typing import Any, Dict, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
@@ -49,7 +48,7 @@ class ElderBaseModel(BaseModel):
 
     def to_dict(
         self, exclude_none: bool = False, exclude_unset: bool = False, **kwargs: Any
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Convert model instance to dictionary.
 
@@ -61,9 +60,7 @@ class ElderBaseModel(BaseModel):
         Returns:
             Dictionary representation of the model
         """
-        return self.model_dump(
-            exclude_none=exclude_none, exclude_unset=exclude_unset, **kwargs
-        )
+        return self.model_dump(exclude_none=exclude_none, exclude_unset=exclude_unset, **kwargs)
 
     @classmethod
     def from_row(cls: type[T], row: Any) -> T:
@@ -107,9 +104,7 @@ class ElderBaseModel(BaseModel):
             )
 
         # Filter out None values that may cause validation issues
-        cleaned_dict = {
-            k: v for k, v in row_dict.items() if v is not None or k in cls.model_fields
-        }
+        cleaned_dict = {k: v for k, v in row_dict.items() if v is not None or k in cls.model_fields}
         return cls(**cleaned_dict)
 
     @classmethod
@@ -252,7 +247,7 @@ class ConfigurableModel(ElderBaseModel):
 
     def to_dict(
         self, exclude_none: bool = False, exclude_unset: bool = False, **kwargs: Any
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Convert model instance to dictionary, including extra fields.
 
@@ -267,9 +262,7 @@ class ConfigurableModel(ElderBaseModel):
         Returns:
             Dictionary representation including both defined and extra fields
         """
-        result = self.model_dump(
-            exclude_none=exclude_none, exclude_unset=exclude_unset, **kwargs
-        )
+        result = self.model_dump(exclude_none=exclude_none, exclude_unset=exclude_unset, **kwargs)
         # Merge extra fields if present
         if self.__pydantic_extra__:
             result.update(self.__pydantic_extra__)

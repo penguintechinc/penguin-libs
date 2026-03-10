@@ -57,7 +57,7 @@ class TableProxy:
         Returns:
             Row if found, None otherwise.
         """
-        from penguin_dal.query import Row, Rows
+        from penguin_dal.query import Row
 
         pk_cols = self._table.primary_key.columns
         if len(pk_cols) != 1:

@@ -1,7 +1,7 @@
 """Tests for pagination helpers."""
 
 import pytest
-from sqlalchemy import Column, Integer, MetaData, String, Boolean, Table, text
+from sqlalchemy import Boolean, Column, Integer, MetaData, String, Table, text
 
 from penguin_dal.pagination import Cursor, Page, async_paginate_query, paginate_query
 
@@ -77,12 +77,14 @@ async def async_db_for_pagination():
     db = AsyncDB("sqlite://", pool_size=5, echo=False)
     async with db.engine.begin() as conn:
         await conn.run_sync(_create_async_tables)
-        await conn.execute(text(
-            "INSERT INTO users (email, name, active) VALUES "
-            "('alice@example.com', 'Alice', 1), "
-            "('bob@example.com', 'Bob', 1), "
-            "('charlie@example.com', 'Charlie', 0)"
-        ))
+        await conn.execute(
+            text(
+                "INSERT INTO users (email, name, active) VALUES "
+                "('alice@example.com', 'Alice', 1), "
+                "('bob@example.com', 'Bob', 1), "
+                "('charlie@example.com', 'Charlie', 0)"
+            )
+        )
     await db.reflect()
     yield db
     await db.close()
@@ -112,9 +114,7 @@ class TestAsyncPagination:
         page1 = await async_paginate_query(qs, db.users.id, Cursor(size=1))
         assert page1.has_more is True
 
-        page2 = await async_paginate_query(
-            qs, db.users.id, Cursor(after=page1.next_cursor, size=1)
-        )
+        page2 = await async_paginate_query(qs, db.users.id, Cursor(after=page1.next_cursor, size=1))
         assert len(page2.rows) == 1
         assert page2.rows[0].id != page1.rows[0].id
 

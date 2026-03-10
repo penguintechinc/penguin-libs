@@ -1,6 +1,5 @@
 """Tests for Flask integration using mocks."""
 
-import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -67,7 +66,6 @@ class TestFlaskIntegration:
             # We need to patch at the import site
             with patch.dict("sys.modules", {"flask": MagicMock()}):
                 # Re-import to get the patched version
-                import importlib
                 import penguin_dal.flask_ext as flask_ext_mod
 
                 # Directly patch the import within get_db

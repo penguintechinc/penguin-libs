@@ -9,9 +9,10 @@ import time
 import traceback
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from threading import Lock
-from typing import Any, Callable, Optional
+from typing import Any
 
 import grpc
 import jwt
@@ -34,8 +35,8 @@ class AuthInterceptor(grpc.ServerInterceptor):
     def __init__(
         self,
         secret_key: str,
-        algorithms: Optional[list[str]] = None,
-        public_methods: Optional[set[str]] = None,
+        algorithms: list[str] | None = None,
+        public_methods: set[str] | None = None,
     ):
         """
         Initialize auth interceptor.
@@ -84,22 +85,16 @@ class AuthInterceptor(grpc.ServerInterceptor):
 
             # Add user info to context (can be retrieved in handlers)
             user_id = payload.get("sub")
-            logger.info(
-                f"Authenticated request to {method}", extra={"user_id": user_id}
-            )
+            logger.info(f"Authenticated request to {method}", extra={"user_id": user_id})
 
             return continuation(handler_call_details)
 
         except jwt.ExpiredSignatureError:
             logger.warning(f"Expired token for {method}")
-            return self._abort_with_error(
-                grpc.StatusCode.UNAUTHENTICATED, "Token has expired"
-            )
+            return self._abort_with_error(grpc.StatusCode.UNAUTHENTICATED, "Token has expired")
         except jwt.InvalidTokenError as e:
             logger.warning(f"Invalid token for {method}: {e}")
-            return self._abort_with_error(
-                grpc.StatusCode.UNAUTHENTICATED, "Invalid token"
-            )
+            return self._abort_with_error(grpc.StatusCode.UNAUTHENTICATED, "Invalid token")
 
     def _abort_with_error(
         self,
@@ -363,9 +358,7 @@ class RecoveryInterceptor(grpc.ServerInterceptor):
                         exc_info=True,
                     )
 
-                    context.abort(
-                        grpc.StatusCode.INTERNAL, f"Internal server error: {str(e)}"
-                    )
+                    context.abort(grpc.StatusCode.INTERNAL, f"Internal server error: {str(e)}")
 
             return grpc.unary_unary_rpc_method_handler(
                 recovery_handler,

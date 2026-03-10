@@ -1,6 +1,5 @@
 """Tests for penguin_libs.h3.config module."""
 
-import os
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 

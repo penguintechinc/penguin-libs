@@ -1,63 +1,48 @@
-# Penguin Tech Python Utilities
+# penguin-utils
 
-Shared Python utilities for Penguin Tech applications.
+Sanitized structured logging for Python microservices. Automatically redacts PII (passwords, tokens, emails) before writing to any output sink. Supports stdout, file, syslog, AWS CloudWatch, GCP Cloud Logging, and Apache Kafka.
 
 ## Installation
 
 ```bash
 pip install penguin-utils
 
-# With Flask extras
-pip install penguin-utils[flask]
+# Optional cloud backends:
+pip install penguin-utils[cloudwatch]   # AWS CloudWatch Logs
+pip install penguin-utils[gcp]          # Google Cloud Logging
+pip install penguin-utils[kafka]        # Apache Kafka
 ```
 
-## Usage
-
-### Sanitized Logging
+## Quick Start
 
 ```python
-from penguintechinc_utils import get_logger, sanitize_log_data
-from penguintechinc_utils.logging import SanitizedLogger
+from penguintechinc_utils import SanitizedLogger
+from penguintechinc_utils.sinks import StdoutSink
 
-# Simple logger
-log = SanitizedLogger("MyComponent")
+logger = SanitizedLogger("MyComponent", sinks=[StdoutSink()])
 
-# Automatically sanitizes sensitive data
-log.info("User login attempt", {
-    "email": "user@example.com",  # Logs as: [email]@example.com
-    "password": "secret123",       # Logs as: [REDACTED]
-    "remember_me": True,           # Logs as-is
+logger.info("User login attempt", {
+    "email": "user@example.com",  # Logged as: [email]@example.com
+    "password": "secret123",       # Logged as: [REDACTED]
+    "remember_me": True,           # Logged as-is
 })
-
-# Output: [MyComponent] INFO: User login attempt {'email': '[email]@example.com', 'password': '[REDACTED]', 'remember_me': True}
 ```
 
-### Sanitization Rules
+## Auto-Configure from Environment
 
-The following are automatically redacted:
-- Passwords, secrets, tokens
-- API keys, auth tokens
-- MFA/TOTP codes
-- Session IDs, cookies
-- Full email addresses (only domain is logged)
+```python
+from penguintechinc_utils.logging import configure_logging_from_env
+from penguintechinc_utils import SanitizedLogger
 
-## Development
-
-```bash
-# Install dev dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Format code
-black src tests
-ruff check src tests
-
-# Type check
-mypy src
+logger = SanitizedLogger("MyApp", sinks=configure_logging_from_env())
 ```
+
+📚 **Full documentation**: [docs/penguin-utils/](../../docs/penguin-utils/)
+- [README](../../docs/penguin-utils/README.md) — complete feature overview and all sinks
+- [API Reference](../../docs/penguin-utils/API.md) — all classes and methods
+- [Changelog](../../docs/penguin-utils/CHANGELOG.md)
+- [Migration Guide](../../docs/penguin-utils/MIGRATION.md) — upgrading to 0.2.x cloud sinks
 
 ## License
 
-AGPL-3.0 - See [LICENSE](../../LICENSE) for details.
+AGPL-3.0 — See [LICENSE](../../LICENSE) for details.

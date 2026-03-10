@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "penguin-utils"
-version = "0.1.0"
+version = "0.2.0"
 description = "Shared Python utilities for Penguin Tech applications"
 readme = "README.md"
 license = {text = "AGPL-3.0"}
@@ -45,6 +45,9 @@ flask = [
     "flask>=3.0",
     "flask-security-too>=5.0",
 ]
+cloudwatch = ["boto3>=1.26"]
+gcp = ["google-cloud-logging>=3.0"]
+kafka = ["kafka-python>=2.0"]
 
 [project.urls]
 Homepage = "https://www.penguintech.io"

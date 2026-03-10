@@ -11,7 +11,6 @@ import pytest
 from penguin_libs.h3.client import H3Client
 from penguin_libs.h3.config import ClientConfig
 from penguin_libs.h3.exceptions import H3ClientError
-from penguin_libs.h3.protocol import Protocol
 
 
 class TestH3ClientEnsureClients:
@@ -211,9 +210,7 @@ class TestH3ClientRequest:
         client = H3Client(cfg)
 
         mock_response = MagicMock(spec=httpx.Response)
-        with patch.object(
-            client, "request", new_callable=AsyncMock, return_value=mock_response
-        ):
+        with patch.object(client, "request", new_callable=AsyncMock, return_value=mock_response):
             result = await client.get("/test")
             client.request.assert_called_once_with("GET", "/test")
             assert result is mock_response
@@ -224,9 +221,7 @@ class TestH3ClientRequest:
         client = H3Client(cfg)
 
         mock_response = MagicMock(spec=httpx.Response)
-        with patch.object(
-            client, "request", new_callable=AsyncMock, return_value=mock_response
-        ):
+        with patch.object(client, "request", new_callable=AsyncMock, return_value=mock_response):
             result = await client.post("/test", json={"key": "val"})
             client.request.assert_called_once_with("POST", "/test", json={"key": "val"})
 
@@ -236,9 +231,7 @@ class TestH3ClientRequest:
         client = H3Client(cfg)
 
         mock_response = MagicMock(spec=httpx.Response)
-        with patch.object(
-            client, "request", new_callable=AsyncMock, return_value=mock_response
-        ):
+        with patch.object(client, "request", new_callable=AsyncMock, return_value=mock_response):
             result = await client.put("/test")
             client.request.assert_called_once_with("PUT", "/test")
 
@@ -248,9 +241,7 @@ class TestH3ClientRequest:
         client = H3Client(cfg)
 
         mock_response = MagicMock(spec=httpx.Response)
-        with patch.object(
-            client, "request", new_callable=AsyncMock, return_value=mock_response
-        ):
+        with patch.object(client, "request", new_callable=AsyncMock, return_value=mock_response):
             result = await client.delete("/test")
             client.request.assert_called_once_with("DELETE", "/test")
 
