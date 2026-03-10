@@ -73,7 +73,7 @@ export const PasskeyButton: React.FC<PasskeyButtonProps> = ({
       console.log('[LoginPageBuilder:Passkey] Received authentication options from server');
 
       // 2. Prompt user for passkey
-      const authResponse = await startAuthentication({ optionsJSON: options });
+      const authResponse = await startAuthentication(options);
       console.log('[LoginPageBuilder:Passkey] User completed passkey gesture');
 
       // 3. Verify with server
