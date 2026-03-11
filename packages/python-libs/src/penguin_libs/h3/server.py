@@ -53,8 +53,7 @@ async def serve(app: Any, cfg: ServerConfig | None = None) -> None:
         from hypercorn.config import Config as HypercornConfig
     except ImportError as exc:
         raise H3ConfigError(
-            "hypercorn is required for H3 server. "
-            "Install with: pip install 'penguin-libs[h3]'"
+            "hypercorn is required for H3 server. Install with: pip install 'penguin-libs[h3]'"
         ) from exc
 
     if cfg is None:

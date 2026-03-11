@@ -17,7 +17,7 @@ T = TypeVar("T")
 
 def _calc_backoff(cfg: RetryConfig, attempt: int) -> float:
     """Calculate backoff duration for a given attempt."""
-    backoff = cfg.initial_backoff * (cfg.multiplier ** attempt)
+    backoff = cfg.initial_backoff * (cfg.multiplier**attempt)
     backoff = min(backoff, cfg.max_backoff)
     if cfg.jitter:
         backoff *= 0.5 + random.random()

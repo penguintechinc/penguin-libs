@@ -9,7 +9,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -64,7 +64,7 @@ class HTTPClientConfig:
     timeout: float = 30.0  # seconds
     retry: RetryConfig = field(default_factory=RetryConfig)
     circuit_breaker: CircuitBreakerConfig = field(default_factory=CircuitBreakerConfig)
-    headers: Dict[str, str] = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict)
     follow_redirects: bool = True
     verify_ssl: bool = True
 
@@ -91,7 +91,7 @@ class HTTPClient:
         data = response.json()
     """
 
-    def __init__(self, config: Optional[HTTPClientConfig] = None) -> None:
+    def __init__(self, config: HTTPClientConfig | None = None) -> None:
         """
         Initialize HTTP client.
 
@@ -129,8 +129,7 @@ class HTTPClient:
             float: Delay in seconds
         """
         delay = min(
-            self.config.retry.base_delay
-            * (self.config.retry.exponential_base**attempt),
+            self.config.retry.base_delay * (self.config.retry.exponential_base**attempt),
             self.config.retry.max_delay,
         )
 
@@ -171,10 +170,7 @@ class HTTPClient:
 
         if self._circuit_state.state == CircuitState.HALF_OPEN:
             self._circuit_state.success_count += 1
-            if (
-                self._circuit_state.success_count
-                >= self.config.circuit_breaker.success_threshold
-            ):
+            if self._circuit_state.success_count >= self.config.circuit_breaker.success_threshold:
                 logger.info("Circuit breaker closing after successful requests")
                 self._circuit_state.state = CircuitState.CLOSED
                 self._circuit_state.failure_count = 0
@@ -194,16 +190,13 @@ class HTTPClient:
             self._circuit_state.failure_count = 0
         elif self._circuit_state.state == CircuitState.CLOSED:
             self._circuit_state.failure_count += 1
-            if (
-                self._circuit_state.failure_count
-                >= self.config.circuit_breaker.failure_threshold
-            ):
+            if self._circuit_state.failure_count >= self.config.circuit_breaker.failure_threshold:
                 logger.warning(
                     f"Circuit breaker opening after {self._circuit_state.failure_count} failures"
                 )
                 self._circuit_state.state = CircuitState.OPEN
 
-    def _prepare_headers(self, headers: Optional[Dict[str, str]]) -> Dict[str, str]:
+    def _prepare_headers(self, headers: dict[str, str] | None) -> dict[str, str]:
         """
         Prepare request headers with correlation ID.
 
@@ -251,7 +244,7 @@ class HTTPClient:
         headers = self._prepare_headers(kwargs.get("headers"))
         kwargs["headers"] = headers
 
-        last_exception: Optional[Exception] = None
+        last_exception: Exception | None = None
 
         for attempt in range(self.config.retry.max_retries + 1):
             try:
@@ -271,18 +264,13 @@ class HTTPClient:
 
             except (httpx.HTTPError, httpx.RequestError) as e:
                 last_exception = e
-                logger.warning(
-                    f"HTTP {method} {url} failed (attempt {attempt + 1}): {e}"
-                )
+                logger.warning(f"HTTP {method} {url} failed (attempt {attempt + 1}): {e}")
 
                 self._record_failure()
 
                 # Don't retry on client errors (4xx) except 429 (rate limit)
                 if isinstance(e, httpx.HTTPStatusError):
-                    if (
-                        400 <= e.response.status_code < 500
-                        and e.response.status_code != 429
-                    ):
+                    if 400 <= e.response.status_code < 500 and e.response.status_code != 429:
                         raise
 
                 # If this was the last attempt, raise

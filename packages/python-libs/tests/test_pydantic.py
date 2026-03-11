@@ -3,18 +3,31 @@
 import asyncio
 import json
 import warnings
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, patch
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from flask import Flask
 from pydantic import BaseModel, ValidationError
 
+from penguin_libs.pydantic.async_utils import (
+    AsyncValidator,
+    run_in_threadpool,
+    validate_foreign_key,
+    validate_unique_field,
+)
 from penguin_libs.pydantic.base import (
     ConfigurableModel,
     ElderBaseModel,
     ImmutableModel,
     RequestModel,
+)
+from penguin_libs.pydantic.flask_integration import (
+    ValidationErrorResponse,
+    model_response,
+    validate_body,
+    validate_query_params,
+    validated_request,
 )
 from penguin_libs.pydantic.types import (
     Description1000,
@@ -33,20 +46,6 @@ from penguin_libs.pydantic.types import (
     bounded_str,
     strong_password,
 )
-from penguin_libs.pydantic.async_utils import (
-    AsyncValidator,
-    run_in_threadpool,
-    validate_foreign_key,
-    validate_unique_field,
-)
-from penguin_libs.pydantic.flask_integration import (
-    ValidationErrorResponse,
-    model_response,
-    validate_body,
-    validate_query_params,
-    validated_request,
-)
-
 
 # ──────────────────────── base.py ────────────────────────
 
@@ -54,7 +53,7 @@ from penguin_libs.pydantic.flask_integration import (
 class SampleModel(ElderBaseModel):
     name: str
     age: int
-    email: Optional[str] = None
+    email: str | None = None
 
 
 class TestElderBaseModel:
@@ -112,9 +111,7 @@ class TestElderBaseModel:
             SampleModel.from_row(BadRow())
 
     def test_from_row_filters_none_for_non_fields(self):
-        m = SampleModel.from_row(
-            {"name": "Alice", "age": 30, "email": None, "extra_field": None}
-        )
+        m = SampleModel.from_row({"name": "Alice", "age": 30, "email": None, "extra_field": None})
         assert m.name == "Alice"
 
     def test_from_pydal_row_deprecated(self):
@@ -359,9 +356,7 @@ class TestRunInThreadpool:
         def add(a, b):
             return a + b
 
-        result = asyncio.get_event_loop().run_until_complete(
-            run_in_threadpool(add, 2, 3)
-        )
+        result = asyncio.get_event_loop().run_until_complete(run_in_threadpool(add, 2, 3))
         assert result == 5
 
 
@@ -423,17 +418,13 @@ class TestValidateForeignKey:
     def test_exists(self):
         table = MagicMock()
         table.__getitem__ = MagicMock(return_value={"id": 1})
-        asyncio.get_event_loop().run_until_complete(
-            validate_foreign_key(table, 1, "User")
-        )
+        asyncio.get_event_loop().run_until_complete(validate_foreign_key(table, 1, "User"))
 
     def test_not_exists(self):
         table = MagicMock()
         table.__getitem__ = MagicMock(return_value=None)
         with pytest.raises(ValueError, match="User with id 1"):
-            asyncio.get_event_loop().run_until_complete(
-                validate_foreign_key(table, 1, "User")
-            )
+            asyncio.get_event_loop().run_until_complete(validate_foreign_key(table, 1, "User"))
 
 
 class TestValidateUniqueField:
@@ -514,9 +505,7 @@ class TestValidateBody:
             name: str
 
         app = _create_app()
-        with app.test_request_context(
-            "/test", method="POST", json={"name": "Alice"}
-        ):
+        with app.test_request_context("/test", method="POST", json={"name": "Alice"}):
             m = validate_body(MyModel)
             assert m.name == "Alice"
 
@@ -543,9 +532,7 @@ class TestValidatedRequest:
         def handler(body=None):
             return {"name": body.name}
 
-        with app.test_request_context(
-            "/test", method="POST", json={"name": "Test"}
-        ):
+        with app.test_request_context("/test", method="POST", json={"name": "Test"}):
             result = handler()
             assert result == {"name": "Test"}
 
@@ -591,9 +578,7 @@ class TestValidatedRequest:
         async def handler(body=None):
             return {"name": body.name}
 
-        with app.test_request_context(
-            "/test", method="POST", json={"name": "Async"}
-        ):
+        with app.test_request_context("/test", method="POST", json={"name": "Async"}):
             result = asyncio.get_event_loop().run_until_complete(handler())
             assert result == {"name": "Async"}
 
@@ -608,9 +593,7 @@ class TestValidatedRequest:
         async def handler(body=None):
             return {"name": body.name}
 
-        with app.test_request_context(
-            "/test", method="POST", json={"name": "X", "age": "bad"}
-        ):
+        with app.test_request_context("/test", method="POST", json={"name": "X", "age": "bad"}):
             result = asyncio.get_event_loop().run_until_complete(handler())
             assert isinstance(result, tuple)
             assert result[1] == 400
@@ -659,7 +642,7 @@ class TestModelResponse:
     def test_model_response_exclude_none(self):
         class Resp(BaseModel):
             id: int
-            name: Optional[str] = None
+            name: str | None = None
 
         app = _create_app()
         r = Resp(id=1)
@@ -689,7 +672,7 @@ class TestOpenAPI:
         class UserModel(BaseModel):
             name: str
             age: int
-            email: Optional[str] = None
+            email: str | None = None
 
         schema = generate_openapi_schema(UserModel)
         assert "properties" in schema
@@ -719,7 +702,7 @@ class TestOpenAPI:
             from penguin_libs.pydantic.openapi import pydantic_to_restx_field
 
             class TestModel(BaseModel):
-                tags: List[str]
+                tags: list[str]
 
             field_info = TestModel.model_fields["tags"]
             result = pydantic_to_restx_field(field_info, field_info.annotation)
@@ -734,7 +717,7 @@ class TestOpenAPI:
             from penguin_libs.pydantic.openapi import pydantic_to_restx_field
 
             class TestModel(BaseModel):
-                meta: Dict[str, Any]
+                meta: dict[str, Any]
 
             field_info = TestModel.model_fields["meta"]
             result = pydantic_to_restx_field(field_info, field_info.annotation)

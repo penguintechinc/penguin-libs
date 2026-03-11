@@ -1,11 +1,9 @@
 """Tests for TableProxy."""
 
 import pytest
-from sqlalchemy import Column, Integer, MetaData, String, Boolean, Table, text
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import Column, Integer, MetaData, String, Table, text
 
 from penguin_dal.field_proxy import FieldProxy
-from penguin_dal.table_proxy import TableProxy
 
 
 class TestTableProxy:
@@ -56,6 +54,7 @@ class TestTableProxyCompositePK:
         """PK lookup with composite PK should raise ValueError."""
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
+
         from penguin_dal.db import DB
 
         eng = create_engine("sqlite://", echo=False)
@@ -116,10 +115,12 @@ class TestTableProxyAsync:
 
     async def test_async_bulk_insert(self, async_db_for_proxy):
         db = async_db_for_proxy
-        await db.items.async_bulk_insert([
-            {"name": "item3"},
-            {"name": "item4"},
-        ])
+        await db.items.async_bulk_insert(
+            [
+                {"name": "item3"},
+                {"name": "item4"},
+            ]
+        )
         count = await db(db.items.id > 0).count()
         assert count == 4
 

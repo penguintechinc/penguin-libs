@@ -1,6 +1,5 @@
 """Tests for Quart integration using mocks."""
 
-import sys
 from unittest.mock import MagicMock, patch
 
 import pytest

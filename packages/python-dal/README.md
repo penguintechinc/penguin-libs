@@ -1,13 +1,13 @@
-# Penguin-DAL
+# penguin-dal
 
-SQLAlchemy runtime wrapper with PyDAL ergonomics. One schema definition (SQLAlchemy), one query interface (penguin-dal) — no more defining tables twice.
+PyDAL-style database abstraction layer built on SQLAlchemy. One schema (reflected automatically), one query interface — no more defining tables twice.
 
-## Install
+## Installation
 
 ```bash
 pip install penguin-dal
 
-# With database drivers
+# With database drivers:
 pip install penguin-dal[postgresql]   # psycopg2
 pip install penguin-dal[asyncpg]      # asyncpg for async
 pip install penguin-dal[mysql]        # PyMySQL
@@ -16,133 +16,37 @@ pip install penguin-dal[all]          # all drivers
 
 ## Quick Start
 
-### Sync (Flask)
-
 ```python
 from penguin_dal import DB
 
 db = DB("postgresql://user:pass@localhost/mydb")
 
-# Select
 users = db(db.users.active == True).select()
-user = db(db.users.email == "alice@example.com").select().first()
-
-# Insert
 pk = db.users.insert(email="new@example.com", name="New User", active=True)
-
-# Update
-db(db.users.id == pk).update(name="Updated Name")
-
-# Delete
+db(db.users.id == pk).update(name="Updated")
 db(db.users.id == pk).delete()
-
-# Count & exists
-count = db(db.users.active == True).count()
-exists = db(db.users.email == "alice@example.com").exists()
-
-# PK lookup
-user = db.users[42]
-
-# Compound queries
-q = (db.users.active == True) & (db.users.name.contains("alice"))
-rows = db(q).select(orderby=~db.users.name, limitby=(0, 10))
 ```
 
-### Async (Quart)
+## Read/Write Splitting
 
 ```python
-from penguin_dal import AsyncDB
+from penguin_dal import DatabaseManager
 
-db = AsyncDB("postgresql+asyncpg://user:pass@localhost/mydb")
-await db.reflect()
-
-users = await db(db.users.active == True).select()
-pk = await db.users.async_insert(email="new@example.com", name="New")
+manager = DatabaseManager(
+    write_url="postgresql://primary/myapp",
+    read_url="postgresql://replica/myapp",
+)
+rows = manager.read(manager.read.users).select()
+manager.write.users.insert(name="Alice")
+manager.close()
 ```
 
-## Features
-
-- **Table reflection** — no `define_table()` calls; reads schema from the database
-- **PyDAL-identical query syntax** — `db(query).select()`, `db.table.insert()`, etc.
-- **Async-first** — native `async/await` with `AsyncDB` for Quart/ASGI apps
-- **All backends** — PostgreSQL, MySQL, MariaDB Galera, MSSQL, Firebird, SQLite
-- **Connection pooling** — per-backend tuning via SQLAlchemy pool
-- **Cursor pagination** — efficient keyset pagination for large datasets
-- **Bulk operations** — `bulk_insert()` for batch inserts
-- **Validators** — register column validators or use `@validated_columns` decorator
-- **Flask/Quart integration** — `init_dal(app)` and `get_db()` helpers
-
-## Flask Integration
-
-```python
-from penguin_dal.flask_ext import init_dal, get_db
-
-app = Flask(__name__)
-init_dal(app, uri="postgresql://...")
-
-@app.route("/users")
-def list_users():
-    db = get_db()
-    return jsonify(db(db.users.active == True).select().as_list())
-```
-
-## Quart Integration
-
-```python
-from penguin_dal.quart_ext import init_dal, get_db
-
-app = Quart(__name__)
-init_dal(app, uri="postgresql+asyncpg://...")
-
-@app.route("/users")
-async def list_users():
-    db = get_db()
-    rows = await db(db.users.active == True).select()
-    return jsonify(rows.as_list())
-```
-
-## Cursor Pagination
-
-```python
-from penguin_dal.pagination import Cursor, paginate_query
-
-qs = db(db.users.active == True)
-page = paginate_query(qs, db.users.id, Cursor(size=25))
-# page.rows, page.next_cursor, page.has_more
-
-# Next page
-page2 = paginate_query(qs, db.users.id, Cursor(after=page.next_cursor, size=25))
-```
-
-## Validators
-
-```python
-from penguin_dal.validators import validated_columns
-
-@validated_columns({
-    "email": [is_not_empty, is_email],
-    "name": [is_not_empty],
-})
-class User(Base):
-    __tablename__ = "users"
-    ...
-
-db.register_model(User)
-# Now db.users.insert() will validate before inserting
-```
-
-## Migration from PyDAL
-
-| PyDAL | Penguin-DAL |
-|-------|-------------|
-| `db.define_table('users', Field(...))` | Tables reflected automatically |
-| `db(db.users.id > 0).select()` | `db(db.users.id > 0).select()` (same!) |
-| `db.users.insert(email=...)` | `db.users.insert(email=...)` (same!) |
-| `db(query).update(...)` | `db(query).update(...)` (same!) |
-| `db(query).delete()` | `db(query).delete()` (same!) |
-| `db.commit()` | Auto-commits (db.commit() is no-op) |
-| `row.email` | `row.email` (same!) |
+📚 **Full documentation**: [docs/penguin-dal/](../../docs/penguin-dal/)
+- [README](../../docs/penguin-dal/README.md) — complete feature overview
+- [API Reference](../../docs/penguin-dal/API.md) — all classes and methods
+- [Changelog](../../docs/penguin-dal/CHANGELOG.md)
+- [Migration Guide](../../docs/penguin-dal/MIGRATION.md) — migrating from PyDAL or upgrading to 0.2.x
 
 ## License
 
-AGPL-3.0 - Penguin Tech Inc
+AGPL-3.0 — Penguin Tech Inc

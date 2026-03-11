@@ -8,7 +8,7 @@ import logging
 import signal
 from concurrent import futures
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
@@ -33,8 +33,8 @@ class ServerOptions:
 
 
 def create_server(
-    interceptors: Optional[list[grpc.ServerInterceptor]] = None,
-    options: Optional[ServerOptions] = None,
+    interceptors: list[grpc.ServerInterceptor] | None = None,
+    options: ServerOptions | None = None,
 ) -> grpc.Server:
     """
     Create a gRPC server with standard configuration.

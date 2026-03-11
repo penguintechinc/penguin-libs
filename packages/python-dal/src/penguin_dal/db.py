@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import MetaData, Table, create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from penguin_dal.backends import ensure_async_uri, get_engine_kwargs, normalize_uri
 from penguin_dal.exceptions import TableNotFoundError
@@ -124,9 +124,7 @@ class DB:
         """Dispose of the engine and connection pool."""
         self._engine.dispose()
 
-    def register_validators(
-        self, table_name: str, validators: dict[str, list[Any]]
-    ) -> None:
+    def register_validators(self, table_name: str, validators: dict[str, list[Any]]) -> None:
         """Register validators for a table's columns.
 
         Args:
@@ -250,9 +248,7 @@ class AsyncDB:
         """Dispose of the async engine."""
         await self._engine.dispose()
 
-    def register_validators(
-        self, table_name: str, validators: dict[str, list[Any]]
-    ) -> None:
+    def register_validators(self, table_name: str, validators: dict[str, list[Any]]) -> None:
         """Register validators for a table's columns."""
         self._validators[table_name] = validators
 
@@ -269,3 +265,45 @@ class AsyncDB:
     def __repr__(self) -> str:
         table_count = len(self._metadata.tables)
         return f"AsyncDB(uri='{self._uri}', tables={table_count})"
+
+
+class DatabaseManager:
+    """Manages primary (write) and optional replica (read) connections.
+
+    Provides read/write splitting by routing SELECT-style operations to a
+    read replica and write operations to the primary database.
+
+    Usage::
+
+        manager = DatabaseManager(
+            write_url="postgresql://primary/db",
+            read_url="postgresql://replica/db",
+        )
+        # Routes to replica
+        rows = manager.read.select(manager.read.users.id > 0)
+        # Routes to primary
+        manager.write.insert(manager.write.users, name="Alice")
+    """
+
+    def __init__(
+        self,
+        write_url: str,
+        read_url: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self.write: DB = DB(write_url, **kwargs)
+        self.read: DB = DB(read_url, **kwargs) if read_url else self.write
+
+    def __call__(self, query: Query) -> QuerySet:
+        """Route top-level queries through the read connection by default."""
+        return self.read(query)
+
+    def close(self) -> None:
+        """Close both connections (safely handles shared read==write case)."""
+        self.write.close()
+        if self.read is not self.write:
+            self.read.close()
+
+    def __repr__(self) -> str:
+        has_replica = self.read is not self.write
+        return f"DatabaseManager(write={self.write!r}, has_replica={has_replica})"

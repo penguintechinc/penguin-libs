@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from penguin_dal.query import Row, Rows
+from penguin_dal.query import Rows
 
 
 @dataclass(slots=True, frozen=True)
@@ -58,7 +58,7 @@ def paginate_query(
         Page with rows, next_cursor, and has_more.
     """
     from penguin_dal.field_proxy import FieldProxy
-    from penguin_dal.query import Query, QuerySet
+    from penguin_dal.query import QuerySet
 
     # Build the query with cursor constraint
     if cursor.after is not None:
@@ -76,13 +76,15 @@ def paginate_query(
     rows = qs.select(orderby=col, limitby=(0, cursor.size + 1))
 
     has_more = len(rows) > cursor.size
-    result_rows = Rows(list(rows)[:cursor.size])
+    result_rows = Rows(list(rows)[: cursor.size])
 
     next_cursor = None
     if has_more and result_rows:
         last_row = result_rows.last()
         if last_row is not None:
-            col_name = cursor_column.name if isinstance(cursor_column, FieldProxy) else str(col.name)
+            col_name = (
+                cursor_column.name if isinstance(cursor_column, FieldProxy) else str(col.name)
+            )
             next_cursor = last_row[col_name]
 
     return Page(rows=result_rows, next_cursor=next_cursor, has_more=has_more)
@@ -104,7 +106,7 @@ async def async_paginate_query(
         Page with rows, next_cursor, and has_more.
     """
     from penguin_dal.field_proxy import FieldProxy
-    from penguin_dal.query import AsyncQuerySet, Query
+    from penguin_dal.query import AsyncQuerySet
 
     if cursor.after is not None:
         cursor_query = cursor_column > cursor.after
@@ -120,13 +122,15 @@ async def async_paginate_query(
     rows = await qs.select(orderby=col, limitby=(0, cursor.size + 1))
 
     has_more = len(rows) > cursor.size
-    result_rows = Rows(list(rows)[:cursor.size])
+    result_rows = Rows(list(rows)[: cursor.size])
 
     next_cursor = None
     if has_more and result_rows:
         last_row = result_rows.last()
         if last_row is not None:
-            col_name = cursor_column.name if isinstance(cursor_column, FieldProxy) else str(col.name)
+            col_name = (
+                cursor_column.name if isinstance(cursor_column, FieldProxy) else str(col.name)
+            )
             next_cursor = last_row[col_name]
 
     return Page(rows=result_rows, next_cursor=next_cursor, has_more=has_more)

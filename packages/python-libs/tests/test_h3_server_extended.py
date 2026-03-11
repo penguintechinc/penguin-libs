@@ -82,9 +82,7 @@ class TestServe:
         mock_hypercorn_serve = AsyncMock()
 
         with patch.dict("os.environ", {}, clear=False):
-            with patch(
-                "penguin_libs.h3.server.serve", new=AsyncMock()
-            ):
+            with patch("penguin_libs.h3.server.serve", new=AsyncMock()):
                 # Just verify config defaults work
                 cfg = ServerConfig.from_env()
                 assert cfg.h2_enabled is True

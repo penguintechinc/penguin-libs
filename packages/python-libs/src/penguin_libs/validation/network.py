@@ -40,9 +40,7 @@ class IsEmail(Validator[str, str]):
         r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$"
     )
 
-    def __init__(
-        self, normalize: bool = True, error_message: str | None = None
-    ) -> None:
+    def __init__(self, normalize: bool = True, error_message: str | None = None) -> None:
         self.normalize = normalize
         self.error_message = error_message or "Invalid email address"
 

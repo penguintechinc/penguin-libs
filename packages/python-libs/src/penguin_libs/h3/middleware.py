@@ -135,12 +135,16 @@ class AuthMiddleware:
 
     @staticmethod
     async def _send_error(send: Send, status: int, body: str) -> None:
-        await send({
-            "type": "http.response.start",
-            "status": status,
-            "headers": [(b"content-type", b"text/plain")],
-        })
-        await send({
-            "type": "http.response.body",
-            "body": body.encode(),
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": status,
+                "headers": [(b"content-type", b"text/plain")],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": body.encode(),
+            }
+        )

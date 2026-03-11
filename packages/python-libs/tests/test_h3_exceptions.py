@@ -32,10 +32,7 @@ def test_subclass_hierarchy():
 def test_protocol_fallback_error_attributes():
     """Test ProtocolFallbackError stores original_error and fallback_protocol."""
     original = ValueError("connection failed")
-    error = ProtocolFallbackError(
-        original_error=original,
-        protocol="h2"
-    )
+    error = ProtocolFallbackError(original_error=original, protocol="h2")
     assert error.original_error is original
     assert error.fallback_protocol == "h2"
 
@@ -43,10 +40,7 @@ def test_protocol_fallback_error_attributes():
 def test_protocol_fallback_error_message():
     """Test ProtocolFallbackError message format."""
     original = ValueError("connection failed")
-    error = ProtocolFallbackError(
-        original_error=original,
-        protocol="h2"
-    )
+    error = ProtocolFallbackError(original_error=original, protocol="h2")
     message = str(error)
     assert "HTTP/3 failed" in message
     assert "fell back to h2" in message

@@ -1,8 +1,6 @@
 """Tests for connection pooling helpers."""
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from penguin_dal.pool import check_galera_readiness, get_pool_config
 

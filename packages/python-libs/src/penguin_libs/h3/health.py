@@ -43,21 +43,23 @@ class HealthCheck:
 
         overall = all(self._statuses.values())
         status = 200 if overall else 503
-        body = json.dumps({
-            "status": "healthy" if overall else "unhealthy",
-            "services": {
-                k: ("ok" if v else "failing")
-                for k, v in self._statuses.items()
-                if k
-            },
-        }).encode()
+        body = json.dumps(
+            {
+                "status": "healthy" if overall else "unhealthy",
+                "services": {k: ("ok" if v else "failing") for k, v in self._statuses.items() if k},
+            }
+        ).encode()
 
-        await send({
-            "type": "http.response.start",
-            "status": status,
-            "headers": [(b"content-type", b"application/json")],
-        })
-        await send({
-            "type": "http.response.body",
-            "body": body,
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": status,
+                "headers": [(b"content-type", b"application/json")],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": body,
+            }
+        )

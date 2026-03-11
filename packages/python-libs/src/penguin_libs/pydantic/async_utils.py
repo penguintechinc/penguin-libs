@@ -2,9 +2,9 @@
 
 # flake8: noqa: E501
 
-
 import asyncio
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
@@ -49,9 +49,7 @@ class AsyncValidator:
 
         return decorator
 
-    async def validate_model(
-        self, model: BaseModel, db, **context
-    ) -> list[dict[str, Any]]:
+    async def validate_model(self, model: BaseModel, db, **context) -> list[dict[str, Any]]:
         """Run all registered validators on a model.
 
         Args:
@@ -73,9 +71,7 @@ class AsyncValidator:
         return errors
 
 
-async def validate_foreign_key(
-    table, value: int, resource_name: str = "Resource"
-) -> None:
+async def validate_foreign_key(table, value: int, resource_name: str = "Resource") -> None:
     """Validate foreign key exists in PyDAL table.
 
     Args:

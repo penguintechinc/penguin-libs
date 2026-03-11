@@ -2,11 +2,10 @@
 
 # flake8: noqa: E501
 
-
 import asyncio
-import inspect
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Dict, Optional, Tuple, Type, TypeVar
+from typing import Any, TypeVar
 
 from flask import Response, jsonify, request
 from pydantic import BaseModel, ValidationError
@@ -18,7 +17,7 @@ class ValidationErrorResponse:
     """Standardized validation error response for Flask."""
 
     @staticmethod
-    def from_pydantic_error(error: ValidationError) -> Tuple[Dict[str, Any], int]:
+    def from_pydantic_error(error: ValidationError) -> tuple[dict[str, Any], int]:
         """
         Convert Pydantic ValidationError to Flask response tuple.
 
@@ -50,7 +49,7 @@ class ValidationErrorResponse:
         }, 400
 
 
-def validate_body(model_class: Type[T]) -> T:
+def validate_body(model_class: type[T]) -> T:
     """
     Validate request body against Pydantic model.
 
@@ -67,7 +66,7 @@ def validate_body(model_class: Type[T]) -> T:
     return model_class.model_validate(data)
 
 
-def validate_query_params(model_class: Type[T]) -> T:
+def validate_query_params(model_class: type[T]) -> T:
     """
     Validate query parameters against Pydantic model.
 
@@ -85,8 +84,8 @@ def validate_query_params(model_class: Type[T]) -> T:
 
 
 def validated_request(
-    body_model: Optional[Type[BaseModel]] = None,
-    query_model: Optional[Type[BaseModel]] = None,
+    body_model: type[BaseModel] | None = None,
+    query_model: type[BaseModel] | None = None,
 ) -> Callable:
     """
     Decorator that validates request body and/or query parameters.
@@ -146,7 +145,7 @@ def validated_request(
 
 def model_response(
     model: BaseModel, status_code: int = 200, exclude_none: bool = True
-) -> Tuple[Response, int]:
+) -> tuple[Response, int]:
     """
     Convert Pydantic model to Flask JSON response.
 

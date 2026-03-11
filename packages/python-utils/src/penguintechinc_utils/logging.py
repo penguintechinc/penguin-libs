@@ -203,3 +203,38 @@ class SanitizedLogger:
     def critical(self, message: str, data: dict[str, Any] | None = None) -> None:
         """Log a critical message with optional sanitized data."""
         self._log("critical", message, data)
+
+
+def configure_logging_from_env() -> list:
+    """Build log sinks from environment variables.
+
+    Checks for the following env vars:
+    - LOG_CLOUDWATCH_GROUP + LOG_CLOUDWATCH_STREAM: enables CloudWatchSink
+    - LOG_GCP_PROJECT + LOG_GCP_LOG_NAME: enables GCPCloudLoggingSink
+    - LOG_KAFKA_SERVERS + LOG_KAFKA_TOPIC: enables KafkaSink
+
+    Returns:
+        List of configured sink instances. Empty list if no env vars set.
+    """
+    import os
+
+    from penguintechinc_utils.sinks import CloudWatchSink, GCPCloudLoggingSink, KafkaSink
+
+    sinks: list = []
+
+    cw_group = os.environ.get("LOG_CLOUDWATCH_GROUP")
+    cw_stream = os.environ.get("LOG_CLOUDWATCH_STREAM")
+    if cw_group and cw_stream:
+        sinks.append(CloudWatchSink(log_group=cw_group, log_stream=cw_stream))
+
+    gcp_project = os.environ.get("LOG_GCP_PROJECT")
+    gcp_log_name = os.environ.get("LOG_GCP_LOG_NAME")
+    if gcp_project and gcp_log_name:
+        sinks.append(GCPCloudLoggingSink(project_id=gcp_project, log_name=gcp_log_name))
+
+    kafka_servers = os.environ.get("LOG_KAFKA_SERVERS")
+    kafka_topic = os.environ.get("LOG_KAFKA_TOPIC")
+    if kafka_servers and kafka_topic:
+        sinks.append(KafkaSink(bootstrap_servers=kafka_servers, topic=kafka_topic))
+
+    return sinks

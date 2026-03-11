@@ -29,6 +29,4 @@ class ProtocolFallbackError(H3Error):
     def __init__(self, original_error: Exception, protocol: str = "h2") -> None:
         self.original_error = original_error
         self.fallback_protocol = protocol
-        super().__init__(
-            f"HTTP/3 failed ({original_error}), fell back to {protocol}"
-        )
+        super().__init__(f"HTTP/3 failed ({original_error}), fell back to {protocol}")

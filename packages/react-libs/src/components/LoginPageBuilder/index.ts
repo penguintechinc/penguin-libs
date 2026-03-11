@@ -10,6 +10,7 @@ export type {
   BrandingConfig,
   CaptchaConfig,
   MFAConfig,
+  PasskeyConfig,
   GDPRConfig,
   SocialLoginConfig,
   BuiltInOAuth2Provider,
@@ -64,6 +65,7 @@ export { CaptchaWidget } from './components/CaptchaWidget';
 export { SocialLoginButtons, LoginDivider } from './components/SocialLoginButtons';
 export { CookieConsent } from './components/CookieConsent';
 export { Footer } from './components/Footer';
+export { PasskeyButton } from './components/PasskeyButton';
 
 // Icon exports (for custom buttons)
 export {

@@ -1,10 +1,9 @@
 """Tests for Query composition and QuerySet operations."""
 
 import pytest
-from sqlalchemy import Column, Integer, MetaData, String, Boolean, Table, text
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import Boolean, Column, Integer, MetaData, String, Table, text
 
-from penguin_dal.query import AsyncQuerySet, Query, QuerySet, Row, Rows
+from penguin_dal.query import Query, Row
 
 
 class TestQuery:
@@ -75,12 +74,14 @@ async def async_db_for_query():
     db = AsyncDB("sqlite://", pool_size=5, echo=False)
     async with db.engine.begin() as conn:
         await conn.run_sync(_create_async_tables)
-        await conn.execute(text(
-            "INSERT INTO users (email, name, active) VALUES "
-            "('alice@example.com', 'Alice', 1), "
-            "('bob@example.com', 'Bob', 1), "
-            "('charlie@example.com', 'Charlie', 0)"
-        ))
+        await conn.execute(
+            text(
+                "INSERT INTO users (email, name, active) VALUES "
+                "('alice@example.com', 'Alice', 1), "
+                "('bob@example.com', 'Bob', 1), "
+                "('charlie@example.com', 'Charlie', 0)"
+            )
+        )
     await db.reflect()
     yield db
     await db.close()

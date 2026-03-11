@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, TypeVar
 
 import grpc
 
@@ -26,9 +27,9 @@ class ClientOptions:
     backoff_multiplier: float = 2.0
     timeout_seconds: float = 30.0
     enable_tls: bool = False
-    ca_cert_path: Optional[str] = None
-    client_cert_path: Optional[str] = None
-    client_key_path: Optional[str] = None
+    ca_cert_path: str | None = None
+    client_cert_path: str | None = None
+    client_key_path: str | None = None
     keepalive_time_ms: int = 60000  # 1 minute
     keepalive_timeout_ms: int = 20000  # 20 seconds
 
@@ -51,7 +52,7 @@ class GrpcClient:
     def __init__(
         self,
         target: str,
-        options: Optional[ClientOptions] = None,
+        options: ClientOptions | None = None,
     ):
         """
         Initialize gRPC client.
@@ -62,7 +63,7 @@ class GrpcClient:
         """
         self.target = target
         self.options = options or ClientOptions()
-        self._channel: Optional[grpc.Channel] = None
+        self._channel: grpc.Channel | None = None
 
         logger.info(f"gRPC client initialized for {target}")
 

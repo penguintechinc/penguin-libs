@@ -1,7 +1,7 @@
 """Shared test fixtures for penguin-dal."""
 
 import pytest
-from sqlalchemy import Column, Integer, MetaData, String, Boolean, Table, create_engine, text
+from sqlalchemy import Boolean, Column, Integer, MetaData, String, Table, create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 
@@ -31,18 +31,22 @@ def engine():
 
     # Seed some data
     with eng.connect() as conn:
-        conn.execute(text(
-            "INSERT INTO users (email, name, active) VALUES "
-            "('alice@example.com', 'Alice', 1), "
-            "('bob@example.com', 'Bob', 1), "
-            "('charlie@example.com', 'Charlie', 0)"
-        ))
-        conn.execute(text(
-            "INSERT INTO posts (user_id, title, body) VALUES "
-            "(1, 'First Post', 'Hello world'), "
-            "(1, 'Second Post', 'More content'), "
-            "(2, 'Bob Post', 'Bob writes')"
-        ))
+        conn.execute(
+            text(
+                "INSERT INTO users (email, name, active) VALUES "
+                "('alice@example.com', 'Alice', 1), "
+                "('bob@example.com', 'Bob', 1), "
+                "('charlie@example.com', 'Charlie', 0)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO posts (user_id, title, body) VALUES "
+                "(1, 'First Post', 'Hello world'), "
+                "(1, 'Second Post', 'More content'), "
+                "(2, 'Bob Post', 'Bob writes')"
+            )
+        )
         conn.commit()
 
     return eng

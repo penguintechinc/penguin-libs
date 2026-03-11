@@ -6,7 +6,6 @@ from typing import Any
 
 from penguin_dal.db import AsyncDB
 
-
 _DAL_KEY = "_penguin_dal"
 
 
@@ -60,7 +59,5 @@ def get_db() -> AsyncDB:
     from quart import current_app
 
     if _DAL_KEY not in current_app.extensions:
-        raise RuntimeError(
-            "Penguin-DAL not initialized. Call init_dal(app) during app setup."
-        )
+        raise RuntimeError("Penguin-DAL not initialized. Call init_dal(app) during app setup.")
     return current_app.extensions[_DAL_KEY]

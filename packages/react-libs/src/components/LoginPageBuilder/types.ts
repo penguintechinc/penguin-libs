@@ -232,6 +232,22 @@ export interface LoginColorConfig {
 }
 
 /**
+ * Passkey/WebAuthn configuration
+ */
+export interface PasskeyConfig {
+  /** Whether passkey authentication is enabled. */
+  enabled: boolean;
+  /** URL to POST for passkey registration challenge. POST returns WebAuthn options. */
+  registrationUrl: string;
+  /** URL to POST for passkey authentication. POST returns WebAuthn options then verify. */
+  authenticationUrl: string;
+  /** Label for the passkey sign-in button. Default: "Sign in with passkey" */
+  buttonLabel?: string;
+  /** If true (default), show password form when WebAuthn is unavailable or fails. */
+  allowFallback?: boolean;
+}
+
+/**
  * Main props for LoginPageBuilder component
  */
 export interface LoginPageBuilderProps {
@@ -276,6 +292,10 @@ export interface LoginPageBuilderProps {
   showRememberMe?: boolean;
   /** Additional CSS class for the page container */
   className?: string;
+
+  // Passkey/WebAuthn configuration
+  /** Passkey/WebAuthn configuration */
+  passkey?: PasskeyConfig;
 
   // Social/SSO logins
   /** Social login provider configurations */

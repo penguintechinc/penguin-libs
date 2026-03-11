@@ -10,7 +10,6 @@ from flask import Flask
 
 from penguin_libs.http.client import (
     CircuitBreakerConfig,
-    CircuitBreakerState,
     CircuitState,
     HTTPClient,
     HTTPClientConfig,
@@ -23,7 +22,6 @@ from penguin_libs.http.correlation import (
     generate_correlation_id,
     get_correlation_id,
 )
-
 
 # ──────────────────────── correlation.py ────────────────────────
 
@@ -193,9 +191,7 @@ class TestHTTPClient:
 
     def test_calculate_delay_max_cap(self):
         cfg = HTTPClientConfig(
-            retry=RetryConfig(
-                base_delay=10.0, exponential_base=10.0, max_delay=30.0, jitter=False
-            )
+            retry=RetryConfig(base_delay=10.0, exponential_base=10.0, max_delay=30.0, jitter=False)
         )
         client = HTTPClient(cfg)
         assert client._calculate_delay(5) == 30.0
@@ -211,9 +207,7 @@ class TestHTTPClient:
     def test_prepare_headers_basic(self):
         cfg = HTTPClientConfig(headers={"X-Custom": "value"})
         client = HTTPClient(cfg)
-        with patch(
-            "penguin_libs.http.client.get_correlation_id", return_value=None
-        ):
+        with patch("penguin_libs.http.client.get_correlation_id", return_value=None):
             headers = client._prepare_headers({"Authorization": "Bearer tok"})
             assert headers["X-Custom"] == "value"
             assert headers["Authorization"] == "Bearer tok"
@@ -222,9 +216,7 @@ class TestHTTPClient:
     def test_prepare_headers_with_correlation(self):
         cfg = HTTPClientConfig()
         client = HTTPClient(cfg)
-        with patch(
-            "penguin_libs.http.client.get_correlation_id", return_value="corr-123"
-        ):
+        with patch("penguin_libs.http.client.get_correlation_id", return_value="corr-123"):
             headers = client._prepare_headers(None)
             assert headers["X-Correlation-ID"] == "corr-123"
             assert headers["X-Request-ID"] == "corr-123"
@@ -233,9 +225,7 @@ class TestHTTPClient:
     def test_prepare_headers_no_overwrite_correlation(self):
         cfg = HTTPClientConfig()
         client = HTTPClient(cfg)
-        with patch(
-            "penguin_libs.http.client.get_correlation_id", return_value="auto-id"
-        ):
+        with patch("penguin_libs.http.client.get_correlation_id", return_value="auto-id"):
             headers = client._prepare_headers({"X-Correlation-ID": "manual-id"})
             assert headers["X-Correlation-ID"] == "manual-id"
         client.close()
@@ -250,9 +240,10 @@ class TestHTTPClient:
     def test_get_success(self):
         client = HTTPClient()
         mock_resp = self._mock_response()
-        with patch(
-            "penguin_libs.http.client.get_correlation_id", return_value=None
-        ), patch.object(client._client, "request", return_value=mock_resp):
+        with (
+            patch("penguin_libs.http.client.get_correlation_id", return_value=None),
+            patch.object(client._client, "request", return_value=mock_resp),
+        ):
             resp = client.get("http://test.example.com/api")
             assert resp.status_code == 200
         client.close()
@@ -260,9 +251,10 @@ class TestHTTPClient:
     def test_post_success(self):
         client = HTTPClient()
         mock_resp = self._mock_response(201, b'{"id": 1}')
-        with patch(
-            "penguin_libs.http.client.get_correlation_id", return_value=None
-        ), patch.object(client._client, "request", return_value=mock_resp):
+        with (
+            patch("penguin_libs.http.client.get_correlation_id", return_value=None),
+            patch.object(client._client, "request", return_value=mock_resp),
+        ):
             resp = client.post("http://test.example.com/api", json={"name": "test"})
             assert resp.status_code == 201
         client.close()
@@ -270,18 +262,17 @@ class TestHTTPClient:
     def test_put_patch_delete_head_options(self):
         client = HTTPClient()
         mock_resp = self._mock_response()
-        with patch(
-            "penguin_libs.http.client.get_correlation_id", return_value=None
-        ), patch.object(client._client, "request", return_value=mock_resp):
+        with (
+            patch("penguin_libs.http.client.get_correlation_id", return_value=None),
+            patch.object(client._client, "request", return_value=mock_resp),
+        ):
             for method in [client.put, client.patch, client.delete, client.head, client.options]:
                 resp = method("http://test.example.com/api")
                 assert resp.status_code == 200
         client.close()
 
     def test_retry_on_server_error(self):
-        cfg = HTTPClientConfig(
-            retry=RetryConfig(max_retries=2, base_delay=0.01, jitter=False)
-        )
+        cfg = HTTPClientConfig(retry=RetryConfig(max_retries=2, base_delay=0.01, jitter=False))
         client = HTTPClient(cfg)
         mock_resp = self._mock_response()
         call_count = 0
@@ -293,34 +284,32 @@ class TestHTTPClient:
                 raise httpx.RequestError("Connection failed")
             return mock_resp
 
-        with patch(
-            "penguin_libs.http.client.get_correlation_id", return_value=None
-        ), patch.object(client._client, "request", side_effect=side_effect):
+        with (
+            patch("penguin_libs.http.client.get_correlation_id", return_value=None),
+            patch.object(client._client, "request", side_effect=side_effect),
+        ):
             resp = client.get("http://test.example.com/api")
             assert resp.status_code == 200
             assert call_count == 3
         client.close()
 
     def test_no_retry_on_4xx(self):
-        cfg = HTTPClientConfig(
-            retry=RetryConfig(max_retries=3, base_delay=0.01, jitter=False)
-        )
+        cfg = HTTPClientConfig(retry=RetryConfig(max_retries=3, base_delay=0.01, jitter=False))
         client = HTTPClient(cfg)
         mock_resp = MagicMock(spec=httpx.Response)
         mock_resp.status_code = 404
         error = httpx.HTTPStatusError("Not Found", request=MagicMock(), response=mock_resp)
 
-        with patch(
-            "penguin_libs.http.client.get_correlation_id", return_value=None
-        ), patch.object(client._client, "request", side_effect=error):
+        with (
+            patch("penguin_libs.http.client.get_correlation_id", return_value=None),
+            patch.object(client._client, "request", side_effect=error),
+        ):
             with pytest.raises(httpx.HTTPStatusError):
                 client.get("http://test.example.com/notfound")
         client.close()
 
     def test_retry_on_429(self):
-        cfg = HTTPClientConfig(
-            retry=RetryConfig(max_retries=1, base_delay=0.01, jitter=False)
-        )
+        cfg = HTTPClientConfig(retry=RetryConfig(max_retries=1, base_delay=0.01, jitter=False))
         client = HTTPClient(cfg)
         mock_429 = MagicMock(spec=httpx.Response)
         mock_429.status_code = 429
@@ -335,22 +324,20 @@ class TestHTTPClient:
                 raise error
             return mock_ok
 
-        with patch(
-            "penguin_libs.http.client.get_correlation_id", return_value=None
-        ), patch.object(client._client, "request", side_effect=side_effect):
+        with (
+            patch("penguin_libs.http.client.get_correlation_id", return_value=None),
+            patch.object(client._client, "request", side_effect=side_effect),
+        ):
             resp = client.get("http://test.example.com/api")
             assert resp.status_code == 200
         client.close()
 
     def test_exhausted_retries(self):
-        cfg = HTTPClientConfig(
-            retry=RetryConfig(max_retries=1, base_delay=0.01, jitter=False)
-        )
+        cfg = HTTPClientConfig(retry=RetryConfig(max_retries=1, base_delay=0.01, jitter=False))
         client = HTTPClient(cfg)
-        with patch(
-            "penguin_libs.http.client.get_correlation_id", return_value=None
-        ), patch.object(
-            client._client, "request", side_effect=httpx.RequestError("fail")
+        with (
+            patch("penguin_libs.http.client.get_correlation_id", return_value=None),
+            patch.object(client._client, "request", side_effect=httpx.RequestError("fail")),
         ):
             with pytest.raises(httpx.RequestError):
                 client.get("http://test.example.com/api")
@@ -379,9 +366,7 @@ class TestCircuitBreaker:
 
     def test_circuit_open_rejects_requests(self):
         cfg = HTTPClientConfig(
-            circuit_breaker=CircuitBreakerConfig(
-                enabled=True, failure_threshold=1, timeout=60.0
-            )
+            circuit_breaker=CircuitBreakerConfig(enabled=True, failure_threshold=1, timeout=60.0)
         )
         client = HTTPClient(cfg)
         client._circuit_state.state = CircuitState.OPEN
@@ -392,9 +377,7 @@ class TestCircuitBreaker:
 
     def test_circuit_half_open_after_timeout(self):
         cfg = HTTPClientConfig(
-            circuit_breaker=CircuitBreakerConfig(
-                enabled=True, failure_threshold=1, timeout=0.01
-            )
+            circuit_breaker=CircuitBreakerConfig(enabled=True, failure_threshold=1, timeout=0.01)
         )
         client = HTTPClient(cfg)
         client._circuit_state.state = CircuitState.OPEN
@@ -416,9 +399,7 @@ class TestCircuitBreaker:
         client.close()
 
     def test_circuit_reopens_on_half_open_failure(self):
-        cfg = HTTPClientConfig(
-            circuit_breaker=CircuitBreakerConfig(enabled=True)
-        )
+        cfg = HTTPClientConfig(circuit_breaker=CircuitBreakerConfig(enabled=True))
         client = HTTPClient(cfg)
         client._circuit_state.state = CircuitState.HALF_OPEN
         client._record_failure()
@@ -436,9 +417,7 @@ class TestCircuitBreaker:
         client.close()
 
     def test_disabled_circuit_breaker_noop(self):
-        cfg = HTTPClientConfig(
-            circuit_breaker=CircuitBreakerConfig(enabled=False)
-        )
+        cfg = HTTPClientConfig(circuit_breaker=CircuitBreakerConfig(enabled=False))
         client = HTTPClient(cfg)
         client._check_circuit_breaker()
         client._record_success()

@@ -126,18 +126,10 @@ class IsStrongPassword(Validator[str, str]):
                 "require_lowercase": kwargs.get(
                     "require_lowercase", default_opts.require_lowercase
                 ),
-                "require_digit": kwargs.get(
-                    "require_digit", default_opts.require_digit
-                ),
-                "require_special": kwargs.get(
-                    "require_special", default_opts.require_special
-                ),
-                "special_chars": kwargs.get(
-                    "special_chars", default_opts.special_chars
-                ),
-                "disallow_spaces": kwargs.get(
-                    "disallow_spaces", default_opts.disallow_spaces
-                ),
+                "require_digit": kwargs.get("require_digit", default_opts.require_digit),
+                "require_special": kwargs.get("require_special", default_opts.require_special),
+                "special_chars": kwargs.get("special_chars", default_opts.special_chars),
+                "disallow_spaces": kwargs.get("disallow_spaces", default_opts.disallow_spaces),
             }
             self.options = PasswordOptions(**opt_dict)  # type: ignore[arg-type]
 

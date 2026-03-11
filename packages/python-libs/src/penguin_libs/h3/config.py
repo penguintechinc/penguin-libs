@@ -48,9 +48,7 @@ class ServerConfig:
             tls_cfg = TLSConfig(
                 cert_path=Path(cert_path),
                 key_path=Path(key_path),
-                ca_cert_path=(
-                    Path(v) if (v := os.environ.get("TLS_CA_CERT_PATH")) else None
-                ),
+                ca_cert_path=(Path(v) if (v := os.environ.get("TLS_CA_CERT_PATH")) else None),
             )
 
         return ServerConfig(

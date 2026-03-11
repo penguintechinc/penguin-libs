@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import FrozenInstanceError
-from typing import Any
-from unittest.mock import MagicMock, Mock, call, mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
@@ -63,7 +62,6 @@ if _need_mock:
     sys.modules["grpc_reflection.v1alpha"] = MagicMock()
     sys.modules["grpc_reflection.v1alpha.reflection"] = _mock_reflection
 
-import importlib
 
 # Force reimport with mocks in place
 if "penguin_libs.grpc" in sys.modules:
@@ -99,6 +97,7 @@ jwt_mod = sys.modules["jwt"]
 
 # ─── __init__.py ───────────────────────────────────────────────────────────
 
+
 class TestGrpcInit:
     """Test grpc __init__.py exports."""
 
@@ -116,6 +115,7 @@ class TestGrpcInit:
 
 
 # ─── ClientOptions ─────────────────────────────────────────────────────────
+
 
 class TestClientOptions:
     """Tests for ClientOptions dataclass."""
@@ -141,6 +141,7 @@ class TestClientOptions:
 
 
 # ─── GrpcClient ────────────────────────────────────────────────────────────
+
 
 class TestGrpcClient:
     """Tests for GrpcClient."""
@@ -346,6 +347,7 @@ class TestGrpcClient:
 
 # ─── AuthInterceptor ──────────────────────────────────────────────────────
 
+
 class TestAuthInterceptor:
     """Tests for AuthInterceptor."""
 
@@ -377,9 +379,7 @@ class TestAuthInterceptor:
     def test_invalid_auth_prefix(self):
         interceptor = AuthInterceptor("secret")
         continuation = MagicMock()
-        details = self._make_handler_call_details(
-            "/pkg.Svc/Do", {"authorization": "Basic abc"}
-        )
+        details = self._make_handler_call_details("/pkg.Svc/Do", {"authorization": "Basic abc"})
 
         result = interceptor.intercept_service(continuation, details)
         continuation.assert_not_called()
@@ -425,9 +425,7 @@ class TestAuthInterceptor:
     def test_custom_algorithms(self):
         interceptor = AuthInterceptor("secret", algorithms=["RS256"])
         continuation = MagicMock(return_value="handler")
-        details = self._make_handler_call_details(
-            "/pkg.Svc/Do", {"authorization": "Bearer tok"}
-        )
+        details = self._make_handler_call_details("/pkg.Svc/Do", {"authorization": "Bearer tok"})
         jwt_mod.decode = MagicMock(return_value={"sub": "u"})
 
         interceptor.intercept_service(continuation, details)
@@ -435,14 +433,13 @@ class TestAuthInterceptor:
 
     def test_abort_handler_calls_context_abort(self):
         interceptor = AuthInterceptor("secret")
-        handler = interceptor._abort_with_error(
-            grpc_mod.StatusCode.UNAUTHENTICATED, "no auth"
-        )
+        handler = interceptor._abort_with_error(grpc_mod.StatusCode.UNAUTHENTICATED, "no auth")
         # The handler wraps a function that calls context.abort
         assert handler is not None
 
 
 # ─── RateLimitInterceptor ──────────────────────────────────────────────────
+
 
 class TestRateLimitInterceptor:
     """Tests for RateLimitInterceptor."""
@@ -537,6 +534,7 @@ class TestRateLimitInterceptor:
 
 
 # ─── AuditInterceptor ─────────────────────────────────────────────────────
+
 
 class TestAuditInterceptor:
     """Tests for AuditInterceptor."""
@@ -638,6 +636,7 @@ class TestAuditInterceptor:
 
 # ─── CorrelationInterceptor ────────────────────────────────────────────────
 
+
 class TestCorrelationInterceptor:
     """Tests for CorrelationInterceptor."""
 
@@ -666,6 +665,7 @@ class TestCorrelationInterceptor:
 
 
 # ─── RecoveryInterceptor ──────────────────────────────────────────────────
+
 
 class TestRecoveryInterceptor:
     """Tests for RecoveryInterceptor."""
@@ -794,6 +794,7 @@ class TestRecoveryInterceptor:
 
 # ─── ServerOptions ─────────────────────────────────────────────────────────
 
+
 class TestServerOptions:
     """Tests for ServerOptions dataclass."""
 
@@ -812,6 +813,7 @@ class TestServerOptions:
 
 
 # ─── create_server ─────────────────────────────────────────────────────────
+
 
 class TestCreateServer:
     """Tests for create_server."""
@@ -841,9 +843,7 @@ class TestCreateServer:
         reflection_mod = sys.modules["grpc_reflection.v1alpha.reflection"]
 
         opts = ServerOptions(enable_health_check=False)
-        with patch(
-            "penguin_libs.grpc.server.register_health_check"
-        ) as mock_health:
+        with patch("penguin_libs.grpc.server.register_health_check") as mock_health:
             server = create_server(options=opts)
             mock_health.assert_not_called()
 
@@ -853,14 +853,13 @@ class TestCreateServer:
         health_mod.HealthServicer = MagicMock(return_value=MagicMock())
 
         opts = ServerOptions(enable_reflection=False)
-        with patch(
-            "penguin_libs.grpc.server._enable_reflection"
-        ) as mock_ref:
+        with patch("penguin_libs.grpc.server._enable_reflection") as mock_ref:
             server = create_server(options=opts)
             mock_ref.assert_not_called()
 
 
 # ─── register_health_check ─────────────────────────────────────────────────
+
 
 class TestRegisterHealthCheck:
     """Tests for register_health_check."""
@@ -874,9 +873,11 @@ class TestRegisterHealthCheck:
 
         mock_server = MagicMock()
 
-        with patch("penguin_libs.grpc.server.health") as p_health, \
-             patch("penguin_libs.grpc.server.health_pb2_grpc") as p_pb2_grpc, \
-             patch("penguin_libs.grpc.server.health_pb2") as p_pb2:
+        with (
+            patch("penguin_libs.grpc.server.health") as p_health,
+            patch("penguin_libs.grpc.server.health_pb2_grpc") as p_pb2_grpc,
+            patch("penguin_libs.grpc.server.health_pb2") as p_pb2,
+        ):
             p_health.HealthServicer = mock_health_cls
             p_pb2_grpc.add_HealthServicer_to_server = mock_add_fn
             p_pb2.HealthCheckResponse.SERVING = 1
@@ -890,14 +891,17 @@ class TestRegisterHealthCheck:
 
 # ─── _enable_reflection ────────────────────────────────────────────────────
 
+
 class TestEnableReflection:
     """Tests for _enable_reflection."""
 
     def test_enables_reflection(self):
         mock_server = MagicMock()
 
-        with patch("penguin_libs.grpc.server.reflection") as mock_ref, \
-             patch("penguin_libs.grpc.server.health") as mock_health:
+        with (
+            patch("penguin_libs.grpc.server.reflection") as mock_ref,
+            patch("penguin_libs.grpc.server.health") as mock_health,
+        ):
             mock_ref.SERVICE_NAME = "grpc.reflection.v1alpha.ServerReflection"
             mock_health.SERVICE_NAME = "grpc.health.v1.Health"
 
@@ -906,6 +910,7 @@ class TestEnableReflection:
 
 
 # ─── start_server_with_graceful_shutdown ───────────────────────────────────
+
 
 class TestStartServerWithGracefulShutdown:
     """Tests for start_server_with_graceful_shutdown."""
@@ -934,9 +939,7 @@ class TestStartServerWithGracefulShutdown:
         import signal as sig_mod
 
         with patch("signal.signal", side_effect=capture_signal):
-            start_server_with_graceful_shutdown(
-                mock_server, port=50051, grace_period=10.0
-            )
+            start_server_with_graceful_shutdown(mock_server, port=50051, grace_period=10.0)
 
         # Invoke the SIGTERM handler
         handler = captured_handlers.get(sig_mod.SIGTERM)
@@ -946,6 +949,7 @@ class TestStartServerWithGracefulShutdown:
 
 
 # ─── RateLimitEntry ────────────────────────────────────────────────────────
+
 
 class TestRateLimitEntry:
     """Tests for RateLimitEntry dataclass."""
