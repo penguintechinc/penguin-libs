@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "PyDAL-inspired unified secrets management - one API, multiple backends"
 readme = "README.md"
 license = {text = "AGPL-3.0"}
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 authors = [{name = "Penguin Tech Inc", email = "dev@penguintech.io"}]
 keywords = ["secrets", "vault", "aws", "gcp", "azure", "kubernetes", "penguintech"]
 classifiers = [

@@ -1,0 +1,11 @@
+{% extends "base.html.j2" %}
+{% block title %}Welcome to {{ app_name | default('the app') }}{% endblock %}
+{% block content %}
+<p>Hi {{ name }},</p>
+<p>Welcome to <strong>{{ app_name | default('our platform') }}</strong>! We're thrilled to have you on board.</p>
+<p>Your account is all set up and ready to go. Click the button below to sign in for the first time.</p>
+<a class="button" href="{{ login_url }}">Sign In to Your Account</a>
+<p style="margin-top:24px;font-size:13px;color:#94a3b8;">
+  If you didn't create this account, you can safely ignore this email.
+</p>
+{% endblock %}

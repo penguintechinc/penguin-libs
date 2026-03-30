@@ -17,9 +17,9 @@ Classifier: Programming Language :: Python :: 3.11
 Classifier: Programming Language :: Python :: 3.12
 Classifier: Programming Language :: Python :: 3.13
 Classifier: Topic :: Software Development :: Libraries :: Python Modules
-Requires-Python: >=3.11
+Requires-Python: >=3.13
 Description-Content-Type: text/markdown
-Requires-Dist: httpx>=0.25
+Requires-Dist: requests>=2.28
 Requires-Dist: structlog>=23.0
 Provides-Extra: dev
 Requires-Dist: pytest>=7.0; extra == "dev"
