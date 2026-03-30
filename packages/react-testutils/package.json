@@ -21,7 +21,13 @@
     "test": "vitest run",
     "prepublishOnly": "npm run typecheck"
   },
-  "keywords": ["penguintech", "testing", "vitest", "react-testing-library", "test-utils"],
+  "keywords": [
+    "penguintech",
+    "testing",
+    "vitest",
+    "react-testing-library",
+    "test-utils"
+  ],
   "author": "Penguin Tech Inc <dev@penguintech.io>",
   "license": "AGPL-3.0",
   "homepage": "https://www.penguintech.io",
@@ -47,13 +53,13 @@
     "vitest": ">=1"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
-    "@types/react": "^18.2.0",
-    "jsdom": "^28.0.0",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.2",
+    "@types/react": "18.2.0",
+    "jsdom": "28.0.0",
     "react": "*",
     "react-dom": "*",
-    "typescript": "^5.3.0",
-    "vitest": "^4.0.18"
+    "typescript": "5.3.0",
+    "vitest": "4.0.18"
   }
 }

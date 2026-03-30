@@ -31,9 +31,14 @@ tests/test_asgi_middleware.py
 tests/test_audit_event.py
 tests/test_decorators.py
 tests/test_emitter.py
+tests/test_grpc_middleware.py
 tests/test_keystore.py
+tests/test_killkrill.py
 tests/test_oidc_provider.py
 tests/test_oidc_rp.py
 tests/test_rbac.py
+tests/test_sinks.py
+tests/test_spiffe.py
+tests/test_tenant_middleware.py
 tests/test_types.py
 tests/test_validators.py

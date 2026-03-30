@@ -24,6 +24,14 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# npm auth tokens — use ${GITHUB_TOKEN} env var in .npmrc instead of hardcoded tokens
+# If you need a local .npmrc with a real token, keep it outside the repo
+.npmrc.local
+
+# Python test coverage data — generated, not source
+.coverage
+**/.coverage
+
 # Logs
 logs/
 *.log
