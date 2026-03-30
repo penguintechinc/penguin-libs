@@ -745,7 +745,7 @@ jobs:
   publish-python-limiter:
     name: Publish penguin-limiter
     runs-on: ubuntu-latest
-    environment: pypi-limiter
+    environment: py-limiter
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-limiter' || github.event.inputs.package == 'all') ||
