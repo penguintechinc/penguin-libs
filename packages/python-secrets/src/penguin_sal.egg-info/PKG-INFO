@@ -12,7 +12,7 @@ Classifier: Programming Language :: Python :: 3.11
 Classifier: Programming Language :: Python :: 3.12
 Classifier: Programming Language :: Python :: 3.13
 Classifier: Topic :: Security
-Requires-Python: >=3.11
+Requires-Python: >=3.13
 Description-Content-Type: text/markdown
 Requires-Dist: typing-extensions>=4.5.0
 Provides-Extra: vault
