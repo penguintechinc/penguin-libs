@@ -16,6 +16,8 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
+      - name: Security
+        run: npm audit --omit=dev
       - run: npm run build -w @penguintechinc/react-libs
       - run: npm run typecheck -w @penguintechinc/react-libs
       - run: npm run test -w @penguintechinc/react-libs
@@ -39,7 +41,7 @@ jobs:
       - name: Test
         run: npm test -w @penguintechinc/react-aaa
       - name: Security
-        run: cd packages/react-aaa && npm audit --omit=dev
+        run: npm audit --omit=dev
 
   build-python:
     name: Build & Test Python Packages
@@ -155,6 +157,8 @@ jobs:
         run: npm run typecheck -w @penguintechinc/react-testutils
       - name: Test
         run: npm run test -w @penguintechinc/react-testutils
+      - name: Security
+        run: npm audit --omit=dev
 
   build-flutter:
     name: Build Flutter Libs
