@@ -4,6 +4,7 @@ src/penguin_dal/__init__.py
 src/penguin_dal/backends.py
 src/penguin_dal/db.py
 src/penguin_dal/exceptions.py
+src/penguin_dal/field.py
 src/penguin_dal/field_proxy.py
 src/penguin_dal/flask_ext.py
 src/penguin_dal/pagination.py
@@ -22,6 +23,8 @@ tests/test_async_db.py
 tests/test_backends.py
 tests/test_database_manager.py
 tests/test_db.py
+tests/test_define_table.py
+tests/test_field.py
 tests/test_field_proxy.py
 tests/test_flask.py
 tests/test_pagination.py

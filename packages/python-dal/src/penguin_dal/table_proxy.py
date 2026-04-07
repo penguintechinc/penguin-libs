@@ -90,6 +90,13 @@ class TableProxy:
     def _run_validators(self, data: dict[str, Any]) -> None:
         """Run registered validators on data before insert.
 
+        Supports two validator call conventions:
+
+        * **PyDAL-style** (preferred): callable returns ``(value, error)`` where
+          *error* is ``None`` on success or a string message on failure.
+        * **Raise-style** (legacy): callable raises ``ValueError`` or
+          ``TypeError`` on failure and returns nothing.
+
         Args:
             data: Column name -> value mapping.
 
@@ -104,7 +111,12 @@ class TableProxy:
                 value = data[col_name]
                 for validator in validators:
                     try:
-                        validator(value)
+                        result = validator(value)
+                        # PyDAL-style: (value, error_or_None) tuple
+                        if isinstance(result, tuple) and len(result) == 2:
+                            _, error = result
+                            if error is not None:
+                                errors.append({"field": col_name, "message": str(error)})
                     except (ValueError, TypeError) as e:
                         errors.append({"field": col_name, "message": str(e)})
         if errors:

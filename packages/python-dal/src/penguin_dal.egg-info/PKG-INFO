@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: penguin-dal
-Version: 0.2.0
+Version: 0.3.0
 Summary: SQLAlchemy runtime wrapper with PyDAL ergonomics for Penguin Tech applications
 Author-email: Penguin Tech Inc <dev@penguintech.io>
 License: AGPL-3.0
