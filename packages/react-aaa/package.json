@@ -1,6 +1,6 @@
 {
   "name": "@penguintechinc/react-aaa",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Authentication, Authorization, and Audit library for React applications - OIDC, RBAC, and audit logging",
   "type": "module",
   "main": "./dist/index.js",
@@ -59,7 +59,7 @@
   },
   "dependencies": {
     "jose": "5.0.0",
-    "zod": "3.22.0"
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "6.9.1",
