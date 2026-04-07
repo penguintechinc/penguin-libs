@@ -1,6 +1,6 @@
 {
   "name": "@penguintechinc/react-testutils",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared Vitest + RTL test utilities for PenguinTech React packages",
   "type": "module",
   "exports": {
@@ -59,7 +59,7 @@
     "jsdom": "28.0.0",
     "react": "*",
     "react-dom": "*",
-    "typescript": "5.3.0",
+    "typescript": "5.3.3",
     "vitest": "4.0.18"
   }
 }
