@@ -70,7 +70,7 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: '20'
-          registry-url: 'https://npm.pkg.github.com'
+          registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
 
       - name: Install dependencies
@@ -83,10 +83,10 @@ jobs:
       - name: Run type check
         run: npm run typecheck
 
-      - name: Publish to GitHub Packages
+      - name: Publish to npm
         run: npm publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create release summary
         run: |
@@ -94,7 +94,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: @penguintechinc/react-libs" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry**: GitHub Packages (npm)" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: npm (public)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
   # Python Libs - PyPI
@@ -523,7 +523,7 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: '20'
-          registry-url: 'https://npm.pkg.github.com'
+          registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
 
       - name: Install dependencies
@@ -536,10 +536,10 @@ jobs:
       - name: Run type check
         run: npm run typecheck
 
-      - name: Publish to GitHub Packages
+      - name: Publish to npm
         run: npm publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create release summary
         run: |
@@ -547,7 +547,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: @penguintechinc/react-aaa" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry**: GitHub Packages (npm)" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: npm (public)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
   # Go AAA - No publish needed (go get from repo)
@@ -614,7 +614,7 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: '20'
-          registry-url: 'https://npm.pkg.github.com'
+          registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
 
       - name: Install dependencies
@@ -624,10 +624,10 @@ jobs:
       - name: Run type check
         run: npm run typecheck
 
-      - name: Publish to GitHub Packages
+      - name: Publish to npm
         run: npm publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create release summary
         run: |
@@ -635,7 +635,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: @penguintechinc/react-testutils" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry**: GitHub Packages (npm)" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: npm (public)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
   # Python pytest (penguin-pytest) - PyPI
