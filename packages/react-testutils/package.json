@@ -1,6 +1,6 @@
 {
   "name": "@penguintechinc/react-testutils",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Shared Vitest + RTL test utilities for PenguinTech React packages",
   "type": "module",
   "exports": {
@@ -40,7 +40,7 @@
     "url": "https://github.com/penguintechinc/penguin-libs/issues"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
+    "registry": "https://registry.npmjs.org",
     "access": "public"
   },
   "engines": {
