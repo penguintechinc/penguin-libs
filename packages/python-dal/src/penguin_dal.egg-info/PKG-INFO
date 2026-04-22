@@ -1,0 +1,109 @@
+Metadata-Version: 2.4
+Name: penguin-dal
+Version: 0.3.0
+Summary: SQLAlchemy runtime wrapper with PyDAL ergonomics for Penguin Tech applications
+Author-email: Penguin Tech Inc <dev@penguintech.io>
+License: AGPL-3.0
+Project-URL: Homepage, https://www.penguintech.io
+Project-URL: Repository, https://github.com/penguintechinc/penguin-libs
+Project-URL: Issues, https://github.com/penguintechinc/penguin-libs/issues
+Keywords: penguintech,dal,database,sqlalchemy,orm
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU Affero General Public License v3
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Database
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: sqlalchemy>=2.0
+Provides-Extra: postgresql
+Requires-Dist: psycopg2-binary>=2.9; extra == "postgresql"
+Provides-Extra: asyncpg
+Requires-Dist: asyncpg>=0.29; extra == "asyncpg"
+Provides-Extra: mysql
+Requires-Dist: pymysql>=1.1; extra == "mysql"
+Provides-Extra: aiomysql
+Requires-Dist: aiomysql>=0.2; extra == "aiomysql"
+Provides-Extra: mssql
+Requires-Dist: pyodbc>=5.0; extra == "mssql"
+Provides-Extra: firebird
+Requires-Dist: sqlalchemy-firebird>=2.0; extra == "firebird"
+Provides-Extra: sqlite-async
+Requires-Dist: aiosqlite>=0.20; extra == "sqlite-async"
+Provides-Extra: flask
+Requires-Dist: flask>=3.0; extra == "flask"
+Provides-Extra: quart
+Requires-Dist: quart>=0.19; extra == "quart"
+Provides-Extra: all
+Requires-Dist: psycopg2-binary>=2.9; extra == "all"
+Requires-Dist: asyncpg>=0.29; extra == "all"
+Requires-Dist: pymysql>=1.1; extra == "all"
+Requires-Dist: aiomysql>=0.2; extra == "all"
+Requires-Dist: aiosqlite>=0.20; extra == "all"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
+Requires-Dist: pytest-cov>=4.0; extra == "dev"
+Requires-Dist: aiosqlite>=0.20; extra == "dev"
+Requires-Dist: black>=23.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: mypy>=1.0; extra == "dev"
+Requires-Dist: bandit>=1.7; extra == "dev"
+
+# penguin-dal
+
+PyDAL-style database abstraction layer built on SQLAlchemy. One schema (reflected automatically), one query interface — no more defining tables twice.
+
+## Installation
+
+```bash
+pip install penguin-dal
+
+# With database drivers:
+pip install penguin-dal[postgresql]   # psycopg2
+pip install penguin-dal[asyncpg]      # asyncpg for async
+pip install penguin-dal[mysql]        # PyMySQL
+pip install penguin-dal[all]          # all drivers
+```
+
+## Quick Start
+
+```python
+from penguin_dal import DB
+
+db = DB("postgresql://user:pass@localhost/mydb")
+
+users = db(db.users.active == True).select()
+pk = db.users.insert(email="new@example.com", name="New User", active=True)
+db(db.users.id == pk).update(name="Updated")
+db(db.users.id == pk).delete()
+```
+
+## Read/Write Splitting
+
+```python
+from penguin_dal import DatabaseManager
+
+manager = DatabaseManager(
+    write_url="postgresql://primary/myapp",
+    read_url="postgresql://replica/myapp",
+)
+rows = manager.read(manager.read.users).select()
+manager.write.users.insert(name="Alice")
+manager.close()
+```
+
+📚 **Full documentation**: [docs/penguin-dal/](../../docs/penguin-dal/)
+- [README](../../docs/penguin-dal/README.md) — complete feature overview
+- [API Reference](../../docs/penguin-dal/API.md) — all classes and methods
+- [Changelog](../../docs/penguin-dal/CHANGELOG.md)
+- [Migration Guide](../../docs/penguin-dal/MIGRATION.md) — migrating from PyDAL or upgrading to 0.2.x
+
+## License
+
+AGPL-3.0 — Penguin Tech Inc

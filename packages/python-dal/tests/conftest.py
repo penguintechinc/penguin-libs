@@ -65,4 +65,17 @@ def db(engine):
     d._metadata.reflect(bind=engine)
     d._validators = {}
     d._models = {}
+    d._migrate = False
     return d
+
+
+@pytest.fixture
+def db_plain():
+    """Create a fresh DB instance on an empty in-memory SQLite database.
+
+    Unlike the ``db`` fixture, no tables are pre-created, making this fixture
+    suitable for tests that exercise ``define_table``.
+    """
+    from penguin_dal.db import DB
+
+    return DB("sqlite://", pool_size=1, reflect=False)
