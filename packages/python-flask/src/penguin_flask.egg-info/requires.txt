@@ -1,0 +1,2 @@
+flask>=3.0
+flask-security-too>=5.0

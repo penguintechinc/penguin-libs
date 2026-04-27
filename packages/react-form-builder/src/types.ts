@@ -1,0 +1,168 @@
+/**
+ * FormBuilder Types
+ *
+ * Type definitions for the flexible FormBuilder component that supports
+ * both modal and inline rendering modes.
+ */
+
+import { ReactNode } from 'react';
+export type { ThemeMode } from './theme';
+
+export type FieldType =
+  | 'text'
+  | 'email'
+  | 'password'
+  | 'number'
+  | 'textarea'
+  | 'select'
+  | 'checkbox'
+  | 'radio'
+  | 'date'
+  | 'time'
+  | 'datetime-local'
+  | 'tel'
+  | 'url';
+
+export interface SelectOption {
+  value: string | number;
+  label: string;
+  disabled?: boolean;
+}
+
+export interface FormTab {
+  id: string;
+  label: string;
+  fields: FieldConfig[];
+}
+
+export interface FieldConfig {
+  name: string;
+  label: string;
+  type: FieldType;
+  placeholder?: string;
+  required?: boolean;
+  disabled?: boolean;
+  autoFocus?: boolean;
+  defaultValue?: any;
+  min?: number | string;
+  max?: number | string;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  step?: number | string;
+  rows?: number; // For textarea
+  options?: SelectOption[]; // For select, radio
+  helperText?: string;
+  validate?: (value: any) => string | null;
+  onChange?: (value: any) => void;
+  className?: string;
+  /** Optional tab assignment for grouping fields */
+  tab?: string;
+}
+
+export interface FormConfig {
+  fields: FieldConfig[];
+  title?: string;
+  submitLabel?: string;
+  cancelLabel?: string;
+  onSubmit: (data: Record<string, any>) => void | Promise<void>;
+  onCancel?: () => void;
+  initialData?: Record<string, any>;
+  validateOnChange?: boolean;
+  validateOnBlur?: boolean;
+  className?: string;
+  /** Optional tabs for grouping fields */
+  tabs?: FormTab[];
+  /** Custom labels for auto-generated tabs (when fields exceed threshold) */
+  tabLabels?: string[];
+  /** Number of fields before auto-generating tabs (default: 8) */
+  autoTabThreshold?: number;
+  /** Fields per tab when auto-generating (default: 6) */
+  fieldsPerTab?: number;
+}
+
+/**
+ * Color configuration for FormBuilder theming
+ */
+export interface FormBuilderColorConfig {
+  // Background
+  formBackground: string;
+  modalBackground: string;
+  overlayBackground: string;
+
+  // Text
+  titleText: string;
+  labelText: string;
+  helperText: string;
+  errorText: string;
+
+  // Fields
+  fieldBackground: string;
+  fieldBorder: string;
+  fieldText: string;
+  fieldPlaceholder: string;
+  focusRing: string;
+  focusBorder: string;
+
+  // Buttons
+  primaryButton: string;
+  primaryButtonHover: string;
+  primaryButtonText: string;
+  secondaryButton: string;
+  secondaryButtonHover: string;
+  secondaryButtonText: string;
+  secondaryButtonBorder: string;
+
+  // Checkbox/Radio accent
+  accentColor: string;
+
+  // Close button (modal)
+  closeButtonText: string;
+  closeButtonHover: string;
+
+  // Error banner
+  errorBannerBackground: string;
+  errorBannerBorder: string;
+
+  // Radio/Checkbox option text
+  optionText: string;
+}
+
+export interface FormBuilderProps extends FormConfig {
+  mode?: 'inline' | 'modal';
+  isOpen?: boolean;
+  loading?: boolean;
+  error?: string | null;
+  closeOnOverlayClick?: boolean;
+  showCloseButton?: boolean;
+  /** Theme mode preset: 'dark' (default) or 'light'. Sets base colors. */
+  themeMode?: import('../../theme').ThemeMode;
+  /** Custom color overrides merged on top of the theme preset. */
+  colors?: Partial<FormBuilderColorConfig>;
+}
+
+export interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title?: string;
+  children: ReactNode;
+  className?: string;
+  closeOnOverlayClick?: boolean;
+  showCloseButton?: boolean;
+  /** Theme mode preset: 'dark' (default) or 'light'. */
+  themeMode?: import('../../theme').ThemeMode;
+  /** Custom color overrides. */
+  colors?: Partial<FormBuilderColorConfig>;
+}
+
+export interface FormFieldProps {
+  field: FieldConfig;
+  value: any;
+  error?: string;
+  onChange: (name: string, value: any) => void;
+  onBlur?: (name: string) => void;
+  /** Theme mode preset: 'dark' (default) or 'light'. */
+  themeMode?: import('../../theme').ThemeMode;
+  /** Custom color overrides. */
+  colors?: Partial<FormBuilderColorConfig>;
+}

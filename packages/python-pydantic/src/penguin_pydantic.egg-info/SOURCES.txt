@@ -1,0 +1,14 @@
+README.md
+pyproject.toml
+src/penguin_pydantic/__init__.py
+src/penguin_pydantic/async_utils.py
+src/penguin_pydantic/base.py
+src/penguin_pydantic/flask_integration.py
+src/penguin_pydantic/openapi.py
+src/penguin_pydantic/types.py
+src/penguin_pydantic.egg-info/PKG-INFO
+src/penguin_pydantic.egg-info/SOURCES.txt
+src/penguin_pydantic.egg-info/dependency_links.txt
+src/penguin_pydantic.egg-info/requires.txt
+src/penguin_pydantic.egg-info/top_level.txt
+tests/test_pydantic.py

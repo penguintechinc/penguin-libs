@@ -196,3 +196,155 @@ jobs:
         run: cd packages/python-pytest && bandit -r src/ -c pyproject.toml
       - name: Test
         run: cd packages/python-pytest && pytest tests/ -v --tb=short
+
+  build-react-form-builder:
+    name: Build & Test React Form Builder
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '24'
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build -w @penguintechinc/react-form-builder
+      - name: Typecheck
+        run: npm run typecheck -w @penguintechinc/react-form-builder
+      - name: Test
+        run: npm run test -w @penguintechinc/react-form-builder
+
+  build-react-login:
+    name: Build & Test React Login
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '24'
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build -w @penguintechinc/react-login
+      - name: Typecheck
+        run: npm run typecheck -w @penguintechinc/react-login
+      - name: Test
+        run: npm run test -w @penguintechinc/react-login
+
+  build-react-sidebar:
+    name: Build & Test React Sidebar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '24'
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build -w @penguintechinc/react-sidebar
+      - name: Typecheck
+        run: npm run typecheck -w @penguintechinc/react-sidebar
+      - name: Test
+        run: npm run test -w @penguintechinc/react-sidebar
+
+  build-react-console-version:
+    name: Build & Test React Console Version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '24'
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build -w @penguintechinc/react-console-version
+      - name: Typecheck
+        run: npm run typecheck -w @penguintechinc/react-console-version
+      - name: Test
+        run: npm run test -w @penguintechinc/react-console-version
+
+  build-react-hooks:
+    name: Build & Test React Hooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '24'
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build -w @penguintechinc/react-hooks
+      - name: Typecheck
+        run: npm run typecheck -w @penguintechinc/react-hooks
+      - name: Test
+        run: npm run test -w @penguintechinc/react-hooks
+
+  build-python-split:
+    name: Build & Test Python Split Packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: '3.13'
+      - name: Install split packages
+        run: |
+          pip install -e "packages/python-crypto[dev]" || pip install -e "packages/python-crypto"
+          pip install -e "packages/python-flask[dev]" || pip install -e "packages/python-flask"
+          pip install -e "packages/python-grpc[dev]" || pip install -e "packages/python-grpc"
+          pip install -e "packages/python-h3[dev]" || pip install -e "packages/python-h3"
+          pip install -e "packages/python-http[dev]" || pip install -e "packages/python-http"
+          pip install -e "packages/python-pydantic[dev]" || pip install -e "packages/python-pydantic"
+          pip install -e "packages/python-security[dev]" || pip install -e "packages/python-security"
+          pip install -e "packages/python-validation[dev]" || pip install -e "packages/python-validation"
+      - name: Install transition library
+        run: pip install -e "packages/python-libs[dev]"
+      - name: Lint
+        run: |
+          cd packages/python-crypto && ruff check src/
+          cd ../python-flask && ruff check src/
+          cd ../python-grpc && ruff check src/
+          cd ../python-h3 && ruff check src/
+          cd ../python-http && ruff check src/
+          cd ../python-pydantic && ruff check src/
+          cd ../python-security && ruff check src/
+          cd ../python-validation && ruff check src/
+      - name: Security - bandit
+        run: |
+          cd packages/python-crypto && bandit -r src/ -ll
+          cd ../python-flask && bandit -r src/ -ll
+          cd ../python-grpc && bandit -r src/ -ll
+          cd ../python-h3 && bandit -r src/ -ll
+          cd ../python-http && bandit -r src/ -ll
+          cd ../python-pydantic && bandit -r src/ -ll
+          cd ../python-security && bandit -r src/ -ll
+          cd ../python-validation && bandit -r src/ -ll
+      - name: Test transition library import
+        run: python3 -c "import penguin_libs; from penguin_libs.validation import validate_string; print('Transition import OK')"
+
+  build-go-split:
+    name: Build & Test Go Split Packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
+        with:
+          go-version: '1.24'
+      - name: Test go-logging
+        run: go test ./...
+        working-directory: packages/go-logging
+      - name: Build go-common (transition)
+        run: go build ./...
+        working-directory: packages/go-common
+      - name: Build go-xdp
+        run: go build ./...
+        working-directory: packages/go-xdp
+      - name: Build go-numa
+        run: go build ./...
+        working-directory: packages/go-numa
+      - name: Vet go-logging
+        run: go vet ./...
+        working-directory: packages/go-logging

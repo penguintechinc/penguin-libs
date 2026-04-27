@@ -1,0 +1,30 @@
+Metadata-Version: 2.4
+Name: penguin-http
+Version: 0.1.0
+Summary: PenguinTech HTTP utilities
+Author-email: Penguin Tech Inc <dev@penguintech.io>
+License: AGPL-3.0
+Keywords: penguintech,http
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU Affero General Public License v3
+Classifier: Programming Language :: Python :: 3.13
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: httpx>=0.24.0
+
+# penguin-http
+
+PenguinTech HTTP utilities.
+
+## Install
+
+```bash
+pip install penguin-http
+```
+
+## Quick Start
+
+```python
+from penguin_http import HTTPClient, CorrelationMiddleware
+```

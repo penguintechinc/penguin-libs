@@ -1,117 +1,170 @@
 """License validation decorators for Elder enterprise features."""
 
-# flake8: noqa: E501
-
-
 import inspect
 from functools import wraps
+from typing import Any, Callable, TypeVar
 
 import structlog
 
 logger = structlog.get_logger()
 
+F = TypeVar("F", bound=Callable[..., Any])
 
-def license_required(required_tier: str = "enterprise"):
+# Managed deployment domains — license enforcement bypassed (billed separately)
+_BYPASS_DOMAINS = (
+    ".penguincloud.io",
+    ".penguintech.cloud",
+    ".localhost.local",
+)
+
+
+def _is_bypass_domain(host: str) -> bool:
+    """Return True if host is a managed PenguinTech domain that skips license checks."""
+    h = host.split(":")[0].lower()
+    return any(h == d.lstrip(".") or h.endswith(d) for d in _BYPASS_DOMAINS)
+
+
+def _get_license_client() -> Any:
+    """Retrieve LicenseClient from Flask app config, or create one from environment."""
+    from flask import current_app  # noqa: PLC0415
+
+    client = current_app.config.get("LICENSE_CLIENT")
+    if client is not None:
+        return client
+    from penguin_licensing.client import LicenseClient  # noqa: PLC0415
+
+    return LicenseClient()
+
+
+def _in_flask_context() -> bool:
+    """Return True when called inside an active Flask application context."""
+    try:
+        from flask import current_app  # noqa: PLC0415
+
+        current_app._get_current_object()
+        return True
+    except RuntimeError:
+        return False
+
+
+def license_required(required_tier: str = "enterprise") -> Callable[[F], F]:
     """
-    Decorator to enforce license tier requirements for enterprise features.
+    Enforce license tier requirements for enterprise features.
 
-    Checks if the current license meets the minimum tier requirement.
     Tier hierarchy: community < professional < enterprise
 
     Args:
-        required_tier: Minimum license tier required (default: enterprise)
+        required_tier: Minimum tier required (default: enterprise)
 
-    Returns:
-        Decorated function that checks license before execution
-
-    Usage:
-        @app.route('/api/v1/issues', methods=['POST'])
-        @login_required
-        @license_required('enterprise')
-        def create_issue():
-            # Only accessible with enterprise license
-            pass
-
-    Example Response (403 when license insufficient):
-        {
-            "error": "License Required",
-            "message": "This feature requires an enterprise license",
-            "required_tier": "enterprise",
-            "current_tier": "professional",
-            "upgrade_url": "https://penguintech.io/elder/pricing"
-        }
+    Returns 403 JSON when tier is insufficient:
+        {"error": "License Required", "required_tier": "enterprise",
+         "current_tier": "community", "upgrade_url": "https://penguintech.io/pricing"}
     """
 
-    def decorator(func):
+    def decorator(func: F) -> F:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # TEMPORARY: License checks disabled for development
-            # TODO: Re-enable license enforcement in production
-            logger.debug(
-                "license_check_bypassed",
-                required_tier=required_tier,
-                endpoint=func.__name__,
-                note="License enforcement temporarily disabled",
-            )
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            if _in_flask_context():
+                from flask import jsonify, request  # noqa: PLC0415
 
-            # Bypass license check - allow all features
+                host = request.host
+                if not _is_bypass_domain(host):
+                    client = _get_license_client()
+                    if not client.check_tier(required_tier):
+                        validation = client.validate()
+                        logger.warning(
+                            "license_check_failed",
+                            required_tier=required_tier,
+                            current_tier=validation.tier,
+                            endpoint=func.__name__,
+                        )
+                        return (
+                            jsonify(
+                                {
+                                    "error": "License Required",
+                                    "message": f"This feature requires a {required_tier} license",
+                                    "required_tier": required_tier,
+                                    "current_tier": validation.tier,
+                                    "upgrade_url": "https://penguintech.io/pricing",
+                                }
+                            ),
+                            403,
+                        )
+                    logger.debug(
+                        "license_check_passed",
+                        required_tier=required_tier,
+                        endpoint=func.__name__,
+                    )
+                else:
+                    logger.debug(
+                        "license_check_domain_bypass",
+                        host=host,
+                        endpoint=func.__name__,
+                    )
+
             if inspect.iscoroutinefunction(func):
                 return await func(*args, **kwargs)
-            else:
-                return func(*args, **kwargs)
+            return func(*args, **kwargs)
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
-    return decorator
+    return decorator  # type: ignore[return-value]
 
 
-def feature_required(feature_name: str):
+def feature_required(feature_name: str) -> Callable[[F], F]:
     """
-    Decorator to enforce specific feature entitlement.
-
-    Checks if the license includes entitlement for a specific feature.
+    Enforce specific feature entitlement.
 
     Args:
         feature_name: Feature identifier to check
 
-    Returns:
-        Decorated function that checks feature entitlement before execution
-
-    Usage:
-        @app.route('/api/v1/advanced-analytics', methods=['GET'])
-        @login_required
-        @feature_required('advanced_analytics')
-        def get_advanced_analytics():
-            # Only accessible if 'advanced_analytics' feature is entitled
-            pass
-
-    Example Response (403 when feature not entitled):
-        {
-            "error": "Feature Not Available",
-            "message": "This feature is not included in your license",
-            "required_feature": "advanced_analytics",
-            "upgrade_url": "https://penguintech.io/elder/pricing"
-        }
+    Returns 403 JSON when feature is not entitled:
+        {"error": "Feature Not Available", "feature": "sso",
+         "upgrade_url": "https://penguintech.io/pricing"}
     """
 
-    def decorator(func):
+    def decorator(func: F) -> F:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # TEMPORARY: Feature checks disabled for development
-            # TODO: Re-enable feature enforcement in production
-            logger.debug(
-                "feature_check_bypassed",
-                feature=feature_name,
-                endpoint=func.__name__,
-                note="Feature enforcement temporarily disabled",
-            )
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            if _in_flask_context():
+                from flask import jsonify, request  # noqa: PLC0415
 
-            # Bypass feature check - allow all features
+                host = request.host
+                if not _is_bypass_domain(host):
+                    client = _get_license_client()
+                    if not client.check_feature(feature_name):
+                        logger.warning(
+                            "feature_check_failed",
+                            feature=feature_name,
+                            endpoint=func.__name__,
+                        )
+                        return (
+                            jsonify(
+                                {
+                                    "error": "Feature Not Available",
+                                    "message": "This feature is not included in your license",
+                                    "feature": feature_name,
+                                    "upgrade_url": "https://penguintech.io/pricing",
+                                }
+                            ),
+                            403,
+                        )
+                    logger.debug(
+                        "feature_check_passed",
+                        feature=feature_name,
+                        endpoint=func.__name__,
+                    )
+                else:
+                    logger.debug(
+                        "feature_check_domain_bypass",
+                        host=host,
+                        endpoint=func.__name__,
+                    )
+
             if inspect.iscoroutinefunction(func):
                 return await func(*args, **kwargs)
-            else:
-                return func(*args, **kwargs)
+            return func(*args, **kwargs)
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
-    return decorator
+    return decorator  # type: ignore[return-value]

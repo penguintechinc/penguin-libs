@@ -1,0 +1,15 @@
+README.md
+pyproject.toml
+src/penguin_grpc/__init__.py
+src/penguin_grpc/client.py
+src/penguin_grpc/interceptors.py
+src/penguin_grpc/server.py
+src/penguin_grpc.egg-info/PKG-INFO
+src/penguin_grpc.egg-info/SOURCES.txt
+src/penguin_grpc.egg-info/dependency_links.txt
+src/penguin_grpc.egg-info/requires.txt
+src/penguin_grpc.egg-info/top_level.txt
+tests/test_client.py
+tests/test_interceptors.py
+tests/test_package.py
+tests/test_server.py

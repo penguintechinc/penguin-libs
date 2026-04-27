@@ -6,6 +6,11 @@ on:
       - 'react-libs-v*'
       - 'react-aaa-v*'
       - 'react-testutils-v*'
+      - 'react-form-builder-v*'
+      - 'react-login-v*'
+      - 'react-sidebar-v*'
+      - 'react-console-version-v*'
+      - 'react-hooks-v*'
       - 'penguin-libs-v*'
       - 'penguin-licensing-v*'
       - 'penguin-secrets-v*'
@@ -13,8 +18,19 @@ on:
       - 'penguin-aaa-v*'
       - 'penguin-dal-v*'
       - 'penguin-limiter-v*'
+      - 'penguin-crypto-v*'
+      - 'penguin-flask-v*'
+      - 'penguin-grpc-v*'
+      - 'penguin-h3-v*'
+      - 'penguin-http-v*'
+      - 'penguin-pydantic-v*'
+      - 'penguin-security-v*'
+      - 'penguin-validation-v*'
       - 'flutter-libs-v*'
       - 'go-aaa-v*'
+      - 'go-logging-v*'
+      - 'go-xdp-v*'
+      - 'go-numa-v*'
       - 'penguin-pytest-v*'
       - 'v*'
   workflow_dispatch:
@@ -28,6 +44,11 @@ on:
           - react-libs
           - react-aaa
           - react-testutils
+          - react-form-builder
+          - react-login
+          - react-sidebar
+          - react-console-version
+          - react-hooks
           - python-libs
           - python-licensing
           - python-secrets
@@ -37,6 +58,14 @@ on:
           - python-pytest
           - python-email
           - python-limiter
+          - python-crypto
+          - python-flask
+          - python-grpc
+          - python-h3
+          - python-http
+          - python-pydantic
+          - python-security
+          - python-validation
           - flutter-libs
           - all
 
@@ -93,6 +122,251 @@ jobs:
           echo "## Published Package" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: @penguintechinc/react-libs" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: npm (public)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # React Form Builder - npm
+  # ============================================
+  publish-react-form-builder:
+    name: Publish React Form Builder
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.package == 'react-form-builder' || github.event.inputs.package == 'all')) ||
+      startsWith(github.ref, 'refs/tags/react-form-builder-v')
+
+    defaults:
+      run:
+        working-directory: packages/react-form-builder
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@penguintechinc'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      - name: Build package
+        run: npm run build
+
+      - name: Run type check
+        run: npm run typecheck
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create release summary
+        run: |
+          echo "## Published Package" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: @penguintechinc/react-form-builder" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: npm (public)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # React Login - npm
+  # ============================================
+  publish-react-login:
+    name: Publish React Login
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.package == 'react-login' || github.event.inputs.package == 'all')) ||
+      startsWith(github.ref, 'refs/tags/react-login-v')
+
+    defaults:
+      run:
+        working-directory: packages/react-login
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@penguintechinc'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      - name: Build package
+        run: npm run build
+
+      - name: Run type check
+        run: npm run typecheck
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create release summary
+        run: |
+          echo "## Published Package" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: @penguintechinc/react-login" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: npm (public)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # React Sidebar - npm
+  # ============================================
+  publish-react-sidebar:
+    name: Publish React Sidebar
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.package == 'react-sidebar' || github.event.inputs.package == 'all')) ||
+      startsWith(github.ref, 'refs/tags/react-sidebar-v')
+
+    defaults:
+      run:
+        working-directory: packages/react-sidebar
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@penguintechinc'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      - name: Build package
+        run: npm run build
+
+      - name: Run type check
+        run: npm run typecheck
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create release summary
+        run: |
+          echo "## Published Package" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: @penguintechinc/react-sidebar" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: npm (public)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # React Console Version - npm
+  # ============================================
+  publish-react-console-version:
+    name: Publish React Console Version
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.package == 'react-console-version' || github.event.inputs.package == 'all')) ||
+      startsWith(github.ref, 'refs/tags/react-console-version-v')
+
+    defaults:
+      run:
+        working-directory: packages/react-console-version
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@penguintechinc'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      - name: Build package
+        run: npm run build
+
+      - name: Run type check
+        run: npm run typecheck
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create release summary
+        run: |
+          echo "## Published Package" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: @penguintechinc/react-console-version" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: npm (public)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # React Hooks - npm
+  # ============================================
+  publish-react-hooks:
+    name: Publish React Hooks
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.package == 'react-hooks' || github.event.inputs.package == 'all')) ||
+      startsWith(github.ref, 'refs/tags/react-hooks-v')
+
+    defaults:
+      run:
+        working-directory: packages/react-hooks
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@penguintechinc'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      - name: Build package
+        run: npm run build
+
+      - name: Run type check
+        run: npm run typecheck
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create release summary
+        run: |
+          echo "## Published Package" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: @penguintechinc/react-hooks" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
           echo "**Registry**: npm (public)" >> $GITHUB_STEP_SUMMARY
 
@@ -789,3 +1063,103 @@ jobs:
           echo "**Package**: penguin-limiter" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
           echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # Python Split Packages - PyPI
+  # ============================================
+  publish-python-split:
+    name: Publish Python Split Packages
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    if: |
+      (github.event_name == 'workflow_dispatch' &&
+       github.event.inputs.package == 'all') ||
+      startsWith(github.ref, 'refs/tags/penguin-crypto-v') ||
+      startsWith(github.ref, 'refs/tags/penguin-flask-v') ||
+      startsWith(github.ref, 'refs/tags/penguin-grpc-v') ||
+      startsWith(github.ref, 'refs/tags/penguin-h3-v') ||
+      startsWith(github.ref, 'refs/tags/penguin-http-v') ||
+      startsWith(github.ref, 'refs/tags/penguin-pydantic-v') ||
+      startsWith(github.ref, 'refs/tags/penguin-security-v') ||
+      startsWith(github.ref, 'refs/tags/penguin-validation-v')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: '3.13'
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build distributions
+        run: |
+          mkdir -p dist
+          for pkg in packages/python-crypto packages/python-flask packages/python-grpc packages/python-h3 packages/python-http packages/python-pydantic packages/python-security packages/python-validation; do
+            python -m build "$pkg" --outdir dist/
+          done
+
+      - name: Check packages
+        run: twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+      - name: Create release summary
+        run: |
+          echo "## Published Packages" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Packages**: penguin-crypto, penguin-flask, penguin-grpc, penguin-h3, penguin-http, penguin-pydantic, penguin-security, penguin-validation" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # Go Split Packages - No publish (go get from repo)
+  # ============================================
+  validate-go-split:
+    name: Validate Go Split Packages
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
+        with:
+          go-version: '1.24'
+
+      - name: Test go-logging
+        run: go test ./...
+        working-directory: packages/go-logging
+
+      - name: Build go-xdp
+        run: go build ./...
+        working-directory: packages/go-xdp
+
+      - name: Build go-numa
+        run: go build ./...
+        working-directory: packages/go-numa
+
+      - name: Vet go-logging
+        run: go vet ./...
+        working-directory: packages/go-logging
+
+      - name: Create release summary
+        run: |
+          echo "## Go Modules Validated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**go-logging**: Ready for use via \`go get\`" >> $GITHUB_STEP_SUMMARY
+          echo "**go-xdp**: Ready for use via \`go get\`" >> $GITHUB_STEP_SUMMARY
+          echo "**go-numa**: Ready for use via \`go get\`" >> $GITHUB_STEP_SUMMARY

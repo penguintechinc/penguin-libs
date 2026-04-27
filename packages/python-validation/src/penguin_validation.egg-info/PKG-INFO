@@ -1,0 +1,30 @@
+Metadata-Version: 2.4
+Name: penguin-validation
+Version: 0.1.0
+Summary: PenguinTech validation utilities
+Author-email: Penguin Tech Inc <dev@penguintech.io>
+License: AGPL-3.0
+Keywords: penguintech,validation
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU Affero General Public License v3
+Classifier: Programming Language :: Python :: 3.13
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: pydantic>=2.0
+
+# penguin-validation
+
+PenguinTech validation utilities.
+
+## Install
+
+```bash
+pip install penguin-validation
+```
+
+## Quick Start
+
+```python
+from penguin_validation import IsEmail, IsLength, chain
+```

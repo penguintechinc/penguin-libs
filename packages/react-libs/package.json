@@ -1,7 +1,7 @@
 {
   "name": "@penguintechinc/react-libs",
-  "version": "1.3.4",
-  "description": "Shared React components for Penguin Tech applications - LoginPageBuilder, FormModalBuilder, SidebarMenu, and more",
+  "version": "1.4.0",
+  "description": "Transition library re-exporting focused React component packages (FormBuilder, Login, Sidebar, ConsoleVersion, Hooks)",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -87,7 +87,10 @@
     "vitest": "4.0.18"
   },
   "dependencies": {
-    "@simplewebauthn/browser": "9.0.1",
-    "zod": "3.25.76"
+    "@penguintechinc/react-form-builder": "*",
+    "@penguintechinc/react-login": "*",
+    "@penguintechinc/react-sidebar": "*",
+    "@penguintechinc/react-console-version": "*",
+    "@penguintechinc/react-hooks": "*"
   }
 }

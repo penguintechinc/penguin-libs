@@ -11,14 +11,37 @@ All 8 packages in the penguin-libs monorepo are now properly configured for auto
 
 | # | Package | Registry | Package Name | Tag Trigger | Workflow Job | Status |
 |---|---------|----------|--------------|-------------|--------------|--------|
-| 1 | react-libs | GitHub Packages (npm) | @penguintechinc/react-libs | `react-libs-v*` | `publish-react-libs` | ✅ Configured |
-| 2 | python-libs | PyPI | penguin-libs | `python-libs-v*` | `publish-python-libs` | ✅ Configured |
-| 3 | python-licensing | PyPI | penguin-licensing | `python-licensing-v*` | `publish-python-licensing` | ✅ Configured |
-| 4 | python-secrets | PyPI | penguin-sal | `python-secrets-v*` | `publish-python-secrets` | ✅ Configured |
-| 5 | python-utils | PyPI | penguin-utils | `python-utils-v*` | `publish-python-utils` | ✅ **NEWLY ADDED** |
-| 6 | go-common | GitHub (go get) | github.com/.../go-common | `v*` | `validate-go-common` | ✅ Configured |
-| 7 | go-h3 | GitHub (go get) | github.com/.../go-h3 | `v*` | `validate-go-common` | ✅ Configured |
-| 8 | flutter_libs | pub.dev | flutter_libs | `flutter-libs-v*` | `publish-flutter-libs` | ✅ Configured (dry-run) |
+| 1 | react-libs | npm | @penguintechinc/react-libs | `react-libs-v*` | `publish-react-libs` | ✅ Configured |
+| 2 | react-aaa | npm | @penguintechinc/react-aaa | `react-aaa-v*` | `publish-react-aaa` | ✅ Configured |
+| 3 | react-testutils | npm | @penguintechinc/react-testutils | `react-testutils-v*` | `publish-react-testutils` | ✅ Configured |
+| 4 | react-form-builder | npm | @penguintechinc/react-form-builder | `react-form-builder-v*` | `publish-react-form-builder` | ✅ **PENDING FIRST PUBLISH** |
+| 5 | react-login | npm | @penguintechinc/react-login | `react-login-v*` | `publish-react-login` | ✅ **PENDING FIRST PUBLISH** |
+| 6 | react-sidebar | npm | @penguintechinc/react-sidebar | `react-sidebar-v*` | `publish-react-sidebar` | ✅ **PENDING FIRST PUBLISH** |
+| 7 | react-console-version | npm | @penguintechinc/react-console-version | `react-console-version-v*` | `publish-react-console-version` | ✅ **PENDING FIRST PUBLISH** |
+| 8 | react-hooks | npm | @penguintechinc/react-hooks | `react-hooks-v*` | `publish-react-hooks` | ✅ **PENDING FIRST PUBLISH** |
+| 9 | python-libs | PyPI | penguin-libs | `penguin-libs-v*` | `publish-python-libs` | ✅ Configured |
+| 10 | python-licensing | PyPI | penguin-licensing | `penguin-licensing-v*` | `publish-python-licensing` | ✅ Configured |
+| 11 | python-secrets | PyPI | penguin-sal | `penguin-secrets-v*` | `publish-python-secrets` | ✅ Configured |
+| 12 | python-utils | PyPI | penguin-utils | `penguin-utils-v*` | `publish-python-utils` | ✅ Configured |
+| 13 | python-aaa | PyPI | penguin-aaa | `penguin-aaa-v*` | `publish-python-aaa` | ✅ Configured |
+| 14 | python-dal | PyPI | penguin-dal | `penguin-dal-v*` | `publish-python-dal` | ✅ Configured |
+| 15 | python-pytest | PyPI | penguin-pytest | `penguin-pytest-v*` | `publish-penguin-pytest` | ✅ Configured |
+| 16 | python-email | PyPI | penguin-email | `penguin-email-v*` | `publish-python-email` | ✅ Configured |
+| 17 | python-limiter | PyPI | penguin-limiter | `penguin-limiter-v*` | `publish-python-limiter` | ✅ Configured |
+| 18 | python-crypto | PyPI | penguin-crypto | `penguin-crypto-v*` | `publish-python-split` | ✅ **PENDING FIRST PUBLISH** |
+| 19 | python-flask | PyPI | penguin-flask | `penguin-flask-v*` | `publish-python-split` | ✅ **PENDING FIRST PUBLISH** |
+| 20 | python-grpc | PyPI | penguin-grpc | `penguin-grpc-v*` | `publish-python-split` | ✅ **PENDING FIRST PUBLISH** |
+| 21 | python-h3 | PyPI | penguin-h3 | `penguin-h3-v*` | `publish-python-split` | ✅ **PENDING FIRST PUBLISH** |
+| 22 | python-http | PyPI | penguin-http | `penguin-http-v*` | `publish-python-split` | ✅ **PENDING FIRST PUBLISH** |
+| 23 | python-pydantic | PyPI | penguin-pydantic | `penguin-pydantic-v*` | `publish-python-split` | ✅ **PENDING FIRST PUBLISH** |
+| 24 | python-security | PyPI | penguin-security | `penguin-security-v*` | `publish-python-split` | ✅ **PENDING FIRST PUBLISH** |
+| 25 | python-validation | PyPI | penguin-validation | `penguin-validation-v*` | `publish-python-split` | ✅ **PENDING FIRST PUBLISH** |
+| 26 | go-common | GitHub (go get) | github.com/.../go-common | `v*` | `validate-go-common` | ✅ Configured |
+| 27 | go-h3 | GitHub (go get) | github.com/.../go-h3 | `v*` | `validate-go-common` | ✅ Configured |
+| 28 | go-logging | GitHub (go get) | github.com/.../go-logging | `go-logging-v*` | `validate-go-split` | ✅ **PENDING FIRST PUBLISH** |
+| 29 | go-xdp | GitHub (go get) | github.com/.../go-xdp | `go-xdp-v*` | `validate-go-split` | ✅ **PENDING FIRST PUBLISH** |
+| 30 | go-numa | GitHub (go get) | github.com/.../go-numa | `go-numa-v*` | `validate-go-split` | ✅ **PENDING FIRST PUBLISH** |
+| 31 | flutter_libs | pub.dev | flutter_libs | `flutter-libs-v*` | `publish-flutter-libs` | ✅ Configured (dry-run) |
 
 ## Changes Made
 

@@ -5,37 +5,44 @@
 
 Shared libraries for Penguin Tech applications across all languages.
 
-## Packages
+## Package Directory
 
-### JavaScript/TypeScript
+| Package | Language | Registry | Install |
+|---------|----------|----------|---------|
+| `penguin-libs` | Python | PyPI | `pip install penguin-libs` (transition) |
+| `penguin-crypto` | Python | PyPI | `pip install penguin-crypto` |
+| `penguin-flask` | Python | PyPI | `pip install penguin-flask` |
+| `penguin-grpc` | Python | PyPI | `pip install penguin-grpc` |
+| `penguin-h3` | Python | PyPI | `pip install penguin-h3` |
+| `penguin-http` | Python | PyPI | `pip install penguin-http` |
+| `penguin-pydantic` | Python | PyPI | `pip install penguin-pydantic` |
+| `penguin-security` | Python | PyPI | `pip install penguin-security` |
+| `penguin-validation` | Python | PyPI | `pip install penguin-validation` |
+| `penguin-aaa` | Python | PyPI | `pip install penguin-aaa` |
+| `penguin-dal` | Python | PyPI | `pip install penguin-dal` |
+| `penguin-email` | Python | PyPI | `pip install penguin-email` (SMTP) |
+| `penguin-limiter` | Python | PyPI | `pip install penguin-limiter` (rate limiting) |
+| `penguin-licensing` | Python | PyPI | `pip install penguin-licensing` |
+| `penguin-sal` | Python | PyPI | `pip install penguin-sal` (secrets) |
+| `penguin-utils` | Python | PyPI | `pip install penguin-utils` |
+| `penguin-pytest` | Python | PyPI | `pip install penguin-pytest` |
+| `@penguintechinc/react-libs` | TypeScript | npm | `npm i @penguintechinc/react-libs` (transition) |
+| `@penguintechinc/react-form-builder` | TypeScript | npm | `npm i @penguintechinc/react-form-builder` |
+| `@penguintechinc/react-login` | TypeScript | npm | `npm i @penguintechinc/react-login` |
+| `@penguintechinc/react-sidebar` | TypeScript | npm | `npm i @penguintechinc/react-sidebar` |
+| `@penguintechinc/react-console-version` | TypeScript | npm | `npm i @penguintechinc/react-console-version` |
+| `@penguintechinc/react-hooks` | TypeScript | npm | `npm i @penguintechinc/react-hooks` |
+| `@penguintechinc/react-aaa` | TypeScript | npm | `npm i @penguintechinc/react-aaa` |
+| `@penguintechinc/react-testutils` | TypeScript | npm | `npm i @penguintechinc/react-testutils` |
+| `go-logging` | Go | go get | `go get github.com/penguintechinc/penguin-libs/packages/go-logging` |
+| `go-common` | Go | go get | `go get ...go-common` (transition) |
+| `go-xdp` | Go | go get | `go get ...go-xdp` |
+| `go-numa` | Go | go get | `go get ...go-numa` |
+| `go-h3` | Go | go get | `go get ...go-h3` |
+| `go-aaa` | Go | go get | `go get ...go-aaa` |
+| `flutter_libs` | Dart | git | See pubspec.yaml |
 
-| Package | Version | Description |
-|---------|---------|-------------|
-| [@penguintechinc/react-libs](./packages/react-libs) | 1.2.0 | React components (LoginPageBuilder, FormModalBuilder, SidebarMenu) |
-
-### Python
-
-| Package | Version | Coverage | Description |
-|---------|---------|----------|-------------|
-| [penguin-aaa](./packages/python-aaa) | 0.1.0 | 99% | Authentication, authorization, and audit (OIDC, RBAC, SPIFFE, tenant isolation) |
-| [penguin-dal](./packages/python-dal) | 0.1.0 | 98% | Database access layer — PyDAL-style API over SQLAlchemy |
-| [penguin-libs](./packages/python-libs) | 0.1.0 | 98% | H3 protocol, HTTP client, validation, Pydantic base models |
-| [penguin-licensing](./packages/python-licensing) | 0.1.0 | 100% | PenguinTech License Server integration |
-| [penguin-sal](./packages/python-secrets) | 0.1.0 | 100% | Secrets and authentication library |
-| [penguin-utils](./packages/python-utils) | 0.1.0 | 99% | Sanitized logging and Flask utilities |
-
-### Go
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| [go-common](./packages/go-common) | - | Common Go utilities and helpers |
-| [go-h3](./packages/go-h3) | - | Go H3 protocol interceptors and middleware |
-
-### Flutter/Dart
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| [flutter_libs](./packages/flutter_libs) | - | Flutter UI components and utilities |
+**Note**: `penguin-email` and `penguin-limiter` are standalone packages for SMTP and API rate limiting respectively. They are not bundled in the transition `penguin-libs` package — install them directly.
 
 ## Installation
 
