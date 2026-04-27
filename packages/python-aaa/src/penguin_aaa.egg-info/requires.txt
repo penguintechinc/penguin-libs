@@ -14,9 +14,17 @@ types-grpcio
 bandit>=1.7
 pip-audit>=2.6
 hypothesis>=6.0
+redis>=5.0
+flask>=3.0
+
+[flask]
+flask>=3.0
 
 [grpc]
 grpcio>=1.60
+
+[redis]
+redis>=5.0
 
 [spiffe]
 py-spiffe

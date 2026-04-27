@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TokenManager } from '../authn/token-manager.js';
+import { MemoryTokenStorage } from '../authn/storage.js';
 import type { TokenSet } from '../authn/types.js';
 
 const EXPIRED_JWT =
@@ -7,7 +8,15 @@ const EXPIRED_JWT =
 
 const FUTURE_JWT =
   'eyJhbGciOiJIUzI1NiJ9.' +
-  btoa(JSON.stringify({ sub: 'user-123', exp: Math.floor(Date.now() / 1000) + 3600 }))
+  btoa(
+    JSON.stringify({
+      sub: 'user-123',
+      iss: 'https://auth.example.com',
+      aud: ['my-app'],
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    }),
+  )
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=/g, '') +
@@ -145,6 +154,58 @@ describe('TokenManager', () => {
       expect(onRefresh).toHaveBeenCalledWith('old-refresh');
       expect(onTokenRefreshed).toHaveBeenCalledWith(refreshedTokens);
       vi.useRealTimers();
+    });
+  });
+
+  describe('MemoryTokenStorage', () => {
+    it('stores and retrieves tokens in memory', () => {
+      const storage = new MemoryTokenStorage();
+      storage.setItem('test-key', 'test-value');
+      expect(storage.getItem('test-key')).toBe('test-value');
+    });
+
+    it('removes tokens from memory', () => {
+      const storage = new MemoryTokenStorage();
+      storage.setItem('test-key', 'test-value');
+      storage.removeItem('test-key');
+      expect(storage.getItem('test-key')).toBeNull();
+    });
+
+    it('uses memory storage when provided', () => {
+      const memoryStorage = new MemoryTokenStorage();
+      const manager = new TokenManager({ storage: memoryStorage });
+      const tokens = makeTokenSet();
+
+      manager.store(tokens);
+      expect(memoryStorage.getItem('oidc_token_set')).toBeDefined();
+      expect(sessionStorageMock['oidc_token_set']).toBeUndefined();
+    });
+  });
+
+  describe('verifyAndParseClaims', () => {
+    it('falls back to decode-only when jwksUri is not provided', async () => {
+      const manager = new TokenManager();
+      const claims = await manager.verifyAndParseClaims(FUTURE_JWT);
+      expect(claims).not.toBeNull();
+      expect(claims?.sub).toBe('user-123');
+    });
+
+    it('returns null for invalid JWT', async () => {
+      const manager = new TokenManager();
+      const claims = await manager.verifyAndParseClaims('invalid.jwt.token');
+      expect(claims).toBeNull();
+    });
+
+    it('returns null when JWT verification fails with jwksUri', async () => {
+      const manager = new TokenManager({
+        jwksUri: 'https://auth.example.com/.well-known/jwks.json',
+        expectedIssuer: 'https://auth.example.com',
+      });
+
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
+
+      const claims = await manager.verifyAndParseClaims(FUTURE_JWT);
+      expect(claims).toBeNull();
     });
   });
 });

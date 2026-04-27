@@ -76,3 +76,20 @@ class SPIFFEAuthenticator:
         without_scheme = spiffe_id[len("spiffe://") :]
         peer_domain = without_scheme.split("/")[0]
         return peer_domain == self._config.trust_domain
+
+    def authenticate(self, spiffe_id: str) -> None:
+        """
+        Authenticate a SPIFFE ID by validating it is allowed.
+
+        Raises:
+            ValueError: If the SPIFFE ID is invalid or not in the allowlist.
+
+        Args:
+            spiffe_id: The SPIFFE ID to authenticate.
+        """
+        try:
+            validate_spiffe_id(spiffe_id)
+        except ValueError as e:
+            raise ValueError(f"Invalid SPIFFE ID format: {e}") from e
+        if not self.validate_peer_id(spiffe_id):
+            raise ValueError(f"SPIFFE ID not in allowlist: {spiffe_id}")

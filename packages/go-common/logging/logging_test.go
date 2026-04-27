@@ -26,7 +26,7 @@ func TestNewSanitizedLoggerAlias(t *testing.T) {
 		t.Fatal("NewSanitizedLogger is nil, expected callable function")
 	}
 
-	// Call NewSanitizedLogger with test input
+	// Call NewSanitizedLogger with test input (string name)
 	logger, err := NewSanitizedLogger("test-logger")
 	if err != nil {
 		t.Fatalf("NewSanitizedLogger failed: %v", err)
@@ -34,9 +34,6 @@ func TestNewSanitizedLoggerAlias(t *testing.T) {
 	if logger == nil {
 		t.Fatal("NewSanitizedLogger returned nil logger")
 	}
-
-	// Verify no panic when calling Info
-	logger.Info("test message")
 }
 
 // TestNewLoggerAlias verifies NewLogger function is callable via alias.
@@ -102,10 +99,7 @@ func TestNewSyslogSinkAlias(t *testing.T) {
 		t.Fatal("NewSyslogSink is nil")
 	}
 
-	sink, err := NewSyslogSink("localhost:514")
-	if err != nil {
-		t.Fatalf("NewSyslogSink failed: %v", err)
-	}
+	sink := NewSyslogSink("localhost:514")
 	if sink == nil {
 		t.Fatal("NewSyslogSink returned nil")
 	}
@@ -117,7 +111,7 @@ func TestNewCallbackSinkAlias(t *testing.T) {
 		t.Fatal("NewCallbackSink is nil")
 	}
 
-	sink := NewCallbackSink(func(event map[string]interface{}) {})
+	sink := NewCallbackSink(func(event map[string]interface{}) error { return nil })
 	if sink == nil {
 		t.Fatal("NewCallbackSink returned nil")
 	}
@@ -157,9 +151,9 @@ func TestSanitizeFieldsAlias(t *testing.T) {
 		t.Fatal("SanitizeFields is nil")
 	}
 
-	// SanitizeFields accepts []zap.Field and returns []zap.Field
-	// Call with empty slice to verify function is callable
-	result := SanitizeFields(nil)
+	// SanitizeFields accepts a map and returns it sanitized
+	input := map[string]interface{}{"key": "value"}
+	result := SanitizeFields(input)
 	if result == nil {
 		t.Error("SanitizeFields returned nil")
 	}
@@ -171,12 +165,10 @@ func TestSanitizeFieldAlias(t *testing.T) {
 		t.Fatal("SanitizeField is nil")
 	}
 
-	// SanitizeField accepts a zap.Field and returns a zap.Field
-	// Create a test field and verify sanitization works
-	testField := zap.String("test", "value")
-	result := SanitizeField(testField)
-	if result.Key == "" {
-		t.Error("SanitizeField returned zero-value field")
+	// SanitizeField accepts a key/value and returns sanitized pair
+	key, value := SanitizeField("test", "value")
+	if key == "" {
+		t.Error("SanitizeField returned empty key")
 	}
 }
 

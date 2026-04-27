@@ -3,7 +3,12 @@ package authn
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
 	"time"
 
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
@@ -13,10 +18,12 @@ import (
 // OIDCRelyingParty validates tokens issued by an external OIDC provider and
 // handles the Authorization Code flow on behalf of the application.
 type OIDCRelyingParty struct {
-	cfg      OIDCRPConfig
-	provider *gooidc.Provider
-	verifier *gooidc.IDTokenVerifier
-	oauth2   oauth2.Config
+	cfg            OIDCRPConfig
+	provider       *gooidc.Provider
+	verifier       *gooidc.IDTokenVerifier
+	oauth2         oauth2.Config
+	discovery      map[string]interface{}
+	discoveryOnce  sync.Once
 }
 
 // NewOIDCRelyingParty creates an OIDCRelyingParty by discovering the provider's
@@ -56,7 +63,9 @@ func NewOIDCRelyingParty(ctx context.Context, cfg OIDCRPConfig) (*OIDCRelyingPar
 
 // ValidateToken verifies rawToken against the configured provider and returns
 // the extracted Claims. It enforces the MaxTokenSize limit before parsing.
-func (rp *OIDCRelyingParty) ValidateToken(ctx context.Context, rawToken string) (*Claims, error) {
+// If expectedNonce is provided and non-empty, it validates the nonce claim in the token
+// using constant-time comparison.
+func (rp *OIDCRelyingParty) ValidateToken(ctx context.Context, rawToken string, expectedNonce ...string) (*Claims, error) {
 	if len(rawToken) > MaxTokenSize {
 		return nil, fmt.Errorf("oidc_rp: token size %d exceeds maximum of %d bytes", len(rawToken), MaxTokenSize)
 	}
@@ -64,6 +73,19 @@ func (rp *OIDCRelyingParty) ValidateToken(ctx context.Context, rawToken string) 
 	idToken, err := rp.verifier.Verify(ctx, rawToken)
 	if err != nil {
 		return nil, fmt.Errorf("oidc_rp: token verification failed: %w", err)
+	}
+
+	// Validate nonce if provided
+	if len(expectedNonce) > 0 && expectedNonce[0] != "" {
+		var nonceClaims struct {
+			Nonce string `json:"nonce"`
+		}
+		if err := idToken.Claims(&nonceClaims); err != nil {
+			return nil, fmt.Errorf("oidc_rp: failed to extract nonce claim: %w", err)
+		}
+		if subtle.ConstantTimeCompare([]byte(nonceClaims.Nonce), []byte(expectedNonce[0])) != 1 {
+			return nil, fmt.Errorf("oidc_rp: nonce mismatch")
+		}
 	}
 
 	var raw struct {
@@ -128,4 +150,129 @@ func (rp *OIDCRelyingParty) Exchange(ctx context.Context, code string, opts ...o
 // constant-time comparison to prevent timing attacks.
 func (rp *OIDCRelyingParty) ValidateState(received, expected string) bool {
 	return subtle.ConstantTimeCompare([]byte(received), []byte(expected)) == 1
+}
+
+// Refresh exchanges a refresh token for a new TokenSet.
+// It calls the provider's token_endpoint with grant_type=refresh_token.
+func (rp *OIDCRelyingParty) Refresh(ctx context.Context, refreshToken string) (*TokenSet, error) {
+	token := &oauth2.Token{RefreshToken: refreshToken}
+	tokenSource := rp.oauth2.TokenSource(ctx, token)
+	newToken, err := tokenSource.Token()
+	if err != nil {
+		return nil, fmt.Errorf("oidc_rp: refresh failed: %w", err)
+	}
+	idTokenRaw, _ := newToken.Extra("id_token").(string)
+	expiresIn := int64(0)
+	if !newToken.Expiry.IsZero() {
+		expiresIn = int64(time.Until(newToken.Expiry).Seconds())
+	}
+	return &TokenSet{
+		AccessToken:  newToken.AccessToken,
+		IDToken:      idTokenRaw,
+		RefreshToken: newToken.RefreshToken,
+		ExpiresIn:    expiresIn,
+		TokenType:    newToken.TokenType,
+	}, nil
+}
+
+// Revoke calls the provider's revocation endpoint (RFC 7009) to invalidate a token.
+// tokenTypeHint is optional (e.g., "access_token" or "refresh_token").
+func (rp *OIDCRelyingParty) Revoke(ctx context.Context, token string, tokenTypeHint string) error {
+	discovery, err := rp.getDiscovery(ctx)
+	if err != nil {
+		return fmt.Errorf("oidc_rp: revoke discovery failed: %w", err)
+	}
+	revocationEndpoint, ok := discovery["revocation_endpoint"].(string)
+	if !ok || revocationEndpoint == "" {
+		return fmt.Errorf("oidc_rp: provider does not support token revocation")
+	}
+
+	params := url.Values{"token": {token}, "client_id": {rp.cfg.ClientID}}
+	if tokenTypeHint != "" {
+		params.Set("token_type_hint", tokenTypeHint)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, revocationEndpoint,
+		strings.NewReader(params.Encode()))
+	if err != nil {
+		return fmt.Errorf("oidc_rp: revoke request creation failed: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth(rp.cfg.ClientID, rp.cfg.ClientSecret)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("oidc_rp: revoke request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("oidc_rp: revoke returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// Introspect calls the provider's introspection endpoint (RFC 7662).
+// Returns the introspection response as a map. "active" key indicates token validity.
+func (rp *OIDCRelyingParty) Introspect(ctx context.Context, token string) (map[string]interface{}, error) {
+	discovery, err := rp.getDiscovery(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("oidc_rp: introspect discovery failed: %w", err)
+	}
+	introspectionEndpoint, ok := discovery["introspection_endpoint"].(string)
+	if !ok || introspectionEndpoint == "" {
+		return nil, fmt.Errorf("oidc_rp: provider does not support token introspection")
+	}
+
+	params := url.Values{"token": {token}, "client_id": {rp.cfg.ClientID}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, introspectionEndpoint,
+		strings.NewReader(params.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("oidc_rp: introspect request creation failed: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth(rp.cfg.ClientID, rp.cfg.ClientSecret)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("oidc_rp: introspect request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("oidc_rp: introspect response decode failed: %w", err)
+	}
+	return result, nil
+}
+
+// getDiscovery fetches and caches the OIDC provider's discovery document.
+// It is called once and the result is cached in the OIDCRelyingParty instance.
+func (rp *OIDCRelyingParty) getDiscovery(ctx context.Context) (map[string]interface{}, error) {
+	var discoveryErr error
+	rp.discoveryOnce.Do(func() {
+		endpoint := strings.TrimSuffix(rp.cfg.IssuerURL, "/") + "/.well-known/openid-configuration"
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			discoveryErr = fmt.Errorf("failed to create discovery request: %w", err)
+			return
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			discoveryErr = fmt.Errorf("failed to fetch discovery document: %w", err)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			discoveryErr = fmt.Errorf("discovery request returned status %d", resp.StatusCode)
+			return
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&rp.discovery); err != nil {
+			discoveryErr = fmt.Errorf("failed to decode discovery document: %w", err)
+			return
+		}
+	})
+	if discoveryErr != nil {
+		return nil, discoveryErr
+	}
+	return rp.discovery, nil
 }

@@ -25,6 +25,10 @@ Requires-Dist: pyjwt[crypto]>=2.8
 Requires-Dist: pydantic>=2.0
 Requires-Dist: httpx>=0.27
 Requires-Dist: cryptography>=42
+Provides-Extra: redis
+Requires-Dist: redis>=5.0; extra == "redis"
+Provides-Extra: flask
+Requires-Dist: flask>=3.0; extra == "flask"
 Provides-Extra: spiffe
 Requires-Dist: py-spiffe; extra == "spiffe"
 Provides-Extra: grpc
@@ -39,3 +43,5 @@ Requires-Dist: types-grpcio; extra == "dev"
 Requires-Dist: bandit>=1.7; extra == "dev"
 Requires-Dist: pip-audit>=2.6; extra == "dev"
 Requires-Dist: hypothesis>=6.0; extra == "dev"
+Requires-Dist: redis>=5.0; extra == "dev"
+Requires-Dist: flask>=3.0; extra == "dev"

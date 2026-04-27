@@ -1,8 +1,57 @@
 """Shared test fixtures for penguin-dal."""
 
+import sys
+from unittest.mock import MagicMock, AsyncMock
+
 import pytest
 from sqlalchemy import Boolean, Column, Integer, MetaData, String, Table, create_engine, text
 from sqlalchemy.orm import sessionmaker
+
+# Mock external cache/db libraries that may not be installed
+mock_redis = MagicMock()
+mock_redis.Redis = MagicMock()
+mock_redis.asyncio = MagicMock()
+mock_redis.asyncio.Redis = MagicMock()
+
+mock_valkey = MagicMock()
+mock_valkey.Valkey = MagicMock()
+mock_valkey.asyncio = MagicMock()
+mock_valkey.asyncio.Valkey = MagicMock()
+
+mock_pymemcache = MagicMock()
+mock_pymemcache.client = MagicMock()
+mock_pymemcache.client.pool = MagicMock()
+mock_pymemcache.client.pool.ObjectPooledClient = MagicMock()
+
+mock_pymongo = MagicMock()
+mock_pymongo.MongoClient = MagicMock()
+
+mock_motor = MagicMock()
+mock_motor.motor_asyncio = MagicMock()
+mock_motor.motor_asyncio.AsyncMongoClient = MagicMock()
+
+mock_bson = MagicMock()
+# Create a mock ObjectId class
+class MockObjectId(str):
+    def __new__(cls, oid=None):
+        if oid is None:
+            oid = "507f1f77bcf86cd799439000"
+        return str.__new__(cls, oid)
+
+mock_bson.ObjectId = MockObjectId
+
+# Pre-populate sys.modules to avoid ImportError during test collection
+sys.modules["redis"] = mock_redis
+sys.modules["redis.asyncio"] = mock_redis.asyncio
+sys.modules["valkey"] = mock_valkey
+sys.modules["valkey.asyncio"] = mock_valkey.asyncio
+sys.modules["pymemcache"] = mock_pymemcache
+sys.modules["pymemcache.client"] = mock_pymemcache.client
+sys.modules["pymemcache.client.pool"] = mock_pymemcache.client.pool
+sys.modules["pymongo"] = mock_pymongo
+sys.modules["motor"] = mock_motor
+sys.modules["motor.motor_asyncio"] = mock_motor.motor_asyncio
+sys.modules["bson"] = mock_bson
 
 
 @pytest.fixture

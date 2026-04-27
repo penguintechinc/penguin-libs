@@ -1,4 +1,5 @@
 export * from './authn/types.js';
+export * from './authn/storage.js';
 export * from './authn/oidc-client.js';
 export * from './authn/token-manager.js';
 export * from './authz/types.js';

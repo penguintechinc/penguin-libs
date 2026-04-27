@@ -9,6 +9,7 @@ src/penguin_dal/field_proxy.py
 src/penguin_dal/flask_ext.py
 src/penguin_dal/pagination.py
 src/penguin_dal/pool.py
+src/penguin_dal/protocols.py
 src/penguin_dal/py.typed
 src/penguin_dal/quart_ext.py
 src/penguin_dal/query.py
@@ -19,6 +20,18 @@ src/penguin_dal.egg-info/SOURCES.txt
 src/penguin_dal.egg-info/dependency_links.txt
 src/penguin_dal.egg-info/requires.txt
 src/penguin_dal.egg-info/top_level.txt
+src/penguin_dal/cache/__init__.py
+src/penguin_dal/cache/memcache.py
+src/penguin_dal/cache/redis.py
+src/penguin_dal/cache/valkey.py
+src/penguin_dal/document/__init__.py
+src/penguin_dal/document/mongodb.py
+src/penguin_dal/storage/__init__.py
+src/penguin_dal/storage/iscsi.py
+src/penguin_dal/storage/nfs.py
+src/penguin_dal/storage/s3.py
+src/penguin_dal/stream/__init__.py
+src/penguin_dal/stream/kafka.py
 tests/test_async_db.py
 tests/test_backends.py
 tests/test_database_manager.py
@@ -32,5 +45,6 @@ tests/test_pool.py
 tests/test_quart.py
 tests/test_query.py
 tests/test_row.py
+tests/test_storage.py
 tests/test_table_proxy.py
 tests/test_validators.py
