@@ -55,6 +55,8 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
       className={`fixed inset-0 ${theme.overlayBackground} flex items-center justify-center z-50 p-0 sm:p-4`}
       onClick={handleOverlayClick}
     >

@@ -1,8 +1,9 @@
 """License validation decorators for Elder enterprise features."""
 
 import inspect
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 import structlog
 
@@ -62,51 +63,108 @@ def license_required(required_tier: str = "enterprise") -> Callable[[F], F]:
     """
 
     def decorator(func: F) -> F:
-        @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            if _in_flask_context():
-                from flask import jsonify, request  # noqa: PLC0415
+        is_async = inspect.iscoroutinefunction(func)
 
-                host = request.host
-                if not _is_bypass_domain(host):
-                    client = _get_license_client()
-                    if not client.check_tier(required_tier):
-                        validation = client.validate()
-                        logger.warning(
-                            "license_check_failed",
+        if is_async:
+            @wraps(func)
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                if _in_flask_context():
+                    from flask import jsonify, request  # noqa: PLC0415
+
+                    host = request.host
+                    if not _is_bypass_domain(host):
+                        client = _get_license_client()
+                        if not client.check_tier(required_tier):
+                            validation = client.validate()
+                            logger.warning(
+                                "license_check_failed",
+                                required_tier=required_tier,
+                                current_tier=validation.tier,
+                                endpoint=func.__name__,
+                            )
+                            msg = (
+                                f"This feature requires a {required_tier} "
+                                "license"
+                            )
+                            return (
+                                jsonify(
+                                    {
+                                        "error": "License Required",
+                                        "message": msg,
+                                        "required_tier": required_tier,
+                                        "current_tier": validation.tier,
+                                        "upgrade_url": (
+                                            "https://penguintech.io/pricing"
+                                        ),
+                                    }
+                                ),
+                                403,
+                            )
+                        logger.debug(
+                            "license_check_passed",
                             required_tier=required_tier,
-                            current_tier=validation.tier,
                             endpoint=func.__name__,
                         )
-                        return (
-                            jsonify(
-                                {
-                                    "error": "License Required",
-                                    "message": f"This feature requires a {required_tier} license",
-                                    "required_tier": required_tier,
-                                    "current_tier": validation.tier,
-                                    "upgrade_url": "https://penguintech.io/pricing",
-                                }
-                            ),
-                            403,
+                    else:
+                        logger.debug(
+                            "license_check_domain_bypass",
+                            host=host,
+                            endpoint=func.__name__,
                         )
-                    logger.debug(
-                        "license_check_passed",
-                        required_tier=required_tier,
-                        endpoint=func.__name__,
-                    )
-                else:
-                    logger.debug(
-                        "license_check_domain_bypass",
-                        host=host,
-                        endpoint=func.__name__,
-                    )
 
-            if inspect.iscoroutinefunction(func):
                 return await func(*args, **kwargs)
-            return func(*args, **kwargs)
 
-        return wrapper  # type: ignore[return-value]
+            return async_wrapper  # type: ignore[return-value]
+        else:
+            @wraps(func)
+            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+                if _in_flask_context():
+                    from flask import jsonify, request  # noqa: PLC0415
+
+                    host = request.host
+                    if not _is_bypass_domain(host):
+                        client = _get_license_client()
+                        if not client.check_tier(required_tier):
+                            validation = client.validate()
+                            logger.warning(
+                                "license_check_failed",
+                                required_tier=required_tier,
+                                current_tier=validation.tier,
+                                endpoint=func.__name__,
+                            )
+                            msg = (
+                                f"This feature requires a {required_tier} "
+                                "license"
+                            )
+                            return (
+                                jsonify(
+                                    {
+                                        "error": "License Required",
+                                        "message": msg,
+                                        "required_tier": required_tier,
+                                        "current_tier": validation.tier,
+                                        "upgrade_url": (
+                                            "https://penguintech.io/pricing"
+                                        ),
+                                    }
+                                ),
+                                403,
+                            )
+                        logger.debug(
+                            "license_check_passed",
+                            required_tier=required_tier,
+                            endpoint=func.__name__,
+                        )
+                    else:
+                        logger.debug(
+                            "license_check_domain_bypass",
+                            host=host,
+                            endpoint=func.__name__,
+                        )
+
+                return func(*args, **kwargs)
+
+            return sync_wrapper  # type: ignore[return-value]
 
     return decorator  # type: ignore[return-value]
 
@@ -124,47 +182,89 @@ def feature_required(feature_name: str) -> Callable[[F], F]:
     """
 
     def decorator(func: F) -> F:
-        @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            if _in_flask_context():
-                from flask import jsonify, request  # noqa: PLC0415
+        is_async = inspect.iscoroutinefunction(func)
 
-                host = request.host
-                if not _is_bypass_domain(host):
-                    client = _get_license_client()
-                    if not client.check_feature(feature_name):
-                        logger.warning(
-                            "feature_check_failed",
+        if is_async:
+            @wraps(func)
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                if _in_flask_context():
+                    from flask import jsonify, request  # noqa: PLC0415
+
+                    host = request.host
+                    if not _is_bypass_domain(host):
+                        client = _get_license_client()
+                        if not client.check_feature(feature_name):
+                            logger.warning(
+                                "feature_check_failed",
+                                feature=feature_name,
+                                endpoint=func.__name__,
+                            )
+                            return (
+                                jsonify(
+                                    {
+                                        "error": "Feature Not Available",
+                                        "message": "This feature is not included in your license",
+                                        "feature": feature_name,
+                                        "upgrade_url": "https://penguintech.io/pricing",
+                                    }
+                                ),
+                                403,
+                            )
+                        logger.debug(
+                            "feature_check_passed",
                             feature=feature_name,
                             endpoint=func.__name__,
                         )
-                        return (
-                            jsonify(
-                                {
-                                    "error": "Feature Not Available",
-                                    "message": "This feature is not included in your license",
-                                    "feature": feature_name,
-                                    "upgrade_url": "https://penguintech.io/pricing",
-                                }
-                            ),
-                            403,
+                    else:
+                        logger.debug(
+                            "feature_check_domain_bypass",
+                            host=host,
+                            endpoint=func.__name__,
                         )
-                    logger.debug(
-                        "feature_check_passed",
-                        feature=feature_name,
-                        endpoint=func.__name__,
-                    )
-                else:
-                    logger.debug(
-                        "feature_check_domain_bypass",
-                        host=host,
-                        endpoint=func.__name__,
-                    )
 
-            if inspect.iscoroutinefunction(func):
                 return await func(*args, **kwargs)
-            return func(*args, **kwargs)
 
-        return wrapper  # type: ignore[return-value]
+            return async_wrapper  # type: ignore[return-value]
+        else:
+            @wraps(func)
+            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+                if _in_flask_context():
+                    from flask import jsonify, request  # noqa: PLC0415
+
+                    host = request.host
+                    if not _is_bypass_domain(host):
+                        client = _get_license_client()
+                        if not client.check_feature(feature_name):
+                            logger.warning(
+                                "feature_check_failed",
+                                feature=feature_name,
+                                endpoint=func.__name__,
+                            )
+                            return (
+                                jsonify(
+                                    {
+                                        "error": "Feature Not Available",
+                                        "message": "This feature is not included in your license",
+                                        "feature": feature_name,
+                                        "upgrade_url": "https://penguintech.io/pricing",
+                                    }
+                                ),
+                                403,
+                            )
+                        logger.debug(
+                            "feature_check_passed",
+                            feature=feature_name,
+                            endpoint=func.__name__,
+                        )
+                    else:
+                        logger.debug(
+                            "feature_check_domain_bypass",
+                            host=host,
+                            endpoint=func.__name__,
+                        )
+
+                return func(*args, **kwargs)
+
+            return sync_wrapper  # type: ignore[return-value]
 
     return decorator  # type: ignore[return-value]

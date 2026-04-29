@@ -83,10 +83,19 @@ func NewUMEM(opts UMEMOptions) (*UMEM, error) {
 		Size:      opts.FrameSize,
 		Headroom:  opts.HeadRoom,
 	}
-	if err := unix.SetsockoptXDPUmemReg(fd, unix.SOL_XDP, unix.XDP_UMEM_REG, &reg); err != nil {
+	_, _, errno := unix.Syscall6(
+		unix.SYS_SETSOCKOPT,
+		uintptr(fd),
+		uintptr(unix.SOL_XDP),
+		uintptr(unix.XDP_UMEM_REG),
+		uintptr(unsafe.Pointer(&reg)),
+		unsafe.Sizeof(reg),
+		0,
+	)
+	if errno != 0 {
 		unix.Munmap(mem)
 		unix.Close(fd)
-		return nil, fmt.Errorf("register UMEM: %w", err)
+		return nil, fmt.Errorf("register UMEM: %w", errno)
 	}
 
 	logger.Info("umem_registered",

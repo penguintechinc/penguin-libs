@@ -18,7 +18,7 @@ import React, { useMemo, useState } from 'react';
 import { FormBuilderProps, FormTab } from './types';
 import { Modal } from './Modal';
 import { FormField } from './FormField';
-import { useFormBuilder } from '@penguintechinc/react-hooks';
+import { useFormBuilder } from './useFormBuilder';
 import { resolveTheme } from './theme';
 import { THEME_PRESETS } from './themes';
 

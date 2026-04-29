@@ -76,7 +76,7 @@ class TestLicenseRequiredDecorator:
 
         @app.route("/test")
         @license_required("enterprise")
-        async def view() -> flask.Response:
+        def view() -> flask.Response:
             return flask.jsonify({"ok": True})
 
         with app.test_client() as c:
@@ -89,7 +89,7 @@ class TestLicenseRequiredDecorator:
 
         @app.route("/test")
         @license_required("enterprise")
-        async def view() -> flask.Response:
+        def view() -> flask.Response:
             return flask.jsonify({"ok": True})
 
         with app.test_client() as c:
@@ -107,7 +107,7 @@ class TestLicenseRequiredDecorator:
 
         @app.route("/test")
         @license_required("professional")
-        async def view() -> flask.Response:
+        def view() -> flask.Response:
             return flask.jsonify({"ok": True})
 
         with app.test_client() as c:
@@ -120,7 +120,7 @@ class TestLicenseRequiredDecorator:
 
         @app.route("/test")
         @license_required("enterprise")
-        async def view() -> flask.Response:
+        def view() -> flask.Response:
             return flask.jsonify({"ok": True})
 
         with app.test_client() as c:
@@ -134,7 +134,7 @@ class TestLicenseRequiredDecorator:
 
         @app.route("/test")
         @license_required("enterprise")
-        async def view() -> flask.Response:
+        def view() -> flask.Response:
             return flask.jsonify({"ok": True})
 
         with app.test_client() as c:
@@ -148,7 +148,7 @@ class TestLicenseRequiredDecorator:
 
         @app.route("/test")
         @license_required("enterprise")
-        async def view() -> flask.Response:
+        def view() -> flask.Response:
             return flask.jsonify({"ok": True})
 
         with app.test_client() as c:
@@ -170,7 +170,7 @@ class TestLicenseRequiredDecorator:
         def sync_func(x: int) -> int:
             return x * 3
 
-        assert asyncio.run(sync_func(4)) == 12
+        assert sync_func(4) == 12
 
     def test_preserves_function_name(self) -> None:
         @license_required()
@@ -195,7 +195,7 @@ class TestFeatureRequiredDecorator:
 
         @app.route("/test")
         @feature_required("sso")
-        async def view() -> flask.Response:
+        def view() -> flask.Response:
             return flask.jsonify({"ok": True})
 
         with app.test_client() as c:
@@ -208,7 +208,7 @@ class TestFeatureRequiredDecorator:
 
         @app.route("/test")
         @feature_required("sso")
-        async def view() -> flask.Response:
+        def view() -> flask.Response:
             return flask.jsonify({"ok": True})
 
         with app.test_client() as c:
@@ -226,7 +226,7 @@ class TestFeatureRequiredDecorator:
 
         @app.route("/test")
         @feature_required("sso")
-        async def view() -> flask.Response:
+        def view() -> flask.Response:
             return flask.jsonify({"ok": True})
 
         with app.test_client() as c:
@@ -239,7 +239,7 @@ class TestFeatureRequiredDecorator:
 
         @app.route("/test")
         @feature_required("sso")
-        async def view() -> flask.Response:
+        def view() -> flask.Response:
             return flask.jsonify({"ok": True})
 
         with app.test_client() as c:

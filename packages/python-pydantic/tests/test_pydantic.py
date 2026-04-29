@@ -1238,7 +1238,8 @@ class TestOpenAPI:
 
             restx_model = pydantic_to_restx_model(api, User)
             assert restx_model is not None
-            assert hasattr(restx_model, "__name__")
+            assert hasattr(restx_model, "name")
+            assert restx_model.name == "User"
         except ImportError:
             pytest.skip("Flask-RESTX not available")
 

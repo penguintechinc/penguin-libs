@@ -42,4 +42,4 @@ export {
 } from '@penguintechinc/react-login';
 export { SidebarMenu, SidebarMenuTrigger } from '@penguintechinc/react-sidebar';
 export * from '@penguintechinc/react-console-version';
-export { useFormBuilder, useBreakpoint, type UseFormBuilderOptions, type UseFormBuilderReturn, type Breakpoint, type UseBreakpointReturn } from '@penguintechinc/react-hooks';
+export { useBreakpoint, type Breakpoint, type UseBreakpointReturn } from '@penguintechinc/react-hooks';

@@ -83,6 +83,7 @@ dev = [
     "pytest-asyncio>=0.23",
     "pytest-cov>=4.0",
     "aiosqlite>=0.20",
+    "greenlet>=3.0",
     "black>=23.0",
     "ruff>=0.1.0",
     "mypy>=1.0",

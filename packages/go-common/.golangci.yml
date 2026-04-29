@@ -1,3 +1,4 @@
+version: "2"
 linters:
   enable:
     - govet
@@ -10,8 +11,8 @@ linters:
     - bodyclose
     - noctx
     - exhaustive
-linters-settings:
-  exhaustive:
-    default-signifies-exhaustive: true
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
 run:
   timeout: 5m

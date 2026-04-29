@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useBreakpoint, useFormBuilder, resolveTheme } from '../src/index';
+import { useBreakpoint, resolveTheme } from '../src/index';
+import { useFormBuilder } from '@penguintechinc/react-form-builder';
 import type { FieldConfig } from '@penguintechinc/react-form-builder';
 
 // ============================================================================
