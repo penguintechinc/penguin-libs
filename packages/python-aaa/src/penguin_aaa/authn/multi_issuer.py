@@ -1,4 +1,7 @@
-"""Multi-issuer OIDC RP — accepts tokens from multiple configured providers (e.g. Okta, SkausWatch, internal)."""
+"""Multi-issuer OIDC RP — accepts tokens from multiple configured providers.
+
+Supports external IdPs like Okta, SkausWatch, and internal providers.
+"""
 
 from dataclasses import dataclass, field
 from typing import Any
@@ -88,10 +91,12 @@ class MultiIssuerRelyingParty:
             raise ValueError(f"Token issuer '{issuer}' is not a known upstream provider")
 
         # Find the matching provider config for claims mapping
-        mapping = next(
-            (p.claims_mapping for p in self._providers if p.config.issuer_url.rstrip("/") == issuer),
-            ClaimsMapping(),
+        matching_provider = (
+            p.claims_mapping
+            for p in self._providers
+            if p.config.issuer_url.rstrip("/") == issuer
         )
+        mapping = next(matching_provider, ClaimsMapping())
 
         claims = await rp.validate_token(raw_token, expected_nonce)
         return _apply_claims_mapping(claims, mapping, unverified)
@@ -102,7 +107,9 @@ class MultiIssuerRelyingParty:
         return [p.name for p in self._providers]
 
 
-def _apply_claims_mapping(claims: Claims, mapping: ClaimsMapping, raw_payload: dict[str, Any]) -> Claims:
+def _apply_claims_mapping(
+    claims: Claims, mapping: ClaimsMapping, raw_payload: dict[str, Any]
+) -> Claims:
     """Re-map claims from external provider format to internal Claims format."""
     # Apply custom field mappings from raw_payload if configured differently
     tenant = raw_payload.get(mapping.tenant_claim) or claims.tenant

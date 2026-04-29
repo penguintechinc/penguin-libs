@@ -25,6 +25,10 @@ classifiers = [
 
 dependencies = [
     "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+split = [
     "penguin-crypto>=0.1.0",
     "penguin-flask>=0.1.0",
     "penguin-grpc>=0.1.0",
@@ -34,8 +38,6 @@ dependencies = [
     "penguin-security>=0.1.0",
     "penguin-validation>=0.1.0",
 ]
-
-[project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

@@ -1,6 +1,45 @@
 // Transition library — re-exports from focused packages
 export * from '@penguintechinc/react-form-builder';
-export * from '@penguintechinc/react-login';
-export * from '@penguintechinc/react-sidebar';
+export {
+  LoginPageBuilder,
+  MFAModal,
+  MFAInput,
+  CaptchaWidget,
+  SocialLoginButtons,
+  LoginDivider,
+  CookieConsent,
+  Footer,
+  useCaptcha,
+  useCookieConsent,
+  ELDER_LOGIN_THEME,
+  mergeWithElderTheme,
+  GoogleIcon,
+  GitHubIcon,
+  MicrosoftIcon,
+  AppleIcon,
+  TwitchIcon,
+  DiscordIcon,
+  SSOIcon,
+  EnterpriseIcon,
+  buildOAuth2Url,
+  buildCustomOAuth2Url,
+  buildOIDCUrl,
+  generateState,
+  validateState,
+  getProviderLabel,
+  getProviderColors,
+  buildSAMLRequest,
+  buildSAMLRedirectUrl,
+  buildSAMLPostForm,
+  initiateSAMLLogin,
+  initiateSAMLPostLogin,
+  validateRelayState,
+  getStoredRequestId,
+  clearSAMLSession,
+  type BuiltInOAuth2Provider,
+  type ThemeMode as LoginThemeMode,
+  resolveLoginTheme,
+} from '@penguintechinc/react-login';
+export { SidebarMenu, SidebarMenuTrigger } from '@penguintechinc/react-sidebar';
 export * from '@penguintechinc/react-console-version';
-export * from '@penguintechinc/react-hooks';
+export { useFormBuilder, useBreakpoint, type UseFormBuilderOptions, type UseFormBuilderReturn, type Breakpoint, type UseBreakpointReturn } from '@penguintechinc/react-hooks';

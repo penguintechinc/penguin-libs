@@ -11,7 +11,7 @@ export { FormBuilder } from './FormBuilder';
 export type { FieldConfig, FormBuilderProps, FormConfig, FieldType, SelectOption, FormBuilderColorConfig } from './types';
 
 export { Modal } from './Modal';
-export { FormField } from './FormField';
+export { FormField as FormFieldComponent } from './FormField';
 
 export type { ThemeMode } from './theme';
 export { resolveTheme } from './theme';

@@ -3,14 +3,10 @@ package logging
 
 import (
 	"testing"
-
-	"go.uber.org/zap"
 )
 
 // TestTypeAliasCompilation verifies that the type aliases compile correctly.
-// This is a compile-time check that ensures SanitizedLogger is a valid alias.
 func TestTypeAliasCompilation(t *testing.T) {
-	// Create a LoggerConfig to verify the type alias works
 	config := LoggerConfig{
 		Name: "test-logger",
 	}
@@ -22,11 +18,6 @@ func TestTypeAliasCompilation(t *testing.T) {
 
 // TestNewSanitizedLoggerAlias verifies NewSanitizedLogger is callable via alias.
 func TestNewSanitizedLoggerAlias(t *testing.T) {
-	if NewSanitizedLogger == nil {
-		t.Fatal("NewSanitizedLogger is nil, expected callable function")
-	}
-
-	// Call NewSanitizedLogger with test input (string name)
 	logger, err := NewSanitizedLogger("test-logger")
 	if err != nil {
 		t.Fatalf("NewSanitizedLogger failed: %v", err)
@@ -38,10 +29,6 @@ func TestNewSanitizedLoggerAlias(t *testing.T) {
 
 // TestNewLoggerAlias verifies NewLogger function is callable via alias.
 func TestNewLoggerAlias(t *testing.T) {
-	if NewLogger == nil {
-		t.Fatal("NewLogger is nil, expected callable function")
-	}
-
 	config := LoggerConfig{
 		Name: "test",
 	}
@@ -68,10 +55,6 @@ func TestLoggerConfigStruct(t *testing.T) {
 
 // TestNewStdoutSinkAlias verifies NewStdoutSink is callable via alias.
 func TestNewStdoutSinkAlias(t *testing.T) {
-	if NewStdoutSink == nil {
-		t.Fatal("NewStdoutSink is nil")
-	}
-
 	sink := NewStdoutSink()
 	if sink == nil {
 		t.Fatal("NewStdoutSink returned nil")
@@ -80,10 +63,6 @@ func TestNewStdoutSinkAlias(t *testing.T) {
 
 // TestNewFileSinkAlias verifies NewFileSink is callable via alias.
 func TestNewFileSinkAlias(t *testing.T) {
-	if NewFileSink == nil {
-		t.Fatal("NewFileSink is nil")
-	}
-
 	sink, err := NewFileSink("/tmp/test.log", 10)
 	if err != nil {
 		t.Fatalf("NewFileSink failed: %v", err)
@@ -95,10 +74,6 @@ func TestNewFileSinkAlias(t *testing.T) {
 
 // TestNewSyslogSinkAlias verifies NewSyslogSink is callable via alias.
 func TestNewSyslogSinkAlias(t *testing.T) {
-	if NewSyslogSink == nil {
-		t.Fatal("NewSyslogSink is nil")
-	}
-
 	sink := NewSyslogSink("localhost:514")
 	if sink == nil {
 		t.Fatal("NewSyslogSink returned nil")
@@ -107,10 +82,6 @@ func TestNewSyslogSinkAlias(t *testing.T) {
 
 // TestNewCallbackSinkAlias verifies NewCallbackSink is callable via alias.
 func TestNewCallbackSinkAlias(t *testing.T) {
-	if NewCallbackSink == nil {
-		t.Fatal("NewCallbackSink is nil")
-	}
-
 	sink := NewCallbackSink(func(event map[string]interface{}) error { return nil })
 	if sink == nil {
 		t.Fatal("NewCallbackSink returned nil")
@@ -119,10 +90,6 @@ func TestNewCallbackSinkAlias(t *testing.T) {
 
 // TestNewKillKrillSinkAlias verifies NewKillKrillSink is callable via alias.
 func TestNewKillKrillSinkAlias(t *testing.T) {
-	if NewKillKrillSink == nil {
-		t.Fatal("NewKillKrillSink is nil")
-	}
-
 	config := KillKrillConfig{
 		Endpoint: "http://localhost:8080",
 	}
@@ -135,10 +102,6 @@ func TestNewKillKrillSinkAlias(t *testing.T) {
 
 // TestSanitizeValueAlias verifies SanitizeValue is callable via alias.
 func TestSanitizeValueAlias(t *testing.T) {
-	if SanitizeValue == nil {
-		t.Fatal("SanitizeValue is nil")
-	}
-
 	result := SanitizeValue("testkey", "testvalue")
 	if result == nil {
 		t.Error("SanitizeValue returned nil")
@@ -147,11 +110,6 @@ func TestSanitizeValueAlias(t *testing.T) {
 
 // TestSanitizeFieldsAlias verifies SanitizeFields is callable via alias.
 func TestSanitizeFieldsAlias(t *testing.T) {
-	if SanitizeFields == nil {
-		t.Fatal("SanitizeFields is nil")
-	}
-
-	// SanitizeFields accepts a map and returns it sanitized
 	input := map[string]interface{}{"key": "value"}
 	result := SanitizeFields(input)
 	if result == nil {
@@ -161,12 +119,7 @@ func TestSanitizeFieldsAlias(t *testing.T) {
 
 // TestSanitizeFieldAlias verifies SanitizeField is callable via alias.
 func TestSanitizeFieldAlias(t *testing.T) {
-	if SanitizeField == nil {
-		t.Fatal("SanitizeField is nil")
-	}
-
-	// SanitizeField accepts a key/value and returns sanitized pair
-	key, value := SanitizeField("test", "value")
+	key, _ := SanitizeField("test", "value")
 	if key == "" {
 		t.Error("SanitizeField returned empty key")
 	}
@@ -185,7 +138,6 @@ func TestSensitiveKeysAlias(t *testing.T) {
 
 // TestAllTypesCompileCheck verifies all public types are accessible.
 func TestAllTypesCompileCheck(t *testing.T) {
-	// Compile-time checks: all types accessible
 	_ = (*SanitizedLogger)(nil)
 	_ = LoggerConfig{}
 	_ = (*Sink)(nil)
@@ -197,40 +149,34 @@ func TestAllTypesCompileCheck(t *testing.T) {
 	_ = (*KillKrillSink)(nil)
 }
 
-// TestAllFunctionsCompileCheck verifies all public functions are accessible.
+// TestAllFunctionsCompileCheck verifies all public functions are accessible by calling them.
 func TestAllFunctionsCompileCheck(t *testing.T) {
-	// Compile-time checks: all functions accessible as non-nil
-	if NewLogger == nil {
-		t.Error("NewLogger is nil")
+	// Verify functions are callable — compile-time accessibility proven by package building.
+	logger, err := NewLogger(LoggerConfig{Name: "compile-check"})
+	if err != nil {
+		t.Errorf("NewLogger: %v", err)
 	}
-	if NewSanitizedLogger == nil {
-		t.Error("NewSanitizedLogger is nil")
+	_ = logger
+
+	sl, err := NewSanitizedLogger("compile-check")
+	if err != nil {
+		t.Errorf("NewSanitizedLogger: %v", err)
 	}
-	if NewStdoutSink == nil {
-		t.Error("NewStdoutSink is nil")
+	_ = sl
+
+	_ = NewStdoutSink()
+
+	fs, err := NewFileSink("/tmp/compile-check.log", 5)
+	if err != nil {
+		t.Errorf("NewFileSink: %v", err)
 	}
-	if NewFileSink == nil {
-		t.Error("NewFileSink is nil")
-	}
-	if NewSyslogSink == nil {
-		t.Error("NewSyslogSink is nil")
-	}
-	if NewCallbackSink == nil {
-		t.Error("NewCallbackSink is nil")
-	}
-	if NewKillKrillSink == nil {
-		t.Error("NewKillKrillSink is nil")
-	}
-	if SanitizeValue == nil {
-		t.Error("SanitizeValue is nil")
-	}
-	if SanitizeFields == nil {
-		t.Error("SanitizeFields is nil")
-	}
-	if SanitizeField == nil {
-		t.Error("SanitizeField is nil")
-	}
-	if SensitiveKeys == nil {
-		t.Error("SensitiveKeys is nil")
-	}
+	_ = fs
+
+	_ = NewSyslogSink("localhost:514")
+	_ = NewCallbackSink(func(map[string]interface{}) error { return nil })
+	_ = NewKillKrillSink(KillKrillConfig{Endpoint: "http://localhost:8080"})
+	_ = SanitizeValue("k", "v")
+	_ = SanitizeFields(map[string]interface{}{})
+	_, _ = SanitizeField("k", "v")
+	_ = SensitiveKeys
 }

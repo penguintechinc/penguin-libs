@@ -1,6 +1,9 @@
 """Tests for OIDC Relying Party nonce validation and PKCE helpers."""
 
 from datetime import UTC, datetime, timedelta
+import base64
+import hashlib
+import hmac
 
 import pytest
 import jwt
@@ -75,7 +78,6 @@ class TestNonceValidation:
         token_set = provider.issue_token_set(claims, nonce=nonce_issued)
 
         # Decode and check nonce validation logic
-        import hmac
         payload = jwt.decode(token_set.id_token, options={"verify_signature": False})
         token_nonce = payload.get("nonce")
         # Verify the constant-time comparison would fail
@@ -118,8 +120,6 @@ class TestPKCEHelpers:
         assert challenge.count("-") + challenge.count("_") >= 0
 
         # Recreate challenge from verifier
-        import hashlib
-        import base64
         manual_challenge = base64.urlsafe_b64encode(
             hashlib.sha256(verifier.encode()).digest()
         ).rstrip(b"=").decode()

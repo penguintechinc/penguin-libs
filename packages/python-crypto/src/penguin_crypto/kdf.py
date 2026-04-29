@@ -1,9 +1,9 @@
 """Key derivation functions (Argon2id, HKDF)."""
 
 import os
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives import hashes
-from argon2.low_level import hash_secret_raw, Type
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF  # type: ignore[import-untyped]
+from cryptography.hazmat.primitives import hashes  # type: ignore[import-untyped]
+from argon2.low_level import hash_secret_raw, Type  # type: ignore[import-untyped]
 
 
 def generate_salt(length: int = 32) -> bytes:

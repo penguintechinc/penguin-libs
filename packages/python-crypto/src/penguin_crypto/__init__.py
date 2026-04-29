@@ -10,13 +10,13 @@ Provides:
 """
 
 # Symmetric encryption
-from .symmetric import encrypt, decrypt, generate_key
+from .symmetric import encrypt, decrypt, generate_key  # type: ignore[import-untyped]
 
 # Key derivation functions
-from .kdf import generate_salt, derive_key, derive_key_argon2id, derive_key_hkdf
+from .kdf import generate_salt, derive_key, derive_key_argon2id, derive_key_hkdf  # type: ignore[import-untyped]
 
 # Elliptic curve cryptography
-from .ecc import (
+from .ecc import (  # type: ignore[import-untyped]
     generate_x25519_keypair,
     x25519_exchange,
     generate_ed25519_keypair,
@@ -29,10 +29,10 @@ from .ecc import (
 )
 
 # Hybrid encryption
-from .hybrid import hybrid_encrypt, hybrid_decrypt
+from .hybrid import hybrid_encrypt, hybrid_decrypt  # type: ignore[import-untyped]
 
 # Hashing
-from .hashing import sha256, sha512, blake2b, hmac_sha256
+from .hashing import sha256, sha512, blake2b, hmac_sha256  # type: ignore[import-untyped]
 
 __all__ = [
     # Symmetric

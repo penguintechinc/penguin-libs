@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run clean --workspaces --if-present && npm run build --workspaces --if-present",
     "build:react-libs": "npm run build -w @penguintechinc/react-libs",
     "build:react-aaa": "npm run build -w @penguintechinc/react-aaa",
     "clean": "npm run clean --workspaces --if-present",
@@ -33,6 +33,7 @@
     "npm": ">=8.0.0"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
     "vite": "7.3.2"
   },
   "overrides": {

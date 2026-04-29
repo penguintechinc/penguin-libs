@@ -11,8 +11,10 @@ src/penguin_aaa/audit/event.py
 src/penguin_aaa/audit/killkrill.py
 src/penguin_aaa/audit/sinks.py
 src/penguin_aaa/authn/__init__.py
+src/penguin_aaa/authn/multi_issuer.py
 src/penguin_aaa/authn/oidc_provider.py
 src/penguin_aaa/authn/oidc_rp.py
+src/penguin_aaa/authn/presets.py
 src/penguin_aaa/authn/spiffe.py
 src/penguin_aaa/authn/types.py
 src/penguin_aaa/authz/__init__.py
@@ -41,7 +43,9 @@ tests/test_flask_blueprint.py
 tests/test_grpc_middleware.py
 tests/test_keystore.py
 tests/test_killkrill.py
+tests/test_multi_issuer.py
 tests/test_oidc_provider.py
+tests/test_oidc_provider_config.py
 tests/test_oidc_provider_lifecycle.py
 tests/test_oidc_rp.py
 tests/test_oidc_rp_nonce.py

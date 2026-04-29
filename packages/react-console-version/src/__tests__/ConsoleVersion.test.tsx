@@ -478,10 +478,10 @@ describe('useVersionInfo Hook', () => {
     const { result } = renderHook(() =>
       useVersionInfo('1.2.3.1737727200')
     );
-    expect(result.current.major).toBe(1);
-    expect(result.current.minor).toBe(2);
-    expect(result.current.patch).toBe(3);
-    expect(result.current.semver).toBe('1.2.3');
+    expect(result.current!.major).toBe(1);
+    expect(result.current!.minor).toBe(2);
+    expect(result.current!.patch).toBe(3);
+    expect(result.current!.semver).toBe('1.2.3');
   });
 
   it('memoizes result when version does not change', () => {
@@ -500,14 +500,14 @@ describe('useVersionInfo Hook', () => {
       { initialProps: { version: '1.0.0.1737727200' } }
     );
     rerender({ version: '2.0.0.1737727200' });
-    expect(result.current.major).toBe(2);
+    expect(result.current!.major).toBe(2);
   });
 
   it('uses buildEpoch override', () => {
     const { result } = renderHook(() =>
       useVersionInfo('1.0.0.999', 1737727200)
     );
-    expect(result.current.buildEpoch).toBe(1737727200);
+    expect(result.current!.buildEpoch).toBe(1737727200);
   });
 });
 
@@ -752,9 +752,9 @@ describe('useApiVersionInfo Hook', () => {
       useApiVersionInfo('/api/v1/status')
     );
 
-    expect(result.current.loading).toBe(true);
-    expect(result.current.apiVersion).toBe(null);
-    expect(result.current.error).toBe(null);
+    expect(result.current!.loading).toBe(true);
+    expect(result.current!.apiVersion).toBe(null);
+    expect(result.current!.error).toBe(null);
   });
 
   it('fetches and parses API version', async () => {
@@ -770,9 +770,9 @@ describe('useApiVersionInfo Hook', () => {
 
     await new Promise(resolve => setTimeout(resolve, 50));
 
-    expect(result.current.apiVersion?.semver).toBe('1.5.0');
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBe(null);
+    expect(result.current!.apiVersion?.semver).toBe('1.5.0');
+    expect(result.current!.loading).toBe(false);
+    expect(result.current!.error).toBe(null);
   });
 
   it('handles fetch error', async () => {
@@ -785,9 +785,9 @@ describe('useApiVersionInfo Hook', () => {
 
     await new Promise(resolve => setTimeout(resolve, 50));
 
-    expect(result.current.apiVersion).toBe(null);
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBeInstanceOf(Error);
+    expect(result.current!.apiVersion).toBe(null);
+    expect(result.current!.loading).toBe(false);
+    expect(result.current!.error).toBeInstanceOf(Error);
   });
 
   it('refetches when URL changes', () => {

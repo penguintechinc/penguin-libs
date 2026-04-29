@@ -136,7 +136,7 @@ export interface FormBuilderProps extends FormConfig {
   closeOnOverlayClick?: boolean;
   showCloseButton?: boolean;
   /** Theme mode preset: 'dark' (default) or 'light'. Sets base colors. */
-  themeMode?: import('../../theme').ThemeMode;
+  themeMode?: import('./theme').ThemeMode;
   /** Custom color overrides merged on top of the theme preset. */
   colors?: Partial<FormBuilderColorConfig>;
 }
@@ -150,7 +150,7 @@ export interface ModalProps {
   closeOnOverlayClick?: boolean;
   showCloseButton?: boolean;
   /** Theme mode preset: 'dark' (default) or 'light'. */
-  themeMode?: import('../../theme').ThemeMode;
+  themeMode?: import('./theme').ThemeMode;
   /** Custom color overrides. */
   colors?: Partial<FormBuilderColorConfig>;
 }
@@ -162,7 +162,7 @@ export interface FormFieldProps {
   onChange: (name: string, value: any) => void;
   onBlur?: (name: string) => void;
   /** Theme mode preset: 'dark' (default) or 'light'. */
-  themeMode?: import('../../theme').ThemeMode;
+  themeMode?: import('./theme').ThemeMode;
   /** Custom color overrides. */
   colors?: Partial<FormBuilderColorConfig>;
 }

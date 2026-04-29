@@ -56,7 +56,10 @@ class OIDCProvider:
     """
 
     def __init__(
-        self, config: OIDCProviderConfig, keystore: KeyStore, token_store: "TokenStore | None" = None
+        self,
+        config: OIDCProviderConfig,
+        keystore: KeyStore,
+        token_store: "TokenStore | None" = None,
     ) -> None:
         self._config = config
         self._keystore = keystore

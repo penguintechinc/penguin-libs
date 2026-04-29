@@ -32,7 +32,7 @@ export type {
   FooterProps,
 } from './types';
 
-export { ELDER_LOGIN_THEME, mergeWithElderTheme, resolveLoginTheme } from './themes/elderTheme';
+export { ELDER_LOGIN_THEME, mergeWithElderTheme } from './themes/elderTheme';
 export type { ThemeMode } from './types';
 
 export { useCaptcha } from './hooks/useCaptcha';

@@ -273,7 +273,7 @@ export interface LoginPageBuilderProps {
 
   // UI options
   /** Theme mode preset: 'dark' (default) or 'light'. Sets base colors. */
-  themeMode?: import('../../theme').ThemeMode;
+  themeMode?: import('./theme').ThemeMode;
   /** Custom color overrides merged on top of the theme preset. */
   colors?: Partial<LoginColorConfig>;
   /** Show "Forgot Password" link (default: true) */
