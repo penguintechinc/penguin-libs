@@ -49,7 +49,7 @@ class ValidationErrorResponse:
         }, 400
 
 
-def validate_body(model_class: type[T]) -> T:
+def validate_body[T: BaseModel](model_class: type[T]) -> T:
     """
     Validate request body against Pydantic model.
 
@@ -66,7 +66,7 @@ def validate_body(model_class: type[T]) -> T:
     return model_class.model_validate(data)
 
 
-def validate_query_params(model_class: type[T]) -> T:
+def validate_query_params[T: BaseModel](model_class: type[T]) -> T:
     """
     Validate query parameters against Pydantic model.
 

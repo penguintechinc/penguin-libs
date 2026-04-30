@@ -1,8 +1,6 @@
 """HTML sanitization and XSS prevention utilities."""
 
-import html
 import re
-from typing import Any
 
 
 def sanitize_html(text: str) -> str:
@@ -33,7 +31,7 @@ def sanitize_html(text: str) -> str:
     text = text.replace("\x00", "")
 
     # Remove script tags but try to preserve text content for non-dangerous scripts
-    # Pattern: extract content between script tags, then remove the tags entirely if it contains dangerous code
+    # Pattern: extract content between script tags, then remove the tags entirely if it contains dangerous code  # noqa: E501
     def sanitize_script_tag(match):
         content = match.group(1)
         # Remove dangerous JavaScript functions/patterns
@@ -54,10 +52,10 @@ def sanitize_html(text: str) -> str:
         # Otherwise preserve the content (it might be data or safe text)
         return content
 
-    text = re.sub(r"<script[^>]*>(.*?)</script>", sanitize_script_tag, text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<script[^>]*>(.*?)</script>", sanitize_script_tag, text, flags=re.IGNORECASE | re.DOTALL)  # noqa: E501
 
     # Remove event handlers (onclick, onerror, onload, etc.)
-    text = re.sub(r'\s+on\w+\s*=\s*["\']?[^"\'>\s]*["\']?', "", text, flags=re.IGNORECASE)
+    text = re.sub(r'\s+on\w+\s*=\s*["\']?[^"\'>\s]*["\']?', "", text, flags=re.IGNORECASE)  # noqa: E501
 
     # Remove javascript: URLs
     text = re.sub(r'javascript:', "", text, flags=re.IGNORECASE)
@@ -66,10 +64,10 @@ def sanitize_html(text: str) -> str:
     text = re.sub(r'data:text/html[^,]*,', "", text, flags=re.IGNORECASE)
 
     # Remove SVG with onload/onerror and their content
-    text = re.sub(r"<svg[^>]*>.*?</svg>", "", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<svg[^>]*>.*?</svg>", "", text, flags=re.IGNORECASE | re.DOTALL)  # noqa: E501
 
     # Remove iframe, embed, object tags and their content
-    text = re.sub(r"<(iframe|embed|object)[^>]*>.*?</\1>", "", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<(iframe|embed|object)[^>]*>.*?</\1>", "", text, flags=re.IGNORECASE | re.DOTALL)  # noqa: E501
 
     return text
 

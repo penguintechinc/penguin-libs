@@ -16,6 +16,13 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
+      - name: Build dependencies
+        run: |
+          npm run build -w @penguintechinc/react-form-builder
+          npm run build -w @penguintechinc/react-login
+          npm run build -w @penguintechinc/react-sidebar
+          npm run build -w @penguintechinc/react-console-version
+          npm run build -w @penguintechinc/react-hooks
       - name: Security
         run: npm audit --omit=dev
       - run: npm run build -w @penguintechinc/react-libs
@@ -275,6 +282,8 @@ jobs:
           node-version: '24'
       - name: Install
         run: npm ci
+      - name: Build react-form-builder dependency
+        run: npm run build -w @penguintechinc/react-form-builder
       - name: Build
         run: npm run build -w @penguintechinc/react-hooks
       - name: Typecheck

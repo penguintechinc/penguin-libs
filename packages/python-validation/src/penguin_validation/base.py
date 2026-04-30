@@ -13,10 +13,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
-
-T = TypeVar("T")
-V = TypeVar("V")
+from typing import Any
 
 
 class ValidationError(Exception):
@@ -34,7 +31,7 @@ class ValidationError(Exception):
 
 
 @dataclass(slots=True, frozen=True)
-class ValidationResult(Generic[T]):
+class ValidationResult[T]:
     """
     Result of a validation operation.
 
@@ -87,7 +84,7 @@ class ValidationResult(Generic[T]):
         return default
 
 
-class Validator(ABC, Generic[T, V]):
+class Validator[T, V](ABC):
     """
     Abstract base class for validators.
 
@@ -147,7 +144,7 @@ class Validator(ABC, Generic[T, V]):
         return ChainedValidator([self, other])
 
 
-class ChainedValidator(Validator[T, V]):
+class ChainedValidator[T, V](Validator[T, V]):
     """
     A validator that chains multiple validators together.
 

@@ -1,9 +1,7 @@
 """CSRF token generation and validation."""
 
 import hmac
-import os
 import secrets
-from typing import Any
 
 
 def generate_csrf_token() -> str:

@@ -15,7 +15,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const sysFsNumaNodes = "/sys/devices/system/node"
+const (
+	sysFsNumaNodes = "/sys/devices/system/node"
+	cpuSetSize     = 1024 // Linux CPU_SETSIZE
+)
 
 var (
 	once     sync.Once
@@ -127,7 +130,7 @@ func availableCPUs() []int {
 		return []int{0}
 	}
 	var cpus []int
-	for i := 0; i < unix.CPU_SETSIZE; i++ {
+	for i := 0; i < cpuSetSize; i++ {
 		if cs.IsSet(i) {
 			cpus = append(cpus, i)
 		}

@@ -12,12 +12,10 @@ Provides:
 
 from __future__ import annotations
 
-from typing import Union
-
 from penguin_validation.base import ValidationResult, Validator
 
 # Type for numeric inputs that can be converted
-NumericInput = Union[int, float, str]
+NumericInput = int | float | str
 
 
 class IsInt(Validator[NumericInput, int]):

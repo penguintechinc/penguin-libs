@@ -3,7 +3,6 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-import jwt
 
 from penguin_aaa.authn.oidc_provider import OIDCProvider, OIDCProviderConfig
 from penguin_aaa.authn.oidc_rp import OIDCRelyingParty, OIDCRPConfig

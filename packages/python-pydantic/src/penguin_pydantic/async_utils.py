@@ -11,7 +11,7 @@ from pydantic import BaseModel
 T = TypeVar("T")
 
 
-async def run_in_threadpool(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+async def run_in_threadpool[T](func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
     """
     Run a blocking function in a thread pool.
 

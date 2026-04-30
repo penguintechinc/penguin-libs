@@ -5,7 +5,6 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import (  # type: ignore[i
     X25519PublicKey,
 )
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # type: ignore[import-untyped]
-from cryptography.exceptions import InvalidTag  # type: ignore[import-untyped]
 
 from .ecc import generate_x25519_keypair, x25519_exchange
 from .kdf import derive_key_hkdf

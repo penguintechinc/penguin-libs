@@ -1,11 +1,10 @@
 """Rate limiting utilities."""
 
-import time
 import threading
-from typing import Any, Dict
+import time
 
 # Global in-memory rate limit store with thread safety
-_rate_limit_store: Dict[str, list[float]] = {}
+_rate_limit_store: dict[str, list[float]] = {}
 _rate_limit_lock = threading.Lock()
 
 

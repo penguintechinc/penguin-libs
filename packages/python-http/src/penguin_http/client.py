@@ -160,7 +160,7 @@ class HTTPClient:
                 self._circuit_state.success_count = 0
             else:
                 raise httpx.HTTPError(
-                    f"Circuit breaker is OPEN (retry after {self.config.circuit_breaker.timeout - elapsed:.1f}s)"
+                    f"Circuit breaker is OPEN (retry after {self.config.circuit_breaker.timeout - elapsed:.1f}s)"  # noqa: E501
                 )
 
     def _record_success(self) -> None:
@@ -249,7 +249,7 @@ class HTTPClient:
         for attempt in range(self.config.retry.max_retries + 1):
             try:
                 logger.debug(
-                    f"HTTP {method} {url} (attempt {attempt + 1}/{self.config.retry.max_retries + 1})"
+                    f"HTTP {method} {url} (attempt {attempt + 1}/{self.config.retry.max_retries + 1})"  # noqa: E501
                 )
 
                 response = self._client.request(method, url, **kwargs)

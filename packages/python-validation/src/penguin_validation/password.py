@@ -167,7 +167,7 @@ class IsStrongPassword(Validator[str, str]):
             special_set = set(opts.special_chars)
             if not any(c in special_set for c in value):
                 errors.append(
-                    f"Password must contain at least one special character ({opts.special_chars[:10]}...)"
+                    f"Password must contain at least one special character ({opts.special_chars[:10]}...)"  # noqa: E501
                 )
 
         if errors:

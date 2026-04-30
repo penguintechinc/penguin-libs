@@ -26,8 +26,6 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import AfterValidator
-
 from penguin_validation import (
     IsEmail,
     IsHostname,
@@ -39,6 +37,7 @@ from penguin_validation import (
     IsURL,
     PasswordOptions,
 )
+from pydantic import AfterValidator
 
 
 def _validate_with_is_validator(validator_instance) -> callable:

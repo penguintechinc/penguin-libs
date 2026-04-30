@@ -2,8 +2,6 @@
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
 from penguin_aaa.authn.types import Claims
 from penguin_aaa.token_store.memory import MemoryTokenStore
 

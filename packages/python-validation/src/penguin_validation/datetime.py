@@ -11,14 +11,13 @@ Provides:
 from __future__ import annotations
 
 from datetime import date, datetime, time
-from typing import Union
 
 from penguin_validation.base import ValidationResult, Validator
 
 # Type for date/time inputs
-DateInput = Union[str, date, datetime]
-TimeInput = Union[str, time, datetime]
-DateTimeInput = Union[str, datetime]
+DateInput = str | date | datetime
+TimeInput = str | time | datetime
+DateTimeInput = str | datetime
 
 
 class IsDate(Validator[DateInput, date]):
