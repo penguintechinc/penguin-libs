@@ -24,9 +24,9 @@ class ServerConfig:
     HTTP/3 requires TLS. If tls is None, only HTTP/2 (plaintext) will be served.
     """
 
-    h2_host: str = "0.0.0.0"
+    h2_host: str = "0.0.0.0"  # nosec B104
     h2_port: int = 8080
-    h3_host: str = "0.0.0.0"
+    h3_host: str = "0.0.0.0"  # nosec B104
     h3_port: int = 8443
     h2_enabled: bool = True
     h3_enabled: bool = True
