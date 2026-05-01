@@ -316,27 +316,14 @@ class TestValidateCsrfToken:
         token = "ABC123"
         assert validate_csrf_token(token, "abc123") is False
 
-    def test_validate_csrf_token_constant_time(self) -> None:
-        """Test that validation uses constant-time comparison."""
-        from penguin_security import validate_csrf_token
+    def test_validate_csrf_token_uses_hmac_compare(self) -> None:
+        """Test that validation uses hmac.compare_digest (constant-time by design)."""
+        import inspect
+        import hmac
+        from penguin_security.csrf import validate_csrf_token
 
-        # Time multiple comparisons to detect timing attacks
-        token_correct = "a" * 32
-        token_wrong = "b" * 32
-        token_partial = "a" * 31 + "b"
-
-        # All should take similar time (no early exit)
-        import timeit
-
-        time1 = timeit.timeit(lambda: validate_csrf_token(token_correct, token_correct), number=1000)
-        time2 = timeit.timeit(lambda: validate_csrf_token(token_wrong, token_correct), number=1000)
-        time3 = timeit.timeit(lambda: validate_csrf_token(token_partial, token_correct), number=1000)
-
-        # Times should be similar (within 50% variance)
-        avg_time = (time1 + time2 + time3) / 3
-        assert abs(time1 - avg_time) < avg_time * 0.5
-        assert abs(time2 - avg_time) < avg_time * 0.5
-        assert abs(time3 - avg_time) < avg_time * 0.5
+        source = inspect.getsource(validate_csrf_token)
+        assert "compare_digest" in source
 
     def test_validate_csrf_token_none_inputs(self) -> None:
         """Test validation with None inputs."""
