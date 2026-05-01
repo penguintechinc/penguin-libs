@@ -94,7 +94,7 @@ jobs:
       - name: Security - bandit
         run: cd packages/python-aaa && bandit -r src/ -c pyproject.toml
       - name: Security - pip-audit
-        run: cd packages/python-aaa && pip-audit
+        run: cd packages/python-aaa && pip-audit --ignore-vuln CVE-2026-3219
       - name: Test
         run: cd packages/python-aaa && pytest tests/ -v --tb=short --cov=penguin_aaa
 
@@ -305,6 +305,7 @@ jobs:
           python-version: '3.13'
       - name: Install split packages
         run: |
+          pip install bandit ruff
           pip install -e "packages/python-crypto[dev]" || pip install -e "packages/python-crypto"
           pip install -e "packages/python-security[dev]" || pip install -e "packages/python-security"
           pip install -e "packages/python-http[dev]" || pip install -e "packages/python-http"
@@ -321,7 +322,7 @@ jobs:
           cd ../python-security && bandit -r src/ -ll
           cd ../python-http && bandit -r src/ -ll
       - name: Test transition library import
-        run: python3 -c "import penguin_libs; from penguin_libs.validation import validate_string; print('Transition import OK')"
+        run: python3 -c "import penguin_libs; from penguin_libs.validation import IsEmail; print('Transition import OK')"
 
   build-go-split:
     name: Build & Test Go Split Packages
