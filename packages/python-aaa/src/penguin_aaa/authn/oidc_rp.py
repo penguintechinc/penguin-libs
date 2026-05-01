@@ -83,9 +83,7 @@ class OIDCRelyingParty:
         self._jwks_client = PyJWKClient(document["jwks_uri"])
         return document
 
-    async def validate_token(
-        self, raw_token: str, expected_nonce: str | None = None
-    ) -> Claims:
+    async def validate_token(self, raw_token: str, expected_nonce: str | None = None) -> Claims:
         """
         Validate a raw JWT token string and return its parsed claims.
 
@@ -216,9 +214,9 @@ def generate_pkce_pair() -> tuple[str, str]:
         also base64url-encoded.
     """
     verifier = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode()
-    challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(verifier.encode()).digest()
-    ).rstrip(b"=").decode()
+    challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+    )
     return verifier, challenge
 
 

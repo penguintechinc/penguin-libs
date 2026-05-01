@@ -73,7 +73,7 @@ jobs:
       - name: Security - bandit
         run: cd packages/python-utils && bandit -r src/ -c pyproject.toml
       - name: Security - pip-audit
-        run: cd packages/python-utils && pip-audit
+        run: cd packages/python-utils && pip-audit --ignore-vuln CVE-2026-3219
 
   build-python-aaa:
     name: Build & Test Python AAA

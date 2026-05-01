@@ -138,10 +138,12 @@ class TestMultiIssuerRelyingParty:
 
         # Pre-populate RPs to skip discovery
         from penguin_aaa.authn.oidc_rp import OIDCRelyingParty
+
         rp._rps["https://okta.example.com"] = OIDCRelyingParty(config)
 
         # Token with unknown issuer
         import jwt
+
         unknown_token = jwt.encode(
             {"iss": "https://unknown.example.com", "sub": "user"},
             "secret",

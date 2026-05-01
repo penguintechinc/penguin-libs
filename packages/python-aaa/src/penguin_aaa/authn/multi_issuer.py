@@ -92,9 +92,7 @@ class MultiIssuerRelyingParty:
 
         # Find the matching provider config for claims mapping
         matching_provider = (
-            p.claims_mapping
-            for p in self._providers
-            if p.config.issuer_url.rstrip("/") == issuer
+            p.claims_mapping for p in self._providers if p.config.issuer_url.rstrip("/") == issuer
         )
         mapping = next(matching_provider, ClaimsMapping())
 

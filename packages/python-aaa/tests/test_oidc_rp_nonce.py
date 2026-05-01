@@ -16,17 +16,19 @@ from penguin_aaa.crypto.keystore import MemoryKeyStore
 
 def _make_claims() -> Claims:
     now = datetime.now(UTC)
-    return Claims.model_validate({
-        "sub": "user-abc",
-        "iss": "https://auth.example.com",
-        "aud": ["client-123"],
-        "iat": now,
-        "exp": now + timedelta(hours=1),
-        "scope": ["openid", "profile"],
-        "roles": ["user"],
-        "tenant": "acme",
-        "teams": [],
-    })
+    return Claims.model_validate(
+        {
+            "sub": "user-abc",
+            "iss": "https://auth.example.com",
+            "aud": ["client-123"],
+            "iat": now,
+            "exp": now + timedelta(hours=1),
+            "scope": ["openid", "profile"],
+            "roles": ["user"],
+            "tenant": "acme",
+            "teams": [],
+        }
+    )
 
 
 def _make_provider_and_rp() -> tuple[OIDCProvider, OIDCRelyingParty]:
@@ -64,6 +66,7 @@ class TestNonceValidation:
         # Validate with matching nonce (will skip actual JWKS discovery)
         # We need to decode and verify manually for test purposes
         import jwt as jwt_lib
+
         payload = jwt_lib.decode(token_set.id_token, options={"verify_signature": False})
         assert payload.get("nonce") == nonce
         assert payload.get("sub") == claims.sub
@@ -120,9 +123,11 @@ class TestPKCEHelpers:
         assert challenge.count("-") + challenge.count("_") >= 0
 
         # Recreate challenge from verifier
-        manual_challenge = base64.urlsafe_b64encode(
-            hashlib.sha256(verifier.encode()).digest()
-        ).rstrip(b"=").decode()
+        manual_challenge = (
+            base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
+            .rstrip(b"=")
+            .decode()
+        )
         assert challenge == manual_challenge
 
     def test_generate_pkce_pair_uniqueness(self) -> None:

@@ -44,23 +44,27 @@ def create_oidc_blueprint(provider: OIDCProvider, rp: OIDCRelyingParty) -> Bluep
             try:
                 token_set = provider.refresh(refresh_token)
                 return (
-                    jsonify({
-                        "access_token": token_set.access_token,
-                        "id_token": token_set.id_token,
-                        "refresh_token": token_set.refresh_token,
-                        "expires_in": token_set.expires_in,
-                        "token_type": token_set.token_type,
-                    }),
+                    jsonify(
+                        {
+                            "access_token": token_set.access_token,
+                            "id_token": token_set.id_token,
+                            "refresh_token": token_set.refresh_token,
+                            "expires_in": token_set.expires_in,
+                            "token_type": token_set.token_type,
+                        }
+                    ),
                     200,
                 )
             except ValueError as e:
                 return jsonify({"error": "invalid_grant", "error_description": str(e)}), 400
         elif grant_type == "authorization_code":
             return (
-                jsonify({
-                    "error": "unsupported_grant_type",
-                    "error_description": "auth code exchange not implemented",
-                }),
+                jsonify(
+                    {
+                        "error": "unsupported_grant_type",
+                        "error_description": "auth code exchange not implemented",
+                    }
+                ),
                 501,
             )
         else:
@@ -104,17 +108,19 @@ def create_oidc_blueprint(provider: OIDCProvider, rp: OIDCRelyingParty) -> Bluep
                     payload[field] = int(val)
 
             return (
-                jsonify({
-                    "sub": payload.get("sub"),
-                    "iss": payload.get("iss"),
-                    "aud": payload.get("aud"),
-                    "iat": payload.get("iat"),
-                    "exp": payload.get("exp"),
-                    "scope": payload.get("scope", []),
-                    "roles": payload.get("roles", []),
-                    "tenant": payload.get("tenant"),
-                    "teams": payload.get("teams", []),
-                }),
+                jsonify(
+                    {
+                        "sub": payload.get("sub"),
+                        "iss": payload.get("iss"),
+                        "aud": payload.get("aud"),
+                        "iat": payload.get("iat"),
+                        "exp": payload.get("exp"),
+                        "scope": payload.get("scope", []),
+                        "roles": payload.get("roles", []),
+                        "tenant": payload.get("tenant"),
+                        "teams": payload.get("teams", []),
+                    }
+                ),
                 200,
             )
         except jwt.PyJWTError as e:

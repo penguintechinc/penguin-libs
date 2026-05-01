@@ -8,17 +8,19 @@ from penguin_aaa.token_store.memory import MemoryTokenStore
 
 def _make_claims() -> Claims:
     now = datetime.now(UTC)
-    return Claims.model_validate({
-        "sub": "user-123",
-        "iss": "https://auth.example.com",
-        "aud": ["api.example.com"],
-        "iat": now,
-        "exp": now + timedelta(hours=1),
-        "scope": ["openid", "profile"],
-        "roles": ["user"],
-        "tenant": "acme",
-        "teams": ["eng"],
-    })
+    return Claims.model_validate(
+        {
+            "sub": "user-123",
+            "iss": "https://auth.example.com",
+            "aud": ["api.example.com"],
+            "iat": now,
+            "exp": now + timedelta(hours=1),
+            "scope": ["openid", "profile"],
+            "roles": ["user"],
+            "tenant": "acme",
+            "teams": ["eng"],
+        }
+    )
 
 
 class TestMemoryTokenStore:
@@ -48,6 +50,7 @@ class TestMemoryTokenStore:
         store.store_refresh(token, claims, ttl)
         # Token should be expired immediately
         import time
+
         time.sleep(0.01)
         retrieved = store.get_claims_for_refresh(token)
         assert retrieved is None
@@ -77,6 +80,7 @@ class TestMemoryTokenStore:
 
         store.add_revoked_jti(jti, ttl)
         import time
+
         time.sleep(0.01)
         assert store.is_jti_revoked(jti) is False
 
@@ -128,6 +132,7 @@ class TestMemoryTokenStore:
 
         store.store_nonce(nonce, sub, ttl)
         import time
+
         time.sleep(0.01)
         result = store.consume_nonce(nonce, sub)
         assert result is False

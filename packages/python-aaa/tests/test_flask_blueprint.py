@@ -14,17 +14,19 @@ from penguin_aaa.token_store.memory import MemoryTokenStore
 
 def _make_claims() -> Claims:
     now = datetime.now(UTC)
-    return Claims.model_validate({
-        "sub": "user-abc",
-        "iss": "https://auth.example.com",
-        "aud": ["client-123"],
-        "iat": now,
-        "exp": now + timedelta(hours=1),
-        "scope": ["openid", "profile"],
-        "roles": ["user"],
-        "tenant": "acme",
-        "teams": [],
-    })
+    return Claims.model_validate(
+        {
+            "sub": "user-abc",
+            "iss": "https://auth.example.com",
+            "aud": ["client-123"],
+            "iat": now,
+            "exp": now + timedelta(hours=1),
+            "scope": ["openid", "profile"],
+            "roles": ["user"],
+            "tenant": "acme",
+            "teams": [],
+        }
+    )
 
 
 @pytest.fixture

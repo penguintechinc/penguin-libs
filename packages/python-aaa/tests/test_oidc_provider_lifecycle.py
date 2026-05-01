@@ -13,17 +13,19 @@ from penguin_aaa.token_store.memory import MemoryTokenStore
 
 def _make_claims() -> Claims:
     now = datetime.now(UTC)
-    return Claims.model_validate({
-        "sub": "user-abc",
-        "iss": "https://auth.example.com",
-        "aud": ["api.example.com"],
-        "iat": now,
-        "exp": now + timedelta(hours=1),
-        "scope": ["openid", "profile"],
-        "roles": ["admin"],
-        "tenant": "acme",
-        "teams": ["eng"],
-    })
+    return Claims.model_validate(
+        {
+            "sub": "user-abc",
+            "iss": "https://auth.example.com",
+            "aud": ["api.example.com"],
+            "iat": now,
+            "exp": now + timedelta(hours=1),
+            "scope": ["openid", "profile"],
+            "roles": ["admin"],
+            "tenant": "acme",
+            "teams": ["eng"],
+        }
+    )
 
 
 def _make_provider_with_store() -> tuple[OIDCProvider, MemoryKeyStore, MemoryTokenStore]:
