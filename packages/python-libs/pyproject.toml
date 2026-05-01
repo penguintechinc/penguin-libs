@@ -30,23 +30,13 @@ dependencies = [
 [project.optional-dependencies]
 split = [
     "penguin-crypto>=0.1.0",
-    "penguin-flask>=0.1.0",
-    "penguin-grpc>=0.1.0",
-    "penguin-h3>=0.1.0",
-    "penguin-http>=0.1.0",
-    "penguin-pydantic>=0.1.0",
     "penguin-security>=0.1.0",
-    "penguin-validation>=0.1.0",
+    "penguin-http>=0.1.0",
 ]
 all = [
     "penguin-crypto>=0.1.0",
-    "penguin-flask>=0.1.0",
-    "penguin-grpc>=0.1.0",
-    "penguin-h3>=0.1.0",
-    "penguin-http>=0.1.0",
-    "penguin-pydantic>=0.1.0",
     "penguin-security>=0.1.0",
-    "penguin-validation>=0.1.0",
+    "penguin-http>=0.1.0",
 ]
 dev = [
     "pytest>=7.0",
