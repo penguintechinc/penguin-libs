@@ -204,7 +204,7 @@ func (rp *OIDCRelyingParty) Revoke(ctx context.Context, token string, tokenTypeH
 	if err != nil {
 		return fmt.Errorf("oidc_rp: revoke request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("oidc_rp: revoke returned status %d", resp.StatusCode)
 	}
@@ -236,7 +236,7 @@ func (rp *OIDCRelyingParty) Introspect(ctx context.Context, token string) (map[s
 	if err != nil {
 		return nil, fmt.Errorf("oidc_rp: introspect request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -261,7 +261,7 @@ func (rp *OIDCRelyingParty) getDiscovery(ctx context.Context) (map[string]interf
 			discoveryErr = fmt.Errorf("failed to fetch discovery document: %w", err)
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusOK {
 			discoveryErr = fmt.Errorf("discovery request returned status %d", resp.StatusCode)
 			return

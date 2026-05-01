@@ -1,9 +1,9 @@
 """Tests for OIDC Relying Party nonce validation and PKCE helpers."""
 
-from datetime import UTC, datetime, timedelta
 import base64
 import hashlib
 import hmac
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import jwt

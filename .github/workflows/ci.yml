@@ -59,7 +59,11 @@ jobs:
         with:
           python-version: '3.13'
       - run: pip install build pytest pytest-asyncio requests bandit pip-audit
-      - run: pip install -e "packages/python-libs[all,dev]"
+      - run: |
+          pip install -e "packages/python-crypto"
+          pip install -e "packages/python-security"
+          pip install -e "packages/python-http"
+          pip install -e "packages/python-libs[all,dev]"
       - run: pytest packages/python-libs/tests -v
       - run: pip install -e "packages/python-licensing[dev]"
       - run: pytest packages/python-licensing/tests -v
@@ -302,35 +306,20 @@ jobs:
       - name: Install split packages
         run: |
           pip install -e "packages/python-crypto[dev]" || pip install -e "packages/python-crypto"
-          pip install -e "packages/python-flask[dev]" || pip install -e "packages/python-flask"
-          pip install -e "packages/python-grpc[dev]" || pip install -e "packages/python-grpc"
-          pip install -e "packages/python-h3[dev]" || pip install -e "packages/python-h3"
-          pip install -e "packages/python-http[dev]" || pip install -e "packages/python-http"
-          pip install -e "packages/python-pydantic[dev]" || pip install -e "packages/python-pydantic"
           pip install -e "packages/python-security[dev]" || pip install -e "packages/python-security"
-          pip install -e "packages/python-validation[dev]" || pip install -e "packages/python-validation"
+          pip install -e "packages/python-http[dev]" || pip install -e "packages/python-http"
       - name: Install transition library
         run: pip install -e "packages/python-libs[dev]"
       - name: Lint
         run: |
           cd packages/python-crypto && ruff check src/
-          cd ../python-flask && ruff check src/
-          cd ../python-grpc && ruff check src/
-          cd ../python-h3 && ruff check src/
-          cd ../python-http && ruff check src/
-          cd ../python-pydantic && ruff check src/
           cd ../python-security && ruff check src/
-          cd ../python-validation && ruff check src/
+          cd ../python-http && ruff check src/
       - name: Security - bandit
         run: |
           cd packages/python-crypto && bandit -r src/ -ll
-          cd ../python-flask && bandit -r src/ -ll
-          cd ../python-grpc && bandit -r src/ -ll
-          cd ../python-h3 && bandit -r src/ -ll
-          cd ../python-http && bandit -r src/ -ll
-          cd ../python-pydantic && bandit -r src/ -ll
           cd ../python-security && bandit -r src/ -ll
-          cd ../python-validation && bandit -r src/ -ll
+          cd ../python-http && bandit -r src/ -ll
       - name: Test transition library import
         run: python3 -c "import penguin_libs; from penguin_libs.validation import validate_string; print('Transition import OK')"
 

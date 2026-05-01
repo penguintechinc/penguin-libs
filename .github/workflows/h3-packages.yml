@@ -5,13 +5,13 @@ on:
     branches: [main]
     paths:
       - 'packages/go-h3/**'
-      - 'packages/python-libs/src/penguin_libs/h3/**'
+      - 'packages/python-http/src/penguin_http/h3/**'
       - 'proto/**'
   pull_request:
     branches: [main]
     paths:
       - 'packages/go-h3/**'
-      - 'packages/python-libs/src/penguin_libs/h3/**'
+      - 'packages/python-http/src/penguin_http/h3/**'
       - 'proto/**'
 
 jobs:
@@ -51,16 +51,16 @@ jobs:
           python-version: '3.13'
       - name: Install dependencies
         run: |
-          pip install -e "packages/python-libs[h3,dev]"
+          pip install -e "packages/python-http[dev]"
       - name: Run linting
         run: |
-          cd packages/python-libs
-          python -m ruff check src/penguin_libs/h3/
-          python -m mypy src/penguin_libs/h3/ --ignore-missing-imports
+          cd packages/python-http
+          python -m ruff check src/penguin_http/h3/
+          python -m mypy src/penguin_http/h3/ --ignore-missing-imports
       - name: Run tests
         run: |
-          cd packages/python-libs
-          python -m pytest tests/h3/ -v --tb=short || echo "No h3 tests yet"
+          cd packages/python-http
+          python -m pytest tests/test_h3.py tests/test_h3_asgi.py -v --tb=short
 
   integration-test:
     name: Cross-Language Integration
@@ -81,7 +81,7 @@ jobs:
           cd packages/go-h3
           go build -o ../../bin/echo-server ./examples/echo-server/
       - name: Install Python H3
-        run: pip install -e "packages/python-libs[h3]"
+        run: pip install -e "packages/python-http"
       - name: Run integration tests
         run: |
           if [ -d tests/integration ]; then
