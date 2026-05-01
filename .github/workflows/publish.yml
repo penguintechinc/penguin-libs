@@ -18,14 +18,6 @@ on:
       - 'penguin-aaa-v*'
       - 'penguin-dal-v*'
       - 'penguin-limiter-v*'
-      - 'penguin-crypto-v*'
-      - 'penguin-flask-v*'
-      - 'penguin-grpc-v*'
-      - 'penguin-h3-v*'
-      - 'penguin-http-v*'
-      - 'penguin-pydantic-v*'
-      - 'penguin-security-v*'
-      - 'penguin-validation-v*'
       - 'flutter-libs-v*'
       - 'go-aaa-v*'
       - 'go-logging-v*'
@@ -58,14 +50,6 @@ on:
           - python-pytest
           - python-email
           - python-limiter
-          - python-crypto
-          - python-flask
-          - python-grpc
-          - python-h3
-          - python-http
-          - python-pydantic
-          - python-security
-          - python-validation
           - flutter-libs
           - all
 
@@ -1062,63 +1046,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: penguin-limiter" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
-
-  # ============================================
-  # Python Split Packages - PyPI
-  # ============================================
-  publish-python-split:
-    name: Publish Python Split Packages
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
-    if: |
-      (github.event_name == 'workflow_dispatch' &&
-       github.event.inputs.package == 'all') ||
-      startsWith(github.ref, 'refs/tags/penguin-crypto-v') ||
-      startsWith(github.ref, 'refs/tags/penguin-flask-v') ||
-      startsWith(github.ref, 'refs/tags/penguin-grpc-v') ||
-      startsWith(github.ref, 'refs/tags/penguin-h3-v') ||
-      startsWith(github.ref, 'refs/tags/penguin-http-v') ||
-      startsWith(github.ref, 'refs/tags/penguin-pydantic-v') ||
-      startsWith(github.ref, 'refs/tags/penguin-security-v') ||
-      startsWith(github.ref, 'refs/tags/penguin-validation-v')
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-
-      - name: Setup Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
-        with:
-          python-version: '3.13'
-
-      - name: Install build tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install build twine
-
-      - name: Build distributions
-        run: |
-          mkdir -p dist
-          for pkg in packages/python-crypto packages/python-flask packages/python-grpc packages/python-h3 packages/python-http packages/python-pydantic packages/python-security packages/python-validation; do
-            python -m build "$pkg" --outdir dist/
-          done
-
-      - name: Check packages
-        run: twine check dist/*
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/
-
-      - name: Create release summary
-        run: |
-          echo "## Published Packages" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Packages**: penguin-crypto, penguin-flask, penguin-grpc, penguin-h3, penguin-http, penguin-pydantic, penguin-security, penguin-validation" >> $GITHUB_STEP_SUMMARY
           echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
