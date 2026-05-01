@@ -763,4 +763,8 @@ class TestSecurityModule:
     def test_security_init_imports(self):
         from penguin_libs.security import __all__
 
-        assert __all__ == []
+        assert "sanitize_html" in __all__
+        assert "generate_csrf_token" in __all__
+        assert "hash_password" in __all__
+        assert "validate_body" in __all__
+        assert "ElderBaseModel" in __all__

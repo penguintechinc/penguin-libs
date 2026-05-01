@@ -5,8 +5,8 @@ import hashlib
 import hmac
 from datetime import UTC, datetime, timedelta
 
-import pytest
 import jwt
+import pytest
 
 from penguin_aaa.authn.oidc_provider import OIDCProvider, OIDCProviderConfig
 from penguin_aaa.authn.oidc_rp import OIDCRelyingParty, OIDCRPConfig, generate_pkce_pair

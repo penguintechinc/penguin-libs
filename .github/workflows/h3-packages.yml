@@ -51,6 +51,7 @@ jobs:
           python-version: '3.13'
       - name: Install dependencies
         run: |
+          pip install ruff mypy
           pip install -e "packages/python-http[dev]"
       - name: Run linting
         run: |
