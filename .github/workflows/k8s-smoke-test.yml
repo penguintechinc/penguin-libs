@@ -1,9 +1,6 @@
 name: K8s Smoke Tests
 on:
-  push:
-    branches: [main, 'v*']
-  pull_request:
-    branches: [main, 'v*']
+  workflow_dispatch:
 
 jobs:
   alpha-smoke:
