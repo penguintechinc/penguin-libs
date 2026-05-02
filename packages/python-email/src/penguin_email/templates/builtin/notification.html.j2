@@ -1,0 +1,10 @@
+{% extends "base.html.j2" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<p>Hi {{ name }},</p>
+<p><strong>{{ title }}</strong></p>
+<p>{{ body }}</p>
+{% if action_url is defined and action_url %}
+<a class="button" href="{{ action_url }}">{{ action_label | default('View Details') }}</a>
+{% endif %}
+{% endblock %}

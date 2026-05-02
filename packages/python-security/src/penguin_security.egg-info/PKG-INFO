@@ -1,0 +1,29 @@
+Metadata-Version: 2.4
+Name: penguin-security
+Version: 0.1.0
+Summary: PenguinTech security utilities
+Author-email: Penguin Tech Inc <dev@penguintech.io>
+License: AGPL-3.0
+Keywords: penguintech,security
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU Affero General Public License v3
+Classifier: Programming Language :: Python :: 3.13
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+
+# penguin-security
+
+PenguinTech security utilities.
+
+## Install
+
+```bash
+pip install penguin-security
+```
+
+## Quick Start
+
+```python
+from penguin_security import ...
+```

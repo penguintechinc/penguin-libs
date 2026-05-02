@@ -1,0 +1,90 @@
+Metadata-Version: 2.4
+Name: penguin-utils
+Version: 0.2.0
+Summary: Shared Python utilities for Penguin Tech applications
+Author-email: Penguin Tech Inc <dev@penguintech.io>
+License: AGPL-3.0
+Project-URL: Homepage, https://www.penguintech.io
+Project-URL: Repository, https://github.com/penguintechinc/penguin-libs
+Project-URL: Issues, https://github.com/penguintechinc/penguin-libs/issues
+Keywords: penguintech,utilities,flask,pydal
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU Affero General Public License v3
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: pydal>=20230521.1
+Requires-Dist: structlog>=23.0
+Requires-Dist: httpx>=0.27
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0; extra == "dev"
+Requires-Dist: black>=23.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: mypy>=1.0; extra == "dev"
+Requires-Dist: bandit>=1.7; extra == "dev"
+Requires-Dist: pip-audit>=2.6; extra == "dev"
+Provides-Extra: flask
+Requires-Dist: flask>=3.0; extra == "flask"
+Requires-Dist: flask-security-too>=5.0; extra == "flask"
+Provides-Extra: cloudwatch
+Requires-Dist: boto3>=1.26; extra == "cloudwatch"
+Provides-Extra: gcp
+Requires-Dist: google-cloud-logging>=3.0; extra == "gcp"
+Provides-Extra: kafka
+Requires-Dist: kafka-python>=2.0; extra == "kafka"
+
+# penguin-utils
+
+Sanitized structured logging for Python microservices. Automatically redacts PII (passwords, tokens, emails) before writing to any output sink. Supports stdout, file, syslog, AWS CloudWatch, GCP Cloud Logging, and Apache Kafka.
+
+## Installation
+
+```bash
+pip install penguin-utils
+
+# Optional cloud backends:
+pip install penguin-utils[cloudwatch]   # AWS CloudWatch Logs
+pip install penguin-utils[gcp]          # Google Cloud Logging
+pip install penguin-utils[kafka]        # Apache Kafka
+```
+
+## Quick Start
+
+```python
+from penguintechinc_utils import SanitizedLogger
+from penguintechinc_utils.sinks import StdoutSink
+
+logger = SanitizedLogger("MyComponent", sinks=[StdoutSink()])
+
+logger.info("User login attempt", {
+    "email": "user@example.com",  # Logged as: [email]@example.com
+    "password": "secret123",       # Logged as: [REDACTED]
+    "remember_me": True,           # Logged as-is
+})
+```
+
+## Auto-Configure from Environment
+
+```python
+from penguintechinc_utils.logging import configure_logging_from_env
+from penguintechinc_utils import SanitizedLogger
+
+logger = SanitizedLogger("MyApp", sinks=configure_logging_from_env())
+```
+
+📚 **Full documentation**: [docs/penguin-utils/](../../docs/penguin-utils/)
+- [README](../../docs/penguin-utils/README.md) — complete feature overview and all sinks
+- [API Reference](../../docs/penguin-utils/API.md) — all classes and methods
+- [Changelog](../../docs/penguin-utils/CHANGELOG.md)
+- [Migration Guide](../../docs/penguin-utils/MIGRATION.md) — upgrading to 0.2.x cloud sinks
+
+## License
+
+AGPL-3.0 — See [LICENSE](../../LICENSE) for details.

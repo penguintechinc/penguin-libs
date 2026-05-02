@@ -9,8 +9,9 @@ import (
 
 func TestEmitter_Emit_SingleSink(t *testing.T) {
 	var received []map[string]interface{}
-	sink := logging.NewCallbackSink(func(event map[string]interface{}) {
+	sink := logging.NewCallbackSink(func(event map[string]interface{}) error {
 		received = append(received, event)
+		return nil
 	})
 
 	emitter := NewEmitter(sink)
@@ -30,8 +31,8 @@ func TestEmitter_Emit_SingleSink(t *testing.T) {
 
 func TestEmitter_Emit_MultipleSinks(t *testing.T) {
 	countA, countB := 0, 0
-	sinkA := logging.NewCallbackSink(func(_ map[string]interface{}) { countA++ })
-	sinkB := logging.NewCallbackSink(func(_ map[string]interface{}) { countB++ })
+	sinkA := logging.NewCallbackSink(func(_ map[string]interface{}) error { countA++; return nil })
+	sinkB := logging.NewCallbackSink(func(_ map[string]interface{}) error { countB++; return nil })
 
 	emitter := NewEmitter(sinkA, sinkB)
 	_ = emitter.Emit(NewAuditEvent(EventTokenIssued, "u", "a", "r", OutcomeSuccess))

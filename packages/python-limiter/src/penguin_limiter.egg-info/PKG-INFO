@@ -1,0 +1,21 @@
+Metadata-Version: 2.4
+Name: penguin-limiter
+Version: 0.1.0
+Summary: Pluggable rate limiting for REST, gRPC, and H3 — with automatic private-IP bypass
+License: AGPL-3.0
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Provides-Extra: redis
+Requires-Dist: redis>=5.0; extra == "redis"
+Provides-Extra: grpc
+Requires-Dist: grpcio>=1.60; extra == "grpc"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-cov>=5.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
+Requires-Dist: fakeredis>=2.20; extra == "dev"
+Requires-Dist: ruff>=0.4; extra == "dev"
+Requires-Dist: mypy>=1.9; extra == "dev"
+Requires-Dist: bandit>=1.7; extra == "dev"
+Requires-Dist: grpcio>=1.60; extra == "dev"
+Requires-Dist: redis>=5.0; extra == "dev"

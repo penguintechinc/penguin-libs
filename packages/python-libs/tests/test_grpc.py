@@ -13,6 +13,7 @@ import pytest
 # Create mock grpc module with all needed attributes BEFORE importing penguin_libs.grpc.
 
 _mock_grpc = MagicMock()
+_mock_grpc.__version__ = "1.80.0"  # Required: grpc_health imports check this
 _mock_grpc.StatusCode.UNAUTHENTICATED = "UNAUTHENTICATED"
 _mock_grpc.StatusCode.PERMISSION_DENIED = "PERMISSION_DENIED"
 _mock_grpc.StatusCode.INVALID_ARGUMENT = "INVALID_ARGUMENT"
@@ -37,6 +38,9 @@ _real_reflection = sys.modules.get("grpc_reflection.v1alpha.reflection")
 _need_mock = _real_grpc is None
 
 if _need_mock:
+    # Ensure grpc version is set
+    _mock_grpc.__version__ = "1.80.0"
+
     # Create mock jwt
     _mock_jwt = MagicMock()
     _mock_jwt.ExpiredSignatureError = type("ExpiredSignatureError", (Exception,), {})
@@ -63,7 +67,12 @@ if _need_mock:
     sys.modules["grpc_reflection.v1alpha.reflection"] = _mock_reflection
 
 
-# Force reimport with mocks in place
+# Force reimport with mocks in place.
+# Delete penguin_libs too so _compat.py re-runs and re-registers sys.modules aliases.
+if "penguin_libs" in sys.modules:
+    del sys.modules["penguin_libs"]
+if "penguin_libs._compat" in sys.modules:
+    del sys.modules["penguin_libs._compat"]
 if "penguin_libs.grpc" in sys.modules:
     del sys.modules["penguin_libs.grpc"]
 if "penguin_libs.grpc.client" in sys.modules:

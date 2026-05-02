@@ -5,13 +5,13 @@ on:
     branches: [main]
     paths:
       - 'packages/go-h3/**'
-      - 'packages/python-libs/src/penguin_libs/h3/**'
+      - 'packages/python-http/src/penguin_http/h3/**'
       - 'proto/**'
   pull_request:
     branches: [main]
     paths:
       - 'packages/go-h3/**'
-      - 'packages/python-libs/src/penguin_libs/h3/**'
+      - 'packages/python-http/src/penguin_http/h3/**'
       - 'proto/**'
 
 jobs:
@@ -19,8 +19,8 @@ jobs:
     name: Lint Protobuf
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: bufbuild/buf-setup-action@v1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99  # v1.50.0
       - run: cd proto && buf lint
 
   build-go-h3:
@@ -31,8 +31,8 @@ jobs:
       run:
         working-directory: packages/go-h3
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
         with:
           go-version: '1.25'
       - run: go mod download
@@ -45,33 +45,34 @@ jobs:
     runs-on: ubuntu-latest
     needs: proto-lint
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: '3.13'
       - name: Install dependencies
         run: |
-          pip install -e "packages/python-libs[h3,dev]"
+          pip install ruff mypy pytest pytest-asyncio
+          pip install -e "packages/python-http[dev]"
       - name: Run linting
         run: |
-          cd packages/python-libs
-          python -m ruff check src/penguin_libs/h3/
-          python -m mypy src/penguin_libs/h3/ --ignore-missing-imports
+          cd packages/python-http
+          python -m ruff check src/penguin_http/h3/
+          python -m mypy src/penguin_http/h3/ --ignore-missing-imports
       - name: Run tests
         run: |
-          cd packages/python-libs
-          python -m pytest tests/h3/ -v --tb=short || echo "No h3 tests yet"
+          cd packages/python-http
+          python -m pytest tests/test_h3.py tests/test_h3_asgi.py -v --tb=short
 
   integration-test:
     name: Cross-Language Integration
     runs-on: ubuntu-latest
     needs: [build-go-h3, build-python-h3]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6
         with:
           go-version: '1.25'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: '3.13'
       - name: Generate test certificates
@@ -81,7 +82,7 @@ jobs:
           cd packages/go-h3
           go build -o ../../bin/echo-server ./examples/echo-server/
       - name: Install Python H3
-        run: pip install -e "packages/python-libs[h3]"
+        run: pip install -e "packages/python-http"
       - name: Run integration tests
         run: |
           if [ -d tests/integration ]; then

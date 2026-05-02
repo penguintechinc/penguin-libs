@@ -1,24 +1,21 @@
 name: K8s Smoke Tests
 on:
-  push:
-    branches: [main, 'v*']
-  pull_request:
-    branches: [main, 'v*']
+  workflow_dispatch:
 
 jobs:
   alpha-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Setup microk8s
-        uses: balchua/microk8s-actions@v0.3.2
+        uses: balchua/microk8s-actions@7cab1049ff858184e1524e46da64d090308769e5  # v0.3.2
         with:
           channel: '1.28/stable'
           addons: '["dns","storage","rbac","ingress"]'
 
       - name: Setup Helm
-        uses: azure/setup-helm@v3
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2  # v5
         with:
           version: v3.13.0
 

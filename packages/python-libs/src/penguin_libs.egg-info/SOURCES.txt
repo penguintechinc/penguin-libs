@@ -8,6 +8,9 @@ src/penguin_libs.egg-info/dependency_links.txt
 src/penguin_libs.egg-info/requires.txt
 src/penguin_libs.egg-info/top_level.txt
 src/penguin_libs/crypto/__init__.py
+src/penguin_libs/flask/__init__.py
+src/penguin_libs/flask/pagination.py
+src/penguin_libs/flask/responses.py
 src/penguin_libs/grpc/__init__.py
 src/penguin_libs/grpc/client.py
 src/penguin_libs/grpc/interceptors.py
@@ -38,7 +41,10 @@ src/penguin_libs/validation/network.py
 src/penguin_libs/validation/numeric.py
 src/penguin_libs/validation/password.py
 src/penguin_libs/validation/string.py
+tests/test_flask_utils.py
+tests/test_grpc.py
 tests/test_h3_client.py
+tests/test_h3_client_extended.py
 tests/test_h3_config.py
 tests/test_h3_exceptions.py
 tests/test_h3_health.py
@@ -46,3 +52,7 @@ tests/test_h3_middleware.py
 tests/test_h3_protocol.py
 tests/test_h3_retry.py
 tests/test_h3_server.py
+tests/test_h3_server_extended.py
+tests/test_http.py
+tests/test_pydantic.py
+tests/test_validation.py

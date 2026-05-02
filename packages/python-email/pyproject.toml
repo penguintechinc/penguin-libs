@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "penguin-email"
+version = "0.1.0"
+description = "Pluggable email sending library for Penguin Tech applications"
+readme = "README.md"
+license = {text = "AGPL-3.0"}
+requires-python = ">=3.13"
+authors = [{name = "Penguin Tech Inc", email = "dev@penguintech.io"}]
+keywords = ["penguintech", "email", "gmail", "smtp", "jinja2"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Email",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+gmail = [
+    "google-auth>=2.0",
+    "google-auth-oauthlib>=1.0",
+    "google-api-python-client>=2.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+    "bandit>=1.7",
+    "google-auth>=2.0",
+    "google-auth-oauthlib>=1.0",
+    "google-api-python-client>=2.0",
+]
+
+[project.scripts]
+penguin-email = "penguin_email.cli:main"
+
+[project.urls]
+Homepage = "https://www.penguintech.io"
+Repository = "https://github.com/penguintechinc/penguin-libs"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+penguin_email = ["templates/builtin/*.j2"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["N802"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.bandit]
+skips = ["B101"]

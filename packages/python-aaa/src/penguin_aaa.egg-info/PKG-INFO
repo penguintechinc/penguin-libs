@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: penguin-aaa
-Version: 0.1.0
+Version: 0.2.0
 Summary: PenguinTech Authentication, Authorization, and Accounting library
 Author-email: Penguin Tech Inc <dev@penguintech.io>
 License: AGPL-3.0
@@ -18,13 +18,17 @@ Classifier: Programming Language :: Python :: 3.12
 Classifier: Programming Language :: Python :: 3.13
 Classifier: Topic :: Software Development :: Libraries :: Python Modules
 Classifier: Topic :: Security
-Requires-Python: >=3.11
+Requires-Python: >=3.13
 Description-Content-Type: text/markdown
 Requires-Dist: authlib>=1.3
 Requires-Dist: pyjwt[crypto]>=2.8
 Requires-Dist: pydantic>=2.0
 Requires-Dist: httpx>=0.27
 Requires-Dist: cryptography>=42
+Provides-Extra: redis
+Requires-Dist: redis>=5.0; extra == "redis"
+Provides-Extra: flask
+Requires-Dist: flask>=3.0; extra == "flask"
 Provides-Extra: spiffe
 Requires-Dist: py-spiffe; extra == "spiffe"
 Provides-Extra: grpc
@@ -35,6 +39,9 @@ Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
 Requires-Dist: pytest-cov>=5.0; extra == "dev"
 Requires-Dist: ruff>=0.4; extra == "dev"
 Requires-Dist: mypy>=1.10; extra == "dev"
+Requires-Dist: types-grpcio; extra == "dev"
 Requires-Dist: bandit>=1.7; extra == "dev"
 Requires-Dist: pip-audit>=2.6; extra == "dev"
 Requires-Dist: hypothesis>=6.0; extra == "dev"
+Requires-Dist: redis>=5.0; extra == "dev"
+Requires-Dist: flask>=3.0; extra == "dev"

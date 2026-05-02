@@ -1,0 +1,87 @@
+Metadata-Version: 2.4
+Name: penguin-email
+Version: 0.1.0
+Summary: Pluggable email sending library for Penguin Tech applications
+Author-email: Penguin Tech Inc <dev@penguintech.io>
+License: AGPL-3.0
+Project-URL: Homepage, https://www.penguintech.io
+Project-URL: Repository, https://github.com/penguintechinc/penguin-libs
+Keywords: penguintech,email,gmail,smtp,jinja2
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU Affero General Public License v3
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Communications :: Email
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: jinja2>=3.1
+Provides-Extra: gmail
+Requires-Dist: google-auth>=2.0; extra == "gmail"
+Requires-Dist: google-auth-oauthlib>=1.0; extra == "gmail"
+Requires-Dist: google-api-python-client>=2.0; extra == "gmail"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: mypy>=1.0; extra == "dev"
+Requires-Dist: bandit>=1.7; extra == "dev"
+Requires-Dist: google-auth>=2.0; extra == "dev"
+Requires-Dist: google-auth-oauthlib>=1.0; extra == "dev"
+Requires-Dist: google-api-python-client>=2.0; extra == "dev"
+
+# penguin-email
+
+Pluggable email sending library for Penguin Tech applications.
+
+## Features
+
+- **Gmail REST API** transport (OAuth2, primary)
+- **SMTP** transport (SSL / STARTTLS / PLAIN with `InsecureConnectionWarning`)
+- Fluent `EmailMessage` builder with Jinja2 templating
+- Built-in templates: welcome, notification, transactional, alert, password_reset, form
+- Form builder and table builder helpers
+- Full attachment support (files, bytes, inline images)
+- Formal `EmailTransport` Protocol — add new transports with zero core changes
+
+## Installation
+
+```bash
+pip install penguin-email            # SMTP + templates only
+pip install "penguin-email[gmail]"   # adds Gmail REST API support
+```
+
+## Quick Start
+
+```python
+from penguin_email import EmailClient, EmailMessage, SmtpTransport, SmtpMode
+
+transport = SmtpTransport(host="smtp.example.com", mode=SmtpMode.STARTTLS,
+                          username="user", password="pass")
+client = EmailClient(transport)
+
+result = client.send(
+    EmailMessage()
+    .from_addr("sender@example.com")
+    .to("recipient@example.com")
+    .subject("Hello!")
+    .template("welcome", name="Alice", app_name="MyApp", login_url="https://app.example.com/login")
+)
+print(result.success, result.message_id)
+```
+
+## Gmail Transport
+
+```python
+from penguin_email import EmailClient, EmailMessage, GmailTransport
+
+transport = GmailTransport.from_env()   # reads GMAIL_* env vars
+client = EmailClient(transport)
+```
+
+## License
+
+AGPL-3.0 — see LICENSE.md

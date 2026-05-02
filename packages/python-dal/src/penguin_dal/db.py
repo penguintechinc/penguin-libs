@@ -33,6 +33,7 @@ class DB:
         pool_size: int = 10,
         echo: bool = False,
         reflect: bool = True,
+        migrate: bool = False,
     ) -> None:
         self._uri = normalize_uri(uri)
         self._engine = create_engine(
@@ -44,6 +45,7 @@ class DB:
         self._metadata = MetaData()
         self._validators: dict[str, dict[str, list[Any]]] = {}
         self._models: dict[str, Any] = {}
+        self._migrate = migrate
 
         if reflect:
             self._metadata.reflect(bind=self._engine)
@@ -147,6 +149,79 @@ class DB:
         if validators:
             self._validators[table_name] = validators
 
+    def define_table(
+        self,
+        name: str,
+        *fields: Any,
+        migrate: bool = False,
+        **kwargs: Any,
+    ) -> TableProxy:
+        """Define a table with PyDAL-style Field objects.
+
+        Creates the table in the database using SQLAlchemy if it doesn't exist.
+        If migrate=False (default), only creates if missing (like PyDAL's migrate=False).
+
+        Args:
+            name: Table name.
+            *fields: Field objects (from penguin_dal.field).
+            migrate: If False, create table if not exists. If True, would alter (not supported yet).
+            **kwargs: Additional SQLAlchemy Table kwargs.
+
+        Returns:
+            TableProxy for the defined table.
+        """
+        # Import Field here to avoid circular imports
+        try:
+            from penguin_dal.field import Field
+        except ImportError:
+            raise ImportError("Field class not available; ensure penguin_dal.field is installed")
+
+        # Build SQLAlchemy columns from Field objects
+        columns: list[Any] = []
+        validators_dict: dict[str, list[Any]] = {}
+        has_id_field = False
+
+        for field in fields:
+            if not isinstance(field, Field):
+                raise TypeError(f"Expected Field object, got {type(field)}")
+
+            # Convert Field to SQLAlchemy Column
+            col = field.to_sa_column()
+            columns.append(col)
+
+            # Track if an 'id' field was provided
+            if field.type_ == "id":
+                has_id_field = True
+
+            # Register validators for this field
+            if field.requires:
+                validators_dict[field.name] = field.requires
+
+        # Auto-add 'id' primary key if not provided
+        if not has_id_field:
+            from sqlalchemy import Column, Integer
+
+            id_col = Column(
+                "id",
+                Integer(),
+                primary_key=True,
+                autoincrement=True,
+            )
+            columns.insert(0, id_col)
+
+        # Create SQLAlchemy Table
+        table = Table(name, self._metadata, *columns, **kwargs)
+
+        # Create the table in the database
+        self._metadata.create_all(self._engine, tables=[table])
+
+        # Register validators if any
+        if validators_dict:
+            self._validators[name] = validators_dict
+
+        # Return a TableProxy for the table
+        return TableProxy(table, self._session_factory, validators_dict)
+
     def __repr__(self) -> str:
         table_count = len(self._metadata.tables)
         return f"DB(uri='{self._uri}', tables={table_count})"
@@ -170,6 +245,7 @@ class AsyncDB:
         uri: str,
         pool_size: int = 10,
         echo: bool = False,
+        migrate: bool = False,
     ) -> None:
         from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
         from sqlalchemy.orm import sessionmaker as sync_sessionmaker
@@ -189,6 +265,7 @@ class AsyncDB:
         self._validators: dict[str, dict[str, list[Any]]] = {}
         self._models: dict[str, Any] = {}
         self._reflected = False
+        self._migrate = migrate
 
     async def reflect(self) -> None:
         """Reflect database tables (must be called after init for async).
@@ -261,6 +338,80 @@ class AsyncDB:
         validators = getattr(model_class, "_dal_validators", None)
         if validators:
             self._validators[table_name] = validators
+
+    async def define_table(
+        self,
+        name: str,
+        *fields: Any,
+        migrate: bool = False,
+        **kwargs: Any,
+    ) -> TableProxy:
+        """Define a table with PyDAL-style Field objects (async).
+
+        Creates the table in the database using SQLAlchemy if it doesn't exist.
+        If migrate=False (default), only creates if missing (like PyDAL's migrate=False).
+
+        Args:
+            name: Table name.
+            *fields: Field objects (from penguin_dal.field).
+            migrate: If False, create table if not exists. If True, would alter (not supported yet).
+            **kwargs: Additional SQLAlchemy Table kwargs.
+
+        Returns:
+            TableProxy for the defined table.
+        """
+        # Import Field here to avoid circular imports
+        try:
+            from penguin_dal.field import Field
+        except ImportError:
+            raise ImportError("Field class not available; ensure penguin_dal.field is installed")
+
+        # Build SQLAlchemy columns from Field objects
+        columns: list[Any] = []
+        validators_dict: dict[str, list[Any]] = {}
+        has_id_field = False
+
+        for field in fields:
+            if not isinstance(field, Field):
+                raise TypeError(f"Expected Field object, got {type(field)}")
+
+            # Convert Field to SQLAlchemy Column
+            col = field.to_sa_column()
+            columns.append(col)
+
+            # Track if an 'id' field was provided
+            if field.type_ == "id":
+                has_id_field = True
+
+            # Register validators for this field
+            if field.requires:
+                validators_dict[field.name] = field.requires
+
+        # Auto-add 'id' primary key if not provided
+        if not has_id_field:
+            from sqlalchemy import Column, Integer
+
+            id_col = Column(
+                "id",
+                Integer(),
+                primary_key=True,
+                autoincrement=True,
+            )
+            columns.insert(0, id_col)
+
+        # Create SQLAlchemy Table
+        table = Table(name, self._metadata, *columns, **kwargs)
+
+        # Create the table in the database (async)
+        async with self._engine.begin() as conn:
+            await conn.run_sync(self._metadata.create_all, tables=[table])
+
+        # Register validators if any
+        if validators_dict:
+            self._validators[name] = validators_dict
+
+        # Return a TableProxy for the table
+        return TableProxy(table, self._session_factory, validators_dict, is_async=True)
 
     def __repr__(self) -> str:
         table_count = len(self._metadata.tables)

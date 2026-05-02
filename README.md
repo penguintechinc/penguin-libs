@@ -5,37 +5,61 @@
 
 Shared libraries for Penguin Tech applications across all languages.
 
-## Packages
-
-### JavaScript/TypeScript
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| [@penguintechinc/react-libs](./packages/react-libs) | 1.2.0 | React components (LoginPageBuilder, FormModalBuilder, SidebarMenu) |
+## Package Directory
 
 ### Python
 
-| Package | Version | Coverage | Description |
-|---------|---------|----------|-------------|
-| [penguin-aaa](./packages/python-aaa) | 0.1.0 | 99% | Authentication, authorization, and audit (OIDC, RBAC, SPIFFE, tenant isolation) |
-| [penguin-dal](./packages/python-dal) | 0.1.0 | 98% | Database access layer — PyDAL-style API over SQLAlchemy |
-| [penguin-libs](./packages/python-libs) | 0.1.0 | 98% | H3 protocol, HTTP client, validation, Pydantic base models |
-| [penguin-licensing](./packages/python-licensing) | 0.1.0 | 100% | PenguinTech License Server integration |
-| [penguin-sal](./packages/python-secrets) | 0.1.0 | 100% | Secrets and authentication library |
-| [penguin-utils](./packages/python-utils) | 0.1.0 | 99% | Sanitized logging and Flask utilities |
+| Package | Version | Install |
+|---------|---------|---------|
+| `penguin-libs` | [![PyPI](https://img.shields.io/pypi/v/penguin-libs)](https://pypi.org/project/penguin-libs/) | `pip install penguin-libs` (transition) |
+| `penguin-aaa` | [![PyPI](https://img.shields.io/pypi/v/penguin-aaa)](https://pypi.org/project/penguin-aaa/) | `pip install penguin-aaa` |
+| `penguin-crypto` | [![PyPI](https://img.shields.io/pypi/v/penguin-crypto)](https://pypi.org/project/penguin-crypto/) | `pip install penguin-crypto` |
+| `penguin-dal` | [![PyPI](https://img.shields.io/pypi/v/penguin-dal)](https://pypi.org/project/penguin-dal/) | `pip install penguin-dal` |
+| `penguin-email` | [![PyPI](https://img.shields.io/pypi/v/penguin-email)](https://pypi.org/project/penguin-email/) | `pip install penguin-email` (SMTP) |
+| `penguin-flask` | [![PyPI](https://img.shields.io/pypi/v/penguin-flask)](https://pypi.org/project/penguin-flask/) | `pip install penguin-flask` |
+| `penguin-grpc` | [![PyPI](https://img.shields.io/pypi/v/penguin-grpc)](https://pypi.org/project/penguin-grpc/) | `pip install penguin-grpc` |
+| `penguin-h3` | [![PyPI](https://img.shields.io/pypi/v/penguin-h3)](https://pypi.org/project/penguin-h3/) | `pip install penguin-h3` |
+| `penguin-http` | [![PyPI](https://img.shields.io/pypi/v/penguin-http)](https://pypi.org/project/penguin-http/) | `pip install penguin-http` |
+| `penguin-licensing` | [![PyPI](https://img.shields.io/pypi/v/penguin-licensing)](https://pypi.org/project/penguin-licensing/) | `pip install penguin-licensing` |
+| `penguin-limiter` | [![PyPI](https://img.shields.io/pypi/v/penguin-limiter)](https://pypi.org/project/penguin-limiter/) | `pip install penguin-limiter` (rate limiting) |
+| `penguin-pydantic` | [![PyPI](https://img.shields.io/pypi/v/penguin-pydantic)](https://pypi.org/project/penguin-pydantic/) | `pip install penguin-pydantic` |
+| `penguin-pytest` | [![PyPI](https://img.shields.io/pypi/v/penguin-pytest)](https://pypi.org/project/penguin-pytest/) | `pip install penguin-pytest` |
+| `penguin-sal` | [![PyPI](https://img.shields.io/pypi/v/penguin-sal)](https://pypi.org/project/penguin-sal/) | `pip install penguin-sal` (secrets) |
+| `penguin-security` | [![PyPI](https://img.shields.io/pypi/v/penguin-security)](https://pypi.org/project/penguin-security/) | `pip install penguin-security` |
+| `penguin-utils` | [![PyPI](https://img.shields.io/pypi/v/penguin-utils)](https://pypi.org/project/penguin-utils/) | `pip install penguin-utils` |
+| `penguin-validation` | [![PyPI](https://img.shields.io/pypi/v/penguin-validation)](https://pypi.org/project/penguin-validation/) | `pip install penguin-validation` |
+
+### TypeScript / React
+
+| Package | Version | Install |
+|---------|---------|---------|
+| `@penguintechinc/react-libs` | [![npm](https://img.shields.io/npm/v/@penguintechinc/react-libs)](https://www.npmjs.com/package/@penguintechinc/react-libs) | `npm i @penguintechinc/react-libs` (transition) |
+| `@penguintechinc/react-aaa` | [![npm](https://img.shields.io/npm/v/@penguintechinc/react-aaa)](https://www.npmjs.com/package/@penguintechinc/react-aaa) | `npm i @penguintechinc/react-aaa` |
+| `@penguintechinc/react-console-version` | [![npm](https://img.shields.io/npm/v/@penguintechinc/react-console-version)](https://www.npmjs.com/package/@penguintechinc/react-console-version) | `npm i @penguintechinc/react-console-version` |
+| `@penguintechinc/react-form-builder` | [![npm](https://img.shields.io/npm/v/@penguintechinc/react-form-builder)](https://www.npmjs.com/package/@penguintechinc/react-form-builder) | `npm i @penguintechinc/react-form-builder` |
+| `@penguintechinc/react-hooks` | [![npm](https://img.shields.io/npm/v/@penguintechinc/react-hooks)](https://www.npmjs.com/package/@penguintechinc/react-hooks) | `npm i @penguintechinc/react-hooks` |
+| `@penguintechinc/react-login` | [![npm](https://img.shields.io/npm/v/@penguintechinc/react-login)](https://www.npmjs.com/package/@penguintechinc/react-login) | `npm i @penguintechinc/react-login` |
+| `@penguintechinc/react-sidebar` | [![npm](https://img.shields.io/npm/v/@penguintechinc/react-sidebar)](https://www.npmjs.com/package/@penguintechinc/react-sidebar) | `npm i @penguintechinc/react-sidebar` |
+| `@penguintechinc/react-testutils` | [![npm](https://img.shields.io/npm/v/@penguintechinc/react-testutils)](https://www.npmjs.com/package/@penguintechinc/react-testutils) | `npm i @penguintechinc/react-testutils` |
 
 ### Go
 
-| Package | Version | Description |
-|---------|---------|-------------|
-| [go-common](./packages/go-common) | - | Common Go utilities and helpers |
-| [go-h3](./packages/go-h3) | - | Go H3 protocol interceptors and middleware |
+| Package | Version | Install |
+|---------|---------|---------|
+| `go-aaa` | [![Go](https://pkg.go.dev/badge/github.com/penguintechinc/penguin-libs/packages/go-aaa.svg)](https://pkg.go.dev/github.com/penguintechinc/penguin-libs/packages/go-aaa) | `go get github.com/penguintechinc/penguin-libs/packages/go-aaa` |
+| `go-common` | [![Go](https://pkg.go.dev/badge/github.com/penguintechinc/penguin-libs/packages/go-common.svg)](https://pkg.go.dev/github.com/penguintechinc/penguin-libs/packages/go-common) | `go get github.com/penguintechinc/penguin-libs/packages/go-common` (transition) |
+| `go-h3` | [![Go](https://pkg.go.dev/badge/github.com/penguintechinc/penguin-libs/packages/go-h3.svg)](https://pkg.go.dev/github.com/penguintechinc/penguin-libs/packages/go-h3) | `go get github.com/penguintechinc/penguin-libs/packages/go-h3` |
+| `go-logging` | [![Go](https://pkg.go.dev/badge/github.com/penguintechinc/penguin-libs/packages/go-logging.svg)](https://pkg.go.dev/github.com/penguintechinc/penguin-libs/packages/go-logging) | `go get github.com/penguintechinc/penguin-libs/packages/go-logging` |
+| `go-numa` | [![Go](https://pkg.go.dev/badge/github.com/penguintechinc/penguin-libs/packages/go-numa.svg)](https://pkg.go.dev/github.com/penguintechinc/penguin-libs/packages/go-numa) | `go get github.com/penguintechinc/penguin-libs/packages/go-numa` |
+| `go-xdp` | [![Go](https://pkg.go.dev/badge/github.com/penguintechinc/penguin-libs/packages/go-xdp.svg)](https://pkg.go.dev/github.com/penguintechinc/penguin-libs/packages/go-xdp) | `go get github.com/penguintechinc/penguin-libs/packages/go-xdp` |
 
 ### Flutter/Dart
 
-| Package | Version | Description |
-|---------|---------|-------------|
-| [flutter_libs](./packages/flutter_libs) | - | Flutter UI components and utilities |
+| Package | Version | Install |
+|---------|---------|---------|
+| `flutter_libs` | [![pub](https://img.shields.io/pub/v/flutter_libs)](https://pub.dev/packages/flutter_libs) | Add to `pubspec.yaml` (see Installation) |
+
+**Note**: `penguin-email` and `penguin-limiter` are standalone packages for SMTP and API rate limiting respectively. They are not bundled in the transition `penguin-libs` package — install them directly.
 
 ## Installation
 

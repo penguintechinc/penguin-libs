@@ -7,6 +7,17 @@ src/penguin_sal.egg-info/dependency_links.txt
 src/penguin_sal.egg-info/requires.txt
 src/penguin_sal.egg-info/top_level.txt
 src/penguin_sal/adapters/__init__.py
+src/penguin_sal/adapters/aws_sm.py
+src/penguin_sal/adapters/azure_kv.py
+src/penguin_sal/adapters/cyberark.py
+src/penguin_sal/adapters/doppler.py
+src/penguin_sal/adapters/gcp_sm.py
+src/penguin_sal/adapters/infisical.py
+src/penguin_sal/adapters/k8s_secrets.py
+src/penguin_sal/adapters/oci_vault.py
+src/penguin_sal/adapters/onepassword.py
+src/penguin_sal/adapters/passbolt.py
+src/penguin_sal/adapters/vault.py
 src/penguin_sal/core/__init__.py
 src/penguin_sal/core/base_adapter.py
 src/penguin_sal/core/exceptions.py

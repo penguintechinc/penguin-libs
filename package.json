@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run clean --workspaces --if-present && npm run build --workspaces --if-present",
     "build:react-libs": "npm run build -w @penguintechinc/react-libs",
     "build:react-aaa": "npm run build -w @penguintechinc/react-aaa",
     "clean": "npm run clean --workspaces --if-present",
@@ -31,6 +31,16 @@
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "10.4.0",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.2",
+    "eslint": "8.57.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "typescript": "5.8.3",
+    "vite": "7.3.2"
   },
   "overrides": {
     "minimatch@>=9.0.0 <9.0.7": "9.0.7"
