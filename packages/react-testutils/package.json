@@ -1,6 +1,6 @@
 {
   "name": "@penguintechinc/react-testutils",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "description": "Shared Vitest + RTL test utilities for PenguinTech React packages",
   "type": "module",
   "exports": {
@@ -21,7 +21,13 @@
     "test": "vitest run",
     "prepublishOnly": "npm run typecheck"
   },
-  "keywords": ["penguintech", "testing", "vitest", "react-testing-library", "test-utils"],
+  "keywords": [
+    "penguintech",
+    "testing",
+    "vitest",
+    "react-testing-library",
+    "test-utils"
+  ],
   "author": "Penguin Tech Inc <dev@penguintech.io>",
   "license": "AGPL-3.0",
   "homepage": "https://www.penguintech.io",
