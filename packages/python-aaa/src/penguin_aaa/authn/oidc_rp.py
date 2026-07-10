@@ -125,6 +125,10 @@ class OIDCRelyingParty:
 
         return Claims.model_validate(payload)
 
+    async def verify_token(self, raw_token: str) -> Claims:
+        """Alias for validate_token — the ASGI OIDCAuthMiddleware calls verify_token()."""
+        return await self.validate_token(raw_token)
+
     def validate_state(self, returned_state: str, expected_state: str) -> bool:
         """
         Constant-time comparison of OAuth2 state parameters.

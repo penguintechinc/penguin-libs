@@ -156,6 +156,23 @@ class TestOIDCRelyingPartyValidateToken:
             await rp.validate_token(oversized)
 
 
+class TestOIDCRelyingPartyVerifyToken:
+    @pytest.mark.asyncio
+    async def test_verify_token_delegates_to_validate_token(self):
+        config = _make_rp_config()
+        rp = OIDCRelyingParty(config)
+
+        sentinel_claims = MagicMock()
+        with patch.object(
+            rp, "validate_token", return_value=sentinel_claims
+        ) as mock_validate:
+            mock_validate.return_value = sentinel_claims
+            result = await rp.verify_token("some-raw-token")
+
+        mock_validate.assert_awaited_once_with("some-raw-token")
+        assert result is sentinel_claims
+
+
 class TestOIDCRelyingPartyStateHelpers:
     def test_generate_state_is_urlsafe_string(self):
         config = _make_rp_config()
