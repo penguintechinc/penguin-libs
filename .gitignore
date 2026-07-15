@@ -66,3 +66,4 @@ pubspec.lock
 
 # git
 .egg-info/
+packages/**/*.egg-info/

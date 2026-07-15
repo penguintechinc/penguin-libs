@@ -1,7 +1,0 @@
-pyproject.toml
-src/penguin_rpc.egg-info/PKG-INFO
-src/penguin_rpc.egg-info/SOURCES.txt
-src/penguin_rpc.egg-info/dependency_links.txt
-src/penguin_rpc.egg-info/requires.txt
-src/penguin_rpc.egg-info/top_level.txt
-tests/test_version.py
