@@ -698,11 +698,11 @@ jobs:
     name: Publish Python RPC
     runs-on: ubuntu-latest
     environment: pypi-rpc
+    # v* and package=='all' deliberately excluded until first real release (Phase 5) — scaffolds must not auto-publish
     if: |
       github.event_name == 'workflow_dispatch' &&
-      (github.event.inputs.package == 'python-rpc' || github.event.inputs.package == 'all') ||
-      startsWith(github.ref, 'refs/tags/penguin-rpc-v') ||
-      startsWith(github.ref, 'refs/tags/v')
+      github.event.inputs.package == 'python-rpc' ||
+      startsWith(github.ref, 'refs/tags/penguin-rpc-v')
 
     defaults:
       run:
@@ -789,11 +789,11 @@ jobs:
   publish-rust-rpc:
     name: Publish Rust RPC
     runs-on: ubuntu-latest
+    # v* and package=='all' deliberately excluded until first real release (Phase 5) — scaffolds must not auto-publish
     if: |
       github.event_name == 'workflow_dispatch' &&
-      (github.event.inputs.package == 'rust-rpc' || github.event.inputs.package == 'all') ||
-      startsWith(github.ref, 'refs/tags/rust-rpc-v') ||
-      startsWith(github.ref, 'refs/tags/v')
+      github.event.inputs.package == 'rust-rpc' ||
+      startsWith(github.ref, 'refs/tags/rust-rpc-v')
     permissions:
       id-token: write
       contents: read
