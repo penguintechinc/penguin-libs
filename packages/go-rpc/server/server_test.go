@@ -530,6 +530,73 @@ func TestStart_H3ListenError(t *testing.T) {
 	}
 }
 
+// TestStart_HTTP3Disabled_OnlyH2Binds verifies the HTTP3_ENABLED kill-switch:
+// when H3Enabled=false via Config, Start() binds only H2 (not H3),
+// serves requests over H2, and leaves ListenAddr("h3") empty.
+func TestStart_HTTP3Disabled_OnlyH2Binds(t *testing.T) {
+	tlsCfg := mustSelfSignedTLSConfig(t)
+	cfg := Config{
+		H2Addr:      "127.0.0.1:0",
+		H2Enabled:   true,
+		H3Enabled:   false,
+		TLSConfig:   tlsCfg,
+		GracePeriod: 2 * time.Second,
+	}
+
+	srv, err := New(cfg, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	srv.Mux().HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	startDone := make(chan error, 1)
+	go func() { startDone <- srv.Start(ctx) }()
+
+	h2Addr := waitForAddr(t, srv, "h2")
+	h3Addr := srv.ListenAddr("h3")
+
+	// Verify H2 bound and serves requests.
+	if h2Addr == "" {
+		t.Fatal("expected H2 to be enabled and bound")
+	}
+
+	pool := certPoolFromTLSConfig(t, tlsCfg)
+	h2Client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig:   &tls.Config{RootCAs: pool},
+			ForceAttemptHTTP2: true,
+		},
+		Timeout: 5 * time.Second,
+	}
+	status, body, proto := doGet(t, h2Client, "https://"+h2Addr+"/ping")
+	if status != http.StatusOK || body != "pong" {
+		t.Fatalf("H2 request: status=%d body=%q, want 200/pong", status, body)
+	}
+	if proto != "HTTP/2.0" {
+		t.Errorf("H2 request negotiated %q, want HTTP/2.0", proto)
+	}
+
+	// Verify H3 was NOT bound (kill-switch honored).
+	if h3Addr != "" {
+		t.Errorf("ListenAddr(\"h3\") = %q, want empty (HTTP3_ENABLED=false should prevent H3 listener)", h3Addr)
+	}
+
+	cancel()
+	select {
+	case err := <-startDone:
+		if err != nil {
+			t.Fatalf("Start returned error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Start did not return after cancel")
+	}
+}
+
 func doGet(t *testing.T, client *http.Client, url string) (status int, body string, proto string) {
 	t.Helper()
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)

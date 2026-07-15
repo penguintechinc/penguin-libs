@@ -209,6 +209,8 @@ func (s *Server) abortStartup(wg *sync.WaitGroup, startErr error) error {
 	return startErr
 }
 
+// shutdown performs graceful shutdown of both H2 and H3 listeners,
+// returning any errors encountered during the process.
 func (s *Server) shutdown() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
