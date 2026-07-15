@@ -23,6 +23,7 @@ Shared libraries for Penguin Tech applications across all languages.
 | [penguin-licensing](./packages/python-licensing) | 0.1.0 | 100% | PenguinTech License Server integration |
 | [penguin-sal](./packages/python-secrets) | 0.1.0 | 100% | Secrets and authentication library |
 | [penguin-utils](./packages/python-utils) | 0.1.0 | 99% | Sanitized logging and Flask utilities |
+| [penguin-rpc](./packages/python-rpc) | 0.1.0 | 100% | pRPC — Connect RPC over HTTP/3/QUIC, Python implementation (Apache-2.0) |
 
 ### Go
 
@@ -30,6 +31,14 @@ Shared libraries for Penguin Tech applications across all languages.
 |---------|---------|-------------|
 | [go-common](./packages/go-common) | - | Common Go utilities and helpers |
 | [go-h3](./packages/go-h3) | - | Go H3 protocol interceptors and middleware |
+| [go-rpc](./packages/go-rpc) | 0.1.0 | pRPC — Connect RPC over HTTP/3/QUIC, Go implementation (Apache-2.0) |
+
+### Rust
+
+| Package | Version | Description |
+|---------|---------|-------------|
+| [penguin-rpc](./packages/rust-rpc/crates/penguin-rpc) | 0.1.0 | pRPC — Connect RPC over HTTP/3/QUIC, Rust implementation (Apache-2.0) |
+| [penguin-h3-tower](./packages/rust-rpc/crates/penguin-h3-tower) | 0.1.0 | HTTP/3 bridge for Tower services, used by penguin-rpc (Apache-2.0) |
 
 ### Flutter/Dart
 

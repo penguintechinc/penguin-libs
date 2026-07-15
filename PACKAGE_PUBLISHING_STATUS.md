@@ -19,6 +19,10 @@ All 8 packages in the penguin-libs monorepo are now properly configured for auto
 | 6 | go-common | GitHub (go get) | github.com/.../go-common | `v*` | `validate-go-common` | ✅ Configured |
 | 7 | go-h3 | GitHub (go get) | github.com/.../go-h3 | `v*` | `validate-go-common` | ✅ Configured |
 | 8 | flutter_libs | pub.dev | flutter_libs | `flutter-libs-v*` | `publish-flutter-libs` | ✅ Configured (dry-run) |
+| 9 | python-rpc | PyPI | penguin-rpc | `penguin-rpc-v*` | `publish-python-rpc` | 🔜 Not yet published |
+| 10 | go-rpc | GitHub (go get) | github.com/.../go-rpc | `go-rpc-v*` | `validate-go-rpc` | 🔜 Not yet published |
+| 11 | rust-rpc (penguin-rpc) | crates.io | penguin-rpc | `rust-rpc-v*` | `publish-rust-rpc` | 🔜 Not yet published |
+| 12 | rust-rpc (penguin-h3-tower) | crates.io | penguin-h3-tower | `rust-rpc-v*` | `publish-rust-rpc` | 🔜 Not yet published |
 
 ## Changes Made
 
