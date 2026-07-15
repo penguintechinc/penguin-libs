@@ -1,6 +1,6 @@
 # === Development Targets ===
 
-.PHONY: lint test security build pre-commit install-tools install-hooks prpc-proto
+.PHONY: lint test security build pre-commit install-tools install-hooks prpc-proto prpc-generate prpc-generate-check
 
 build: ## Build/compile all packages
 	@echo "=== Building Go packages ==="
@@ -63,6 +63,17 @@ security: ## Run security scans on all packages
 
 prpc-proto: ## Lint, breaking-check, and format-check proto definitions
 	cd proto && buf lint && buf breaking --against '../.git#branch=main,subdir=proto' && buf format --diff --exit-code
+
+prpc-generate: ## Regenerate Go stubs for prpc/* protos into packages/go-rpc/gen
+	cd proto && buf generate --path prpc
+	rm -rf gen/go/prpc packages/python-libs/src/penguin_libs/gen/prpc
+	find gen -depth -type d -empty -delete 2>/dev/null || true
+	find packages/python-libs/src/penguin_libs/gen -depth -type d -empty -delete 2>/dev/null || true
+	cd packages/go-rpc && GOTOOLCHAIN=local go mod tidy
+
+prpc-generate-check: prpc-generate ## CI drift gate: fail if checked-in go-rpc stubs are stale
+	git add -N packages/go-rpc/gen/
+	git diff --exit-code packages/go-rpc/gen/
 
 pre-commit: build lint security test ## Run full pre-commit gate
 	@echo "=== All checks passed ==="

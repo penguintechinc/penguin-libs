@@ -4,6 +4,8 @@
 syntax = "proto3";
 package prpc.health.v1;
 
+option go_package = "github.com/penguintechinc/penguin-libs/packages/go-rpc/gen/prpc/health/v1;healthv1";
+
 // HealthService reports serving status per pRPC §8 (Operational Conventions).
 service HealthService {
   rpc Check(CheckRequest) returns (CheckResponse) {}

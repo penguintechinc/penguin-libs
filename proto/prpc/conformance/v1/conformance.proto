@@ -6,6 +6,8 @@ package prpc.conformance.v1;
 
 import "buf/validate/validate.proto";
 
+option go_package = "github.com/penguintechinc/penguin-libs/packages/go-rpc/gen/prpc/conformance/v1;conformancev1";
+
 // ConformanceService exercises all four Connect RPC patterns plus
 // contract-level validation, per pRPC §11.
 service ConformanceService {
