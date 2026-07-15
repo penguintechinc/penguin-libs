@@ -7,8 +7,8 @@ build: ## Build/compile all packages
 	cd packages/go-common && go build ./...
 	cd packages/go-aaa && go build ./...
 	@echo "=== Building Python packages ==="
-	cd packages/python-aaa && python -m py_compile src/penguin_aaa/__init__.py
-	cd packages/python-utils && python -m py_compile src/penguintechinc_utils/__init__.py
+	cd packages/python-aaa && python3 -m py_compile src/penguin_aaa/__init__.py
+	cd packages/python-utils && python3 -m py_compile src/penguintechinc_utils/__init__.py
 	@echo "=== Building React packages ==="
 	cd packages/react-aaa && npm run build
 	cd packages/react-libs && npm run build
