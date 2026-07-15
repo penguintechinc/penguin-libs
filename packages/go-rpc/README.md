@@ -9,7 +9,7 @@ Penguin RPC (pRPC) is the Go implementation of the pRPC specification (spec/SPEC
 ## Installation
 
 ```bash
-go get github.com/penguintechinc/penguin-libs/packages/go-rpc@go-rpc-v0.1.0
+go get github.com/penguintechinc/penguin-libs/packages/go-rpc
 ```
 
 ## License & Trademark

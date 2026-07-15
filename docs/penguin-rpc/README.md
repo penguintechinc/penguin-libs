@@ -31,4 +31,5 @@ Manual, console-only follow-ups not achievable via CI/CD or `gh` — required be
 
 - **PyPI**: create a Trusted Publisher entry for `penguin-rpc` on PyPI (repo `penguintechinc/penguin-libs`, workflow `publish.yml`, environment `pypi-rpc`), and create the `pypi-rpc` GitHub Actions environment in repo settings (mirrors `pypi-aaa`, `pypi-dal`, `pypi-secrets`, `pypi-utils`, `pypi-pytest`).
 - **crates.io**: create Trusted Publishing configuration for both the `penguin-h3-tower` and `penguin-rpc` crates (repo `penguintechinc/penguin-libs`, workflow `publish.yml`; the `publish-rust-rpc` job declares no GitHub Actions environment, so no environment needs to be created for it).
+- **go-rpc dual-tag**: at each go-rpc release, dual-tag `packages/go-rpc/v<version>` alongside `go-rpc-v<version>` so `go get github.com/penguintechinc/penguin-libs/packages/go-rpc@v<version>` resolves correctly (Go subdirectory-module tag convention).
 - Org rules `backend.md` (in the private `admin` rules repo, not this repo) still reference `go-h3`/`penguin-h3` as the H3 building blocks — update those references after Phase 5 retires `go-h3` and `penguin_libs.h3`.
