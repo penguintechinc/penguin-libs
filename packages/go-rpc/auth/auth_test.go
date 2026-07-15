@@ -16,10 +16,14 @@ import (
 	"connectrpc.com/connect"
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 
+	"github.com/penguintechinc/penguin-libs/packages/go-aaa/audit"
 	"github.com/penguintechinc/penguin-libs/packages/go-aaa/authn"
 	"github.com/penguintechinc/penguin-libs/packages/go-aaa/authz"
 	"github.com/penguintechinc/penguin-libs/packages/go-aaa/crypto"
 	"github.com/penguintechinc/penguin-libs/packages/go-aaa/middleware"
+	"github.com/penguintechinc/penguin-libs/packages/go-common/logging"
+	healthv1 "github.com/penguintechinc/penguin-libs/packages/go-rpc/gen/prpc/health/v1"
+	"github.com/penguintechinc/penguin-libs/packages/go-rpc/gen/prpc/health/v1/healthv1connect"
 )
 
 // testFixture is populated once in TestMain and shared read-only across all
@@ -301,8 +305,13 @@ func TestInterceptors_UndeclaredProcedure_DeniedEvenWithAdminScopes(t *testing.T
 	if connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Errorf("expected CodePermissionDenied, got %v (%v)", connect.CodeOf(err), err)
 	}
-	if !strings.Contains(err.Error(), "not declared public or scoped") {
-		t.Errorf("expected the deny-by-default gate's message, got: %v", err)
+	// The gate's denial message is intentionally generic ("permission
+	// denied") rather than naming the undeclared procedure — see auth.go's
+	// denyByDefaultGate.WrapUnary doc comment: this package has no logger to
+	// record that detail server-side, so it is dropped rather than leaked to
+	// the client.
+	if err.Error() != "permission_denied: permission denied" {
+		t.Errorf("expected the gate's generic denial message, got: %v", err)
 	}
 }
 
@@ -537,12 +546,18 @@ func TestHasBearerToken(t *testing.T) {
 }
 
 // --- newDenyByDefaultInterceptor: focused, white-box gate coverage ---
+//
+// newDenyByDefaultInterceptor now returns *denyByDefaultGate, a full
+// connect.Interceptor (see Finding 1 in auth.go/doc.go), so these tests call
+// its WrapUnary method explicitly rather than invoking the value directly as
+// a function — the old connect.UnaryInterceptorFunc return type supported
+// direct invocation, the new struct type does not.
 
 func TestDenyByDefaultInterceptor_DeclaredProcedurePassesThrough(t *testing.T) {
 	interceptor := newDenyByDefaultInterceptor(middleware.ProcedureScopes{"": {"report:read"}}, nil)
 	req := connect.NewRequest(&struct{}{})
 
-	_, err := interceptor(successStub)(context.Background(), req)
+	_, err := interceptor.WrapUnary(successStub)(context.Background(), req)
 	if err != nil {
 		t.Errorf("expected pass-through for a declared procedure, got: %v", err)
 	}
@@ -555,7 +570,7 @@ func TestDenyByDefaultInterceptor_PresentKeyWithEmptyScopesStillCountsAsDeclared
 	interceptor := newDenyByDefaultInterceptor(middleware.ProcedureScopes{"": {}}, nil)
 	req := connect.NewRequest(&struct{}{})
 
-	_, err := interceptor(successStub)(context.Background(), req)
+	_, err := interceptor.WrapUnary(successStub)(context.Background(), req)
 	if err != nil {
 		t.Errorf("expected pass-through for a declared (empty-scope) procedure, got: %v", err)
 	}
@@ -565,7 +580,7 @@ func TestDenyByDefaultInterceptor_UndeclaredProcedureDenied(t *testing.T) {
 	interceptor := newDenyByDefaultInterceptor(middleware.ProcedureScopes{}, nil)
 	req := connect.NewRequest(&struct{}{})
 
-	_, err := interceptor(successStub)(context.Background(), req)
+	_, err := interceptor.WrapUnary(successStub)(context.Background(), req)
 	if err == nil {
 		t.Fatal("expected denial for an undeclared procedure")
 	}
@@ -578,8 +593,302 @@ func TestDenyByDefaultInterceptor_PublicProcedureBypassesEvenWhenUndeclared(t *t
 	interceptor := newDenyByDefaultInterceptor(middleware.ProcedureScopes{}, []string{""})
 	req := connect.NewRequest(&struct{}{})
 
-	_, err := interceptor(successStub)(context.Background(), req)
+	_, err := interceptor.WrapUnary(successStub)(context.Background(), req)
 	if err != nil {
 		t.Errorf("expected pass-through for a public procedure, got: %v", err)
+	}
+}
+
+// TestDenyByDefaultInterceptor_WrapStreamingClientPassesThrough covers the
+// gate's client-side leg directly: the gate has no client-side enforcement
+// role (see its doc comment in auth.go), so WrapStreamingClient must return
+// exactly the StreamingClientFunc it was given, unmodified.
+func TestDenyByDefaultInterceptor_WrapStreamingClientPassesThrough(t *testing.T) {
+	interceptor := newDenyByDefaultInterceptor(middleware.ProcedureScopes{}, nil)
+	called := false
+	next := func(ctx context.Context, spec connect.Spec) connect.StreamingClientConn {
+		called = true
+		return nil
+	}
+
+	wrapped := interceptor.WrapStreamingClient(next)
+	wrapped(context.Background(), connect.Spec{Procedure: "/x/Y"})
+
+	if !called {
+		t.Error("expected WrapStreamingClient to pass calls straight through to next")
+	}
+}
+
+// --- Finding 1: streaming RPCs bypass the entire auth chain ---
+//
+// Every interceptor go-aaa's middleware package exports is a
+// connect.UnaryInterceptorFunc, whose WrapStreamingHandler is a documented
+// no-op (connectrpc.com/connect v1.20.0 interceptor.go:70-73). Before the
+// fix, this package's own gate was built the same way, so a streaming
+// procedure behind auth.Interceptors() reached the handler with zero
+// interceptors having done anything — full bypass, regardless of
+// credentials. These tests exercise the real generated
+// healthv1connect.HealthServiceHandler (server-streaming Watch RPC) behind
+// a real httptest.Server wired with connect.WithInterceptors(chain...) —
+// the same wiring production servers use — because WrapUnary is never
+// consulted for a streaming procedure, so nothing short of an actual
+// streaming call proves the fix.
+//
+// RED/GREEN history (see the report for the literal `go test` output):
+// TestStreamingWatch_NonPublic_DeniedWithZeroCredentials was written first
+// asserting the fail-closed *expectation* (stream.Receive() returns false,
+// stream.Err() is CodePermissionDenied). Run against the pre-fix
+// denyByDefaultGate (a connect.UnaryInterceptorFunc, matching every other
+// interceptor at the time), it FAILED: stream.Receive() returned true and
+// stream.Msg() carried the stub handler's real response — proving the
+// bypass Finding 1 describes, with no Authorization header at all. That
+// failure is RED. Making denyByDefaultGate a full connect.Interceptor with
+// a fail-closed WrapStreamingHandler (auth.go) turned the same assertion
+// GREEN with no further change to this test.
+
+// stubHealthServer implements healthv1connect.HealthServiceHandler. Watch
+// sends exactly one response and returns nil; a client actually receiving
+// that response is proof the call reached the handler — i.e. that
+// everything in front of it, including this package's auth chain, let it
+// through.
+type stubHealthServer struct {
+	healthv1connect.UnimplementedHealthServiceHandler
+}
+
+func (stubHealthServer) Watch(_ context.Context, _ *connect.Request[healthv1.CheckRequest], stream *connect.ServerStream[healthv1.CheckResponse]) error {
+	return stream.Send(&healthv1.CheckResponse{Status: healthv1.ServingStatus_SERVING_STATUS_SERVING})
+}
+
+// newStreamingTestServer wires interceptors into a real
+// healthv1connect.HealthServiceHandler behind an httptest.Server via
+// connect.WithInterceptors — the same call production server wiring uses —
+// and returns a real generated client. The Connect protocol supports
+// server-streaming RPCs over plain HTTP/1.1 (chunked transfer encoding), so
+// httptest.NewServer (HTTP/1.1) is sufficient; no TLS/h2c setup is needed.
+func newStreamingTestServer(t *testing.T, interceptors []connect.Interceptor) healthv1connect.HealthServiceClient {
+	t.Helper()
+	mux := http.NewServeMux()
+	path, handler := healthv1connect.NewHealthServiceHandler(stubHealthServer{}, connect.WithInterceptors(interceptors...))
+	mux.Handle(path, handler)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return healthv1connect.NewHealthServiceClient(srv.Client(), srv.URL)
+}
+
+func TestStreamingWatch_NonPublic_DeniedWithZeroCredentials(t *testing.T) {
+	enforcer := authz.NewRBACEnforcer()
+	cfg := Config{
+		Mode:     ModeOIDC,
+		OIDC:     testFixture.rp,
+		Enforcer: enforcer,
+		Scopes:   middleware.ProcedureScopes{healthv1connect.HealthServiceWatchProcedure: {"health:watch"}},
+	}
+	interceptors, err := Interceptors(cfg)
+	if err != nil {
+		t.Fatalf("Interceptors: %v", err)
+	}
+	client := newStreamingTestServer(t, interceptors)
+
+	stream, err := client.Watch(context.Background(), connect.NewRequest(&healthv1.CheckRequest{})) // zero credentials
+	if err != nil {
+		t.Fatalf("Watch: unexpected client-side error establishing the stream: %v", err)
+	}
+	if stream.Receive() {
+		t.Fatalf("expected the streaming call to be denied before any message was sent, but received: %v — this is Finding 1's streaming auth bypass", stream.Msg())
+	}
+	if err := stream.Err(); err == nil {
+		t.Fatal("expected a denial error from Receive/Err, got nil")
+	} else if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("expected CodePermissionDenied, got %v (%v)", connect.CodeOf(err), err)
+	}
+}
+
+func TestStreamingWatch_NonPublic_DeniedEvenWithValidCredentials(t *testing.T) {
+	// Fail-closed means fail-closed regardless of credentials: go-aaa's
+	// authn/tenant/authz interceptors are connect.UnaryInterceptorFunc and
+	// therefore no-ops on the streaming path (see doc.go's "Streaming RPCs"
+	// section), so a fully valid bearer token with the exact required scope
+	// and a tenant claim changes nothing — the gate denies before the
+	// request reaches any of those interceptors.
+	enforcer := authz.NewRBACEnforcer()
+	cfg := Config{
+		Mode:     ModeOIDC,
+		OIDC:     testFixture.rp,
+		Enforcer: enforcer,
+		Scopes:   middleware.ProcedureScopes{healthv1connect.HealthServiceWatchProcedure: {"health:watch"}},
+	}
+	interceptors, err := Interceptors(cfg)
+	if err != nil {
+		t.Fatalf("Interceptors: %v", err)
+	}
+	client := newStreamingTestServer(t, interceptors)
+
+	tok := testFixture.token(t, "user-1", []string{"health:watch"}, nil, "tenant-a")
+	req := connect.NewRequest(&healthv1.CheckRequest{})
+	req.Header().Set("Authorization", "Bearer "+tok)
+
+	stream, err := client.Watch(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Watch: unexpected client-side error establishing the stream: %v", err)
+	}
+	if stream.Receive() {
+		t.Fatalf("expected denial even with a fully valid token+scope+tenant, but received: %v — streaming authn/authz is not implemented, so it must fail closed rather than silently granting access", stream.Msg())
+	}
+	if connect.CodeOf(stream.Err()) != connect.CodePermissionDenied {
+		t.Errorf("expected CodePermissionDenied, got %v (%v)", connect.CodeOf(stream.Err()), stream.Err())
+	}
+}
+
+func TestStreamingWatch_PublicProcedure_PassesThrough(t *testing.T) {
+	enforcer := authz.NewRBACEnforcer()
+	cfg := Config{
+		Mode:     ModeOIDC,
+		OIDC:     testFixture.rp,
+		Enforcer: enforcer,
+		Scopes:   middleware.ProcedureScopes{healthv1connect.HealthServiceWatchProcedure: {"health:watch"}},
+		Public:   []string{healthv1connect.HealthServiceWatchProcedure},
+	}
+	interceptors, err := Interceptors(cfg)
+	if err != nil {
+		t.Fatalf("Interceptors: %v", err)
+	}
+	client := newStreamingTestServer(t, interceptors)
+
+	stream, err := client.Watch(context.Background(), connect.NewRequest(&healthv1.CheckRequest{})) // zero credentials
+	if err != nil {
+		t.Fatalf("Watch: unexpected client-side error establishing the stream: %v", err)
+	}
+	if !stream.Receive() {
+		t.Fatalf("expected the public streaming procedure to pass through with zero credentials, got error: %v", stream.Err())
+	}
+	if stream.Msg().GetStatus() != healthv1.ServingStatus_SERVING_STATUS_SERVING {
+		t.Errorf("unexpected response status: %v", stream.Msg().GetStatus())
+	}
+	if err := stream.Err(); err != nil {
+		t.Errorf("unexpected stream error: %v", err)
+	}
+}
+
+// --- Finding 2: ModeSPIFFE cannot authorize any non-public procedure ---
+//
+// See doc.go's "Known limitations" section for the full rationale,
+// including why this test injects context claims rather than driving a real
+// mTLS handshake: NewSPIFFEInterceptor's peer-certificate extraction
+// requires a completed *tls.Conn handshake with no pure-computation seam
+// available (unlike OIDC's JWT signing, which this file's testFixture
+// already exercises for real). This test instead takes the real
+// tenant/gate/authz sub-slice of the chain that
+// Interceptors(Config{Mode: ModeSPIFFE, ...}) constructs — everything after
+// the authn interceptor, at index 0 — and injects context claims shaped
+// exactly like go-aaa's NewSPIFFEInterceptor synthesis
+// (middleware/authn.go: &authn.Claims{Sub: spiffeID, Iss: "spiffe"}, no
+// Tenant field), i.e. exactly the context state a successful SPIFFE
+// handshake would have produced. Scopes intentionally requires no scope for
+// the test procedure (a present key with an empty slice, matching
+// TestDenyByDefaultInterceptor_PresentKeyWithEmptyScopesStillCountsAsDeclared's
+// documented semantics) so that if a future go-aaa change ever populated
+// Tenant for SPIFFE identities, authz would trivially grant access —
+// isolating the tenant check as the sole thing this test can be denied by
+// today.
+func TestSPIFFEMode_SynthesizedClaimsHaveNoTenant_DeniedByTenantInterceptor(t *testing.T) {
+	sa := newTestSPIFFEAuthenticator(t)
+	cfg := Config{
+		Mode:     ModeSPIFFE,
+		SPIFFE:   sa,
+		Enforcer: authz.NewRBACEnforcer(),
+		Scopes:   middleware.ProcedureScopes{"": {}},
+	}
+	interceptors, err := Interceptors(cfg)
+	if err != nil {
+		t.Fatalf("Interceptors: %v", err)
+	}
+	if len(interceptors) < 2 {
+		t.Fatalf("expected at least [authn, tenant, gate, authz] in the chain, got %d interceptors", len(interceptors))
+	}
+	// Skip index 0 (authn): exercise the real tenant -> gate -> authz
+	// sub-slice this package's own Interceptors() constructed for
+	// Mode: ModeSPIFFE.
+	handler := composeChain(interceptors[1:], successStub)
+
+	// Mirrors go-aaa's NewSPIFFEInterceptor claims synthesis exactly
+	// (middleware/authn.go) — the state left in context by a *successful*
+	// SPIFFE mTLS peer validation.
+	claims := &authn.Claims{Sub: "spiffe://example.org/svc", Iss: "spiffe"}
+	ctx := authz.ContextWithClaims(context.Background(), claims)
+
+	req := connect.NewRequest(&struct{}{})
+	_, err = handler(ctx, req)
+	if err == nil {
+		t.Fatal("expected denial: SPIFFE-synthesized claims carry no tenant, so the tenant interceptor must reject")
+	}
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("expected CodePermissionDenied, got %v (%v)", connect.CodeOf(err), err)
+	}
+	if !strings.Contains(err.Error(), "missing tenant claim") {
+		t.Errorf("expected tenant.go's denial message (proving the tenant interceptor, not the gate or authz, was the one that denied), got: %v", err)
+	}
+}
+
+// --- Finding 3: audit is outermost, so it always attributes to "anonymous" ---
+//
+// See doc.go's "Interceptor order" section (the "Trade-off, disclosed
+// rather than hidden" paragraph) for the full rationale. This test wires a
+// real audit.Emitter (audit.NewEmitter) backed by a real
+// logging.CallbackSink — the same package-level constructors go-aaa's own
+// emitter_test.go uses — into the full chain via Config.Audit, then drives
+// a completely valid, successful, authenticated request (valid token,
+// correct tenant, correct scope) through it. The audit event fires and is
+// classified EventAuthzGranted/OutcomeSuccess as expected, but its subject
+// is asserted to be "anonymous" — NOT the token's real "sub" claim
+// ("user-1") — because go-aaa's NewAuditInterceptor (audit.go) resolves the
+// subject from context before calling next, and audit sits outermost, so it
+// never sees the context authn produces. That assertion documents the
+// CURRENT limitation; it is not the desired end state. If this assertion
+// ever starts failing because events[0]["subject"] is "user-1", it means
+// go-aaa gained post-next subject resolution — update doc.go's
+// "Trade-off, disclosed rather than hidden" paragraph and this test/comment
+// together rather than treating the failure as a regression to revert.
+func TestAuditInterceptor_EmitsEvent_ButAttributesToAnonymous(t *testing.T) {
+	var events []map[string]interface{}
+	sink := logging.NewCallbackSink(func(event map[string]interface{}) {
+		events = append(events, event)
+	})
+	emitter := audit.NewEmitter(sink)
+
+	enforcer := authz.NewRBACEnforcer()
+	cfg := Config{
+		Mode:     ModeOIDC,
+		OIDC:     testFixture.rp,
+		Enforcer: enforcer,
+		Scopes:   middleware.ProcedureScopes{"": {"report:read"}},
+		Audit:    emitter,
+	}
+	interceptors, err := Interceptors(cfg)
+	if err != nil {
+		t.Fatalf("Interceptors: %v", err)
+	}
+	handler := composeChain(interceptors, successStub)
+
+	tok := testFixture.token(t, "user-1", []string{"report:read"}, nil, "tenant-a")
+	req := connect.NewRequest(&struct{}{})
+	req.Header().Set("Authorization", "Bearer "+tok)
+
+	if _, err := handler(context.Background(), req); err != nil {
+		t.Fatalf("expected a fully authorized request to succeed, got: %v", err)
+	}
+
+	if len(events) != 1 {
+		t.Fatalf("expected exactly 1 audit event to be emitted, got %d", len(events))
+	}
+	if events[0]["type"] != string(audit.EventAuthzGranted) {
+		t.Errorf("expected event type %q, got %v", audit.EventAuthzGranted, events[0]["type"])
+	}
+	if events[0]["outcome"] != string(audit.OutcomeSuccess) {
+		t.Errorf("expected outcome %q, got %v", audit.OutcomeSuccess, events[0]["outcome"])
+	}
+	// DOCUMENTED LIMITATION, not the desired end state — see the comment
+	// above this test and doc.go's "Interceptor order" trade-off paragraph.
+	if events[0]["subject"] != "anonymous" {
+		t.Errorf("expected subject %q (documented attribution limitation), got %v", "anonymous", events[0]["subject"])
 	}
 }

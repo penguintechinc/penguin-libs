@@ -159,27 +159,74 @@ func hasBearerToken(req connect.AnyRequest) bool {
 	return len(auth) >= 8 && auth[:7] == "Bearer "
 }
 
-// newDenyByDefaultInterceptor rejects, with CodePermissionDenied, any
-// procedure that is present in neither scopes nor public. See doc.go's
+// newDenyByDefaultInterceptor builds go-rpc's own gate. See doc.go's
 // "Deny-by-default gate" section for why this package supplies its own gate
-// rather than relying on go-aaa's authz interceptor alone.
-func newDenyByDefaultInterceptor(scopes middleware.ProcedureScopes, public []string) connect.UnaryInterceptorFunc {
+// rather than relying on go-aaa's authz interceptor alone, and "Streaming
+// RPCs" for why the gate is a full connect.Interceptor rather than a
+// connect.UnaryInterceptorFunc like every other interceptor in the chain.
+func newDenyByDefaultInterceptor(scopes middleware.ProcedureScopes, public []string) *denyByDefaultGate {
 	publicSet := make(map[string]bool, len(public))
 	for _, p := range public {
 		publicSet[p] = true
 	}
+	return &denyByDefaultGate{scopes: scopes, publicSet: publicSet}
+}
 
-	return func(next connect.UnaryFunc) connect.UnaryFunc {
-		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-			procedure := req.Spec().Procedure
-			if publicSet[procedure] {
-				return next(ctx, req)
-			}
-			if _, declared := scopes[procedure]; !declared {
-				return nil, connect.NewError(connect.CodePermissionDenied,
-					fmt.Errorf("procedure %q is not declared public or scoped; denying by default", procedure))
-			}
+// denyByDefaultGate is the only interceptor in this package's chain that
+// implements connect.Interceptor directly instead of being built from
+// connect.UnaryInterceptorFunc. That distinction matters only for streaming
+// RPCs: connect.UnaryInterceptorFunc's WrapStreamingHandler is a documented
+// no-op (connectrpc.com/connect v1.20.0, interceptor.go lines 70-73), so
+// every go-aaa interceptor this package wraps (authn, tenant, authz, audit)
+// has zero effect on a streaming call. denyByDefaultGate is the sole
+// enforcement point for streaming procedures; see doc.go's "Streaming RPCs"
+// section for the full rationale and current limitations.
+type denyByDefaultGate struct {
+	scopes    middleware.ProcedureScopes
+	publicSet map[string]bool
+}
+
+// WrapUnary rejects, with CodePermissionDenied, any unary procedure that is
+// present in neither g.scopes nor g.publicSet. Behavior is unchanged from
+// this package's original deny-by-default gate, except the error message no
+// longer includes the procedure name (see doc.go's "Deny-by-default gate"
+// section); this package has no logger to record that detail server-side,
+// so the message is generic on both the client and server side.
+func (g *denyByDefaultGate) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
+	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+		procedure := req.Spec().Procedure
+		if g.publicSet[procedure] {
 			return next(ctx, req)
 		}
+		if _, declared := g.scopes[procedure]; !declared {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied"))
+		}
+		return next(ctx, req)
+	}
+}
+
+// WrapStreamingClient is a pass-through: this package's gate has no
+// client-side enforcement role (see doc.go's "Streaming RPCs" section).
+func (g *denyByDefaultGate) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
+	return next
+}
+
+// WrapStreamingHandler fails closed: any streaming procedure whose
+// conn.Spec().Procedure is not in g.publicSet is rejected with
+// CodePermissionDenied before next is ever invoked, regardless of
+// credentials — none of go-aaa's authn/tenant/authz interceptors run on the
+// streaming path (see the denyByDefaultGate doc comment), so there is no
+// scope or claim to evaluate here even if there were one to check against.
+// A public streaming procedure passes straight through with zero
+// enforcement, matching how public unary procedures already bypass the
+// entire chain.
+func (g *denyByDefaultGate) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
+	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
+		procedure := conn.Spec().Procedure
+		if g.publicSet[procedure] {
+			return next(ctx, conn)
+		}
+		return connect.NewError(connect.CodePermissionDenied,
+			fmt.Errorf("streaming procedures are not yet supported by the pRPC auth chain; declare public or use unary"))
 	}
 }
