@@ -236,6 +236,8 @@ jobs:
         run: cd packages/python-rpc && mypy src/
       - name: Security - bandit
         run: cd packages/python-rpc && bandit -r src/ -c pyproject.toml
+      - name: Security - pip-audit
+        run: cd packages/python-rpc && pip install pip-audit && pip-audit
       - name: Test
         run: cd packages/python-rpc && pytest tests/ -v --tb=short --cov=penguin_rpc
 
