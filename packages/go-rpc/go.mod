@@ -17,6 +17,7 @@ require (
 	github.com/penguintechinc/penguin-libs/packages/go-common v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
 	github.com/quic-go/quic-go v0.60.0
+	go.uber.org/goleak v1.3.0
 	go.uber.org/zap v1.27.0
 	google.golang.org/protobuf v1.36.11
 )
