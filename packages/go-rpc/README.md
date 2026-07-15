@@ -1,6 +1,6 @@
 # Penguin RPC (pRPC) — Go Implementation
 
-Penguin RPC (pRPC) is a high-performance, zero-trust Connect RPC framework over HTTP/3 with HTTP/2 fallback, enabling secure service-to-service communication with built-in support for interceptors, MCP mounting, and A2A (application-to-application) authentication. The Go implementation provides native async networking with XDP/AF_XDP support for ultra-low latency packet processing on capable platforms, and graceful degradation to standard Go net on systems without networking privileges.
+Penguin RPC (pRPC) is the Go implementation of the pRPC specification (spec/SPEC.md), providing a high-performance, zero-trust Connect RPC framework over HTTP/3 (QUIC) with automatic HTTP/2 fallback. It enables secure service-to-service communication with zero-trust authentication defaults and built-in support for mounting MCP and A2A (application-to-application) agent protocols.
 
 ## Status
 
