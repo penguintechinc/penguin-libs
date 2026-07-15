@@ -73,7 +73,10 @@ func NewLoggingInterceptor(logger *zap.Logger) connect.UnaryInterceptorFunc {
 // packages' metrics in the default registry. Registering the same metric
 // names against the same registerer more than once (e.g. constructing
 // several servers in one process) reuses the already-registered collectors
-// instead of panicking.
+// instead of panicking. Any other registration failure is treated as an
+// unrecoverable misconfiguration and panics immediately — fail fast at
+// server construction rather than silently serving metrics from an
+// unregistered (never-scraped) collector.
 func NewMetricsInterceptor(registerer ...prometheus.Registerer) connect.Interceptor {
 	reg := prometheus.Registerer(prometheus.DefaultRegisterer)
 	if len(registerer) > 0 && registerer[0] != nil {
@@ -119,7 +122,11 @@ func NewMetricsInterceptor(registerer ...prometheus.Registerer) connect.Intercep
 
 // registerCounterVec registers a new CounterVec against reg, reusing an
 // already-registered collector with the same descriptor (e.g. from a prior
-// call against prometheus.DefaultRegisterer) instead of panicking.
+// call against prometheus.DefaultRegisterer) instead of panicking. Any other
+// registration failure — a genuinely unexpected misconfiguration, such as a
+// duplicate metric name with an incompatible label set — is not swallowed:
+// it panics immediately so the problem surfaces at server construction time
+// instead of silently producing a vec that is never scraped.
 func registerCounterVec(reg prometheus.Registerer, opts prometheus.CounterOpts, labels []string) *prometheus.CounterVec {
 	vec := prometheus.NewCounterVec(opts, labels)
 	if err := reg.Register(vec); err != nil {
@@ -128,12 +135,15 @@ func registerCounterVec(reg prometheus.Registerer, opts prometheus.CounterOpts, 
 			if existing, ok := already.ExistingCollector.(*prometheus.CounterVec); ok {
 				return existing
 			}
+		} else {
+			panic(fmt.Sprintf("go-rpc: registering counter metric %q: %v", opts.Name, err))
 		}
 	}
 	return vec
 }
 
-// registerHistogramVec is registerCounterVec's HistogramVec counterpart.
+// registerHistogramVec is registerCounterVec's HistogramVec counterpart —
+// same reuse-on-AlreadyRegistered, same fail-fast panic otherwise.
 func registerHistogramVec(reg prometheus.Registerer, opts prometheus.HistogramOpts, labels []string) *prometheus.HistogramVec {
 	vec := prometheus.NewHistogramVec(opts, labels)
 	if err := reg.Register(vec); err != nil {
@@ -142,6 +152,8 @@ func registerHistogramVec(reg prometheus.Registerer, opts prometheus.HistogramOp
 			if existing, ok := already.ExistingCollector.(*prometheus.HistogramVec); ok {
 				return existing
 			}
+		} else {
+			panic(fmt.Sprintf("go-rpc: registering histogram metric %q: %v", opts.Name, err))
 		}
 	}
 	return vec
@@ -149,7 +161,15 @@ func registerHistogramVec(reg prometheus.Registerer, opts prometheus.HistogramOp
 
 // NewCorrelationInterceptor propagates the caller's X-Correlation-Id header
 // (spec §8) or generates a new UUID when absent, stashes it in context for
-// CorrelationIDFromContext, and echoes it back on the response header.
+// CorrelationIDFromContext, and echoes it back on both success and error
+// responses. connect-go v1.20.0 guarantees resp is non-nil if and only if
+// err is nil, so a failed RPC has no response header to write to; on that
+// path the ID is instead attached to the error's own metadata via
+// (*connect.Error).Meta(), which connect-go surfaces to the caller as the
+// union of the response's HTTP headers and protocol-specific trailers. A
+// non-*connect.Error is wrapped with connect.NewError(connect.CodeOf(err),
+// err) — preserving its inferred code — purely so the ID has somewhere to
+// live; the wrapping does not change the code a caller observes.
 func NewCorrelationInterceptor() connect.Interceptor {
 	return connect.UnaryInterceptorFunc(func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
@@ -160,10 +180,18 @@ func NewCorrelationInterceptor() connect.Interceptor {
 			ctx = context.WithValue(ctx, correlationCtxKey{}, cid)
 
 			resp, err := next(ctx, req)
-			if resp != nil {
-				resp.Header().Set(correlationHeader, cid)
+			if err != nil {
+				var cerr *connect.Error
+				if !errors.As(err, &cerr) {
+					cerr = connect.NewError(connect.CodeOf(err), err)
+					cerr.Meta().Set(correlationHeader, cid)
+					return resp, cerr
+				}
+				cerr.Meta().Set(correlationHeader, cid)
+				return resp, err
 			}
-			return resp, err
+			resp.Header().Set(correlationHeader, cid)
+			return resp, nil
 		}
 	})
 }

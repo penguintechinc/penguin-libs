@@ -6,6 +6,8 @@ package server
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"runtime"
 	"strings"
@@ -16,6 +18,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
+
+	healthv1 "github.com/penguintechinc/penguin-libs/packages/go-rpc/gen/prpc/health/v1"
+	"github.com/penguintechinc/penguin-libs/packages/go-rpc/gen/prpc/health/v1/healthv1connect"
 )
 
 // --- Logging (salvaged from go-h3, ported green) ---
@@ -165,6 +170,49 @@ func TestMetricsInterceptor_DefaultsToDefaultRegisterer(t *testing.T) {
 	_ = NewMetricsInterceptor()
 }
 
+// erroringRegisterer is a prometheus.Registerer stub whose Register method
+// always fails with a caller-supplied, non-AlreadyRegisteredError — the
+// class of failure (e.g. a duplicate metric name with an incompatible label
+// set) that NewMetricsInterceptor must not swallow silently.
+type erroringRegisterer struct {
+	err error
+}
+
+func (r *erroringRegisterer) Register(prometheus.Collector) error {
+	return r.err
+}
+
+func (r *erroringRegisterer) MustRegister(...prometheus.Collector) {}
+
+func (r *erroringRegisterer) Unregister(prometheus.Collector) bool {
+	return false
+}
+
+// TestNewMetricsInterceptor_PanicsOnUnexpectedRegistrationError is the RED
+// test for Finding 2: a Registerer that fails with something other than
+// prometheus.AlreadyRegisteredError must not be swallowed into a silently
+// unregistered (never-scraped) vec — NewMetricsInterceptor must fail fast at
+// construction time instead.
+func TestNewMetricsInterceptor_PanicsOnUnexpectedRegistrationError(t *testing.T) {
+	reg := &erroringRegisterer{err: errors.New("boom: incompatible label set")}
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected NewMetricsInterceptor to panic on an unexpected registration error, but it returned normally")
+		}
+		msg, ok := r.(string)
+		if !ok {
+			t.Fatalf("panic value has type %T, want string (a clear message)", r)
+		}
+		if !strings.Contains(msg, "boom: incompatible label set") {
+			t.Errorf("panic message = %q, want it to contain the underlying registration error", msg)
+		}
+	}()
+
+	_ = NewMetricsInterceptor(reg)
+}
+
 // counterValue reads the value of a single Counter sample identified by
 // metric family name and exact label set from reg.
 func counterValue(t *testing.T, reg *prometheus.Registry, name string, labels map[string]string) float64 {
@@ -285,6 +333,141 @@ func TestCorrelationIDFromContext_Absent(t *testing.T) {
 	if id := CorrelationIDFromContext(context.Background()); id != "" {
 		t.Errorf("expected empty string for a context with no correlation id, got %q", id)
 	}
+}
+
+// TestCorrelationInterceptor_EchoesIDOnError is the RED test for Finding 1:
+// connect-go v1.20.0 guarantees resp is non-nil IFF err is nil, so the
+// original "if resp != nil { resp.Header().Set(...) }" never ran on the
+// error path and the correlation ID was silently dropped from failed RPCs.
+// This exercises the interceptor in-process (no wire round trip) and
+// inspects the *connect.Error's own Meta() — the mechanism connect-go uses
+// to carry response metadata on errors, since Error has no Header() method.
+func TestCorrelationInterceptor_EchoesIDOnError(t *testing.T) {
+	t.Run("propagates inbound id onto the error", func(t *testing.T) {
+		interceptor := NewCorrelationInterceptor()
+		wrapped := interceptor.WrapUnary(func(_ context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
+			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("bad input"))
+		})
+
+		req := connect.NewRequest(&struct{}{})
+		req.Header().Set(correlationHeader, "inbound-error-id")
+
+		_, err := wrapped(context.Background(), req)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		var cerr *connect.Error
+		if !errors.As(err, &cerr) {
+			t.Fatalf("expected *connect.Error, got %T: %v", err, err)
+		}
+		if got := cerr.Meta().Get(correlationHeader); got != "inbound-error-id" {
+			t.Errorf("error Meta()[%s] = %q, want %q", correlationHeader, got, "inbound-error-id")
+		}
+		if cerr.Code() != connect.CodeInvalidArgument {
+			t.Errorf("error code = %v, want CodeInvalidArgument (must be preserved)", cerr.Code())
+		}
+	})
+
+	t.Run("echoes a generated id when the request had none", func(t *testing.T) {
+		interceptor := NewCorrelationInterceptor()
+		var gotCtxID string
+		wrapped := interceptor.WrapUnary(func(ctx context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
+			gotCtxID = CorrelationIDFromContext(ctx)
+			return nil, connect.NewError(connect.CodeInternal, errors.New("boom"))
+		})
+
+		_, err := wrapped(context.Background(), connect.NewRequest(&struct{}{}))
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if gotCtxID == "" {
+			t.Fatal("expected a generated correlation id to be visible in the handler's context")
+		}
+		var cerr *connect.Error
+		if !errors.As(err, &cerr) {
+			t.Fatalf("expected *connect.Error, got %T: %v", err, err)
+		}
+		if got := cerr.Meta().Get(correlationHeader); got != gotCtxID {
+			t.Errorf("error Meta()[%s] = %q, want the generated id %q", correlationHeader, got, gotCtxID)
+		}
+	})
+
+	t.Run("wraps a non-connect error while preserving its code", func(t *testing.T) {
+		interceptor := NewCorrelationInterceptor()
+		plain := errors.New("not a connect error")
+		wrapped := interceptor.WrapUnary(func(_ context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
+			return nil, plain
+		})
+
+		req := connect.NewRequest(&struct{}{})
+		req.Header().Set(correlationHeader, "plain-error-id")
+
+		_, err := wrapped(context.Background(), req)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		var cerr *connect.Error
+		if !errors.As(err, &cerr) {
+			t.Fatalf("expected the interceptor to wrap the plain error into a *connect.Error, got %T: %v", err, err)
+		}
+		if cerr.Code() != connect.CodeOf(plain) {
+			t.Errorf("wrapped error code = %v, want %v (connect.CodeOf(plain), preserved)", cerr.Code(), connect.CodeOf(plain))
+		}
+		if got := cerr.Meta().Get(correlationHeader); got != "plain-error-id" {
+			t.Errorf("wrapped error Meta()[%s] = %q, want %q", correlationHeader, got, "plain-error-id")
+		}
+		if !errors.Is(err, plain) {
+			t.Error("expected the wrapped error to still unwrap to the original plain error")
+		}
+	})
+}
+
+// TestCorrelationInterceptor_EchoesIDOnError_WireLevel proves the fix
+// reaches real clients, not just the in-process *connect.Error value: it
+// stands up a real HTTP server (httptest) hosting the generated
+// HealthService handler with the correlation interceptor installed, drives
+// a real connect client against it over the wire, and asserts the
+// correlation ID surfaces in the client-observed error's Meta() — which
+// connect-go populates from the union of HTTP headers and protocol
+// trailers actually sent by the server (see connect.Error.Meta docs).
+func TestCorrelationInterceptor_EchoesIDOnError_WireLevel(t *testing.T) {
+	mux := http.NewServeMux()
+	path, handler := healthv1connect.NewHealthServiceHandler(
+		&failingHealthHandler{},
+		connect.WithInterceptors(NewCorrelationInterceptor()),
+	)
+	mux.Handle(path, handler)
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := healthv1connect.NewHealthServiceClient(srv.Client(), srv.URL)
+
+	req := connect.NewRequest(&healthv1.CheckRequest{Service: "wire-test"})
+	req.Header().Set(correlationHeader, "wire-level-id")
+
+	_, err := client.Check(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error from failingHealthHandler")
+	}
+	var cerr *connect.Error
+	if !errors.As(err, &cerr) {
+		t.Fatalf("expected *connect.Error from the wire, got %T: %v", err, err)
+	}
+	if got := cerr.Meta().Get(correlationHeader); got != "wire-level-id" {
+		t.Errorf("client-observed error Meta()[%s] = %q, want %q (must survive a real HTTP round trip)", correlationHeader, got, "wire-level-id")
+	}
+}
+
+// failingHealthHandler is a minimal healthv1connect.HealthServiceHandler
+// whose Check RPC always errors, used only to exercise the correlation
+// interceptor's error path over a real wire round trip.
+type failingHealthHandler struct {
+	healthv1connect.UnimplementedHealthServiceHandler
+}
+
+func (failingHealthHandler) Check(context.Context, *connect.Request[healthv1.CheckRequest]) (*connect.Response[healthv1.CheckResponse], error) {
+	return nil, connect.NewError(connect.CodeUnavailable, errors.New("service down"))
 }
 
 // --- Recovery ---
