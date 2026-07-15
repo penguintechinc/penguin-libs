@@ -530,18 +530,41 @@ func TestStart_H3ListenError(t *testing.T) {
 	}
 }
 
-// TestStart_HTTP3Disabled_OnlyH2Binds verifies the HTTP3_ENABLED kill-switch:
-// when H3Enabled=false via Config, Start() binds only H2 (not H3),
-// serves requests over H2, and leaves ListenAddr("h3") empty.
+// TestStart_HTTP3Disabled_OnlyH2Binds verifies the HTTP3_ENABLED operator
+// kill-switch end-to-end: env var -> ConfigFromEnv() -> Start(). With
+// HTTP3_ENABLED=false (and H3_ENABLED=true, so the kill-switch alone is
+// responsible), Start() binds only H2, serves real requests over it, and
+// leaves ListenAddr("h3") empty.
 func TestStart_HTTP3Disabled_OnlyH2Binds(t *testing.T) {
-	tlsCfg := mustSelfSignedTLSConfig(t)
-	cfg := Config{
-		H2Addr:      "127.0.0.1:0",
-		H2Enabled:   true,
-		H3Enabled:   false,
-		TLSConfig:   tlsCfg,
-		GracePeriod: 2 * time.Second,
+	t.Setenv("HTTP3_ENABLED", "false")
+	t.Setenv("H3_ENABLED", "true") // kill-switch must win over H3_ENABLED=true
+	t.Setenv("H2_ENABLED", "true")
+	// Neutralize ambient env that could alter ConfigFromEnv's output
+	// (envOrDefault uses os.LookupEnv, so "" safely fails the != "" guards).
+	t.Setenv("H2_PORT", "")
+	t.Setenv("H3_PORT", "")
+	t.Setenv("TLS_CERT_PATH", "")
+	t.Setenv("TLS_KEY_PATH", "")
+
+	cfg, err := ConfigFromEnv()
+	if err != nil {
+		t.Fatalf("ConfigFromEnv: %v", err)
 	}
+	if !cfg.H2Enabled {
+		t.Fatal("ConfigFromEnv: expected H2Enabled=true")
+	}
+	if cfg.H3Enabled {
+		t.Fatal("ConfigFromEnv: expected H3Enabled=false from HTTP3_ENABLED=false kill-switch")
+	}
+
+	// Override only what test viability requires — never H3Enabled, which
+	// must come from the env path above. ConfigFromEnv only accepts ports
+	// (":"+H2_PORT), and a bare ":0" binds all interfaces including IPv6,
+	// which the self-signed loopback cert does not cover.
+	tlsCfg := mustSelfSignedTLSConfig(t)
+	cfg.H2Addr = "127.0.0.1:0"
+	cfg.TLSConfig = tlsCfg
+	cfg.GracePeriod = 2 * time.Second
 
 	srv, err := New(cfg, zap.NewNop())
 	if err != nil {
