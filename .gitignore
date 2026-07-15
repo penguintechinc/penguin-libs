@@ -67,3 +67,6 @@ pubspec.lock
 # git
 .egg-info/
 packages/**/*.egg-info/
+
+# Rust
+packages/rust-rpc/target/
