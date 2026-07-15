@@ -26,7 +26,22 @@ type Config struct {
 	BaseURL string
 	// Lanes is the ordered lane preference list. New() defaults this to
 	// [LaneH3, LaneH2] when empty. Including LaneZiti causes New() to return
-	// ErrLaneUnavailable — Phase 1 does not implement the Ziti lane.
+	// ErrLaneUnavailable — Phase 1 does not implement the Ziti lane. Any
+	// value other than LaneH3 or LaneH2 also causes New() to return an
+	// error.
+	//
+	// Lanes is NOT by itself a hard boundary against H3 traffic: New()
+	// always constructs both the H2 and H3 transports regardless of Lanes
+	// (see newLaneRouter's doc), and when Alt-Svc upgrade is enabled (the
+	// default — see DisableAltSvcUpgrade) a same-origin Alt-Svc
+	// advertisement can still promote LaneH3 into the active order for
+	// future requests even if the operator configured Lanes: []Lane{LaneH2}
+	// alone. The same-origin check pins WHICH host can ever be dialed, but
+	// it does not stop H3 (UDP/QUIC) from being attempted at all.
+	// Operators who must hard-disable H3 — for example because UDP is
+	// blocked on the network path and a QUIC handshake attempt would waste
+	// a dial timeout on every upgrade — should set BOTH
+	// DisableAltSvcUpgrade: true AND omit LaneH3 from Lanes.
 	Lanes []Lane
 	// TLSConfig is the base TLS configuration. New() forces MinVersion to
 	// tls.VersionTLS13 regardless of the value supplied here (mutating the
@@ -40,24 +55,37 @@ type Config struct {
 	// IdleTimeout bounds how long an idle connection is retained. New()
 	// defaults this to 90s when zero or negative.
 	IdleTimeout time.Duration
-	// AltSvcUpgrade controls whether an Alt-Svc response header advertising
-	// h3, observed on a response served over HTTP/2, promotes the H3 lane
-	// for future requests. Unlike Lanes/DialTimeout/IdleTimeout, New() does
-	// NOT override a caller-supplied zero value (false) for this field —
-	// its "default true" is realized only via DefaultClientConfig(), the
-	// same convention server.Config uses for H2Enabled/H3Enabled.
-	AltSvcUpgrade bool
+	// DisableAltSvcUpgrade, when true, disables the Alt-Svc upgrade
+	// behavior: by default (zero value, false) an Alt-Svc response header
+	// advertising h3, observed on a response served over HTTP/2, promotes
+	// the H3 lane for future requests, subject to the same-origin check in
+	// resolveAltSvcAuthority (an advertisement naming a different host
+	// than the request is always ignored, regardless of this flag).
+	//
+	// This field is inverted relative to Lanes/DialTimeout/IdleTimeout —
+	// which New() force-defaults away from their Go zero values — because
+	// a plain bool cannot distinguish "caller left AltSvcUpgrade unset" from
+	// "caller explicitly disabled it": both are false. Naming the field for
+	// its off-state means the zero value (false) already means "enabled",
+	// so a Config{} zero value and DefaultClientConfig() agree with no
+	// special-casing required in New().
+	//
+	// See the Lanes field doc for why Lanes alone is not a hard boundary
+	// against H3: DisableAltSvcUpgrade must be combined with omitting
+	// LaneH3 from Lanes to fully prevent H3 activation (e.g. when UDP is
+	// blocked on the network path).
+	DisableAltSvcUpgrade bool
 }
 
 // DefaultClientConfig returns a Config with sensible defaults: both lanes
 // enabled in H3-preferred order, a 5s dial timeout, a 90s idle timeout, and
-// Alt-Svc upgrade enabled. BaseURL and TLSConfig are left unset — callers
-// must supply BaseURL; TLSConfig defaults to the system trust store.
+// Alt-Svc upgrade enabled (DisableAltSvcUpgrade left at its zero value,
+// false). BaseURL and TLSConfig are left unset — callers must supply
+// BaseURL; TLSConfig defaults to the system trust store.
 func DefaultClientConfig() Config {
 	return Config{
-		Lanes:         []Lane{LaneH3, LaneH2},
-		DialTimeout:   defaultDialTimeout,
-		IdleTimeout:   defaultIdleTimeout,
-		AltSvcUpgrade: true,
+		Lanes:       []Lane{LaneH3, LaneH2},
+		DialTimeout: defaultDialTimeout,
+		IdleTimeout: defaultIdleTimeout,
 	}
 }

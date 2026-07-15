@@ -32,6 +32,19 @@ func TestNew_RejectsLaneZiti(t *testing.T) {
 	}
 }
 
+// TestNew_RejectsUnknownLane is the RED/GREEN regression test for Fix 3:
+// before the fix, an unrecognized lane string silently passed New()'s
+// validation (only LaneZiti was checked) and any request would eventually
+// hit laneRouter.RoundTrip's no-matching-transport path, which used to
+// return (nil, nil) -- a guaranteed nil-pointer panic for any caller that
+// checks err before touching resp (the standard net/http contract).
+func TestNew_RejectsUnknownLane(t *testing.T) {
+	_, err := New(Config{Lanes: []Lane{"h4"}}, zap.NewNop())
+	if err == nil {
+		t.Fatal("expected an error for an unrecognized lane, got nil")
+	}
+}
+
 func TestNew_DefaultsEmptyLanesToH3ThenH2(t *testing.T) {
 	c, err := New(Config{}, zap.NewNop())
 	if err != nil {
@@ -89,6 +102,33 @@ func TestNew_NilTLSConfig_DefaultsToTLS13(t *testing.T) {
 	}
 	if c.cfg.TLSConfig.MinVersion != tls.VersionTLS13 {
 		t.Errorf("MinVersion = %d, want tls.VersionTLS13", c.cfg.TLSConfig.MinVersion)
+	}
+}
+
+// TestNew_AltSvcUpgrade_EnabledByDefault covers Fix 4: Config{}'s zero
+// value for DisableAltSvcUpgrade (false) must propagate as an ENABLED
+// Alt-Svc upgrade in the router, matching DefaultClientConfig()'s documented
+// "default true" behavior.
+func TestNew_AltSvcUpgrade_EnabledByDefault(t *testing.T) {
+	c, err := New(Config{}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if !c.router.altSvcUpgrade {
+		t.Error("router.altSvcUpgrade = false, want true (DisableAltSvcUpgrade zero value is false = enabled)")
+	}
+}
+
+// TestNew_DisableAltSvcUpgrade_PropagatesToRouter covers Fix 4: explicitly
+// setting DisableAltSvcUpgrade: true must disable the router's Alt-Svc
+// upgrade behavior.
+func TestNew_DisableAltSvcUpgrade_PropagatesToRouter(t *testing.T) {
+	c, err := New(Config{DisableAltSvcUpgrade: true}, zap.NewNop())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if c.router.altSvcUpgrade {
+		t.Error("router.altSvcUpgrade = true, want false when Config.DisableAltSvcUpgrade is true")
 	}
 }
 

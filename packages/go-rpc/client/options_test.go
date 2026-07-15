@@ -20,8 +20,8 @@ func TestDefaultClientConfig(t *testing.T) {
 	if cfg.IdleTimeout != 90*time.Second {
 		t.Errorf("IdleTimeout = %v, want 90s", cfg.IdleTimeout)
 	}
-	if !cfg.AltSvcUpgrade {
-		t.Error("AltSvcUpgrade = false, want true")
+	if cfg.DisableAltSvcUpgrade {
+		t.Error("DisableAltSvcUpgrade = true, want false (Alt-Svc upgrade enabled by default)")
 	}
 	if cfg.TLSConfig != nil {
 		t.Error("TLSConfig should be left nil by DefaultClientConfig (system trust store default)")

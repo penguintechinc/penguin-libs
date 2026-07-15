@@ -207,12 +207,12 @@ func TestClient_AltSvcUpgrade_PromotesH3ForFutureRequests(t *testing.T) {
 
 	pool := certPoolFromTLSConfig(t, tlsCfg)
 	// Client only knows about the H2 lane up front — mirrors the brief's
-	// "client on [LaneH2] order" TDD variant.
+	// "client on [LaneH2] order" TDD variant. AltSvcUpgrade is left at its
+	// default (DisableAltSvcUpgrade: false, i.e. enabled).
 	c, err := New(Config{
-		BaseURL:       "https://" + h2Addr,
-		TLSConfig:     &tls.Config{RootCAs: pool},
-		Lanes:         []Lane{LaneH2},
-		AltSvcUpgrade: true,
+		BaseURL:   "https://" + h2Addr,
+		TLSConfig: &tls.Config{RootCAs: pool},
+		Lanes:     []Lane{LaneH2},
 	}, zap.NewNop())
 	if err != nil {
 		t.Fatalf("New: %v", err)

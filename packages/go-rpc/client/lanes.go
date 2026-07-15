@@ -4,6 +4,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -124,6 +125,20 @@ func newLaneRouter(order []Lane, transports map[Lane]http.RoundTripper, altSvcUp
 // its body via GetBody. If the request carries a body with no GetBody, the
 // first failure is returned immediately rather than silently retried on
 // another lane with a stale/consumed body.
+//
+// A caller context cancellation/deadline is never treated as a lane
+// failure: if req.Context().Err() is set, or the transport error is (or
+// wraps) context.Canceled/context.DeadlineExceeded, that error is returned
+// immediately without marking the lane failed or attempting another lane —
+// the caller gave up, the transport didn't. Only genuine transport/dial
+// errors mark a lane and fail over.
+//
+// RoundTrip never returns (nil, nil): http.RoundTripper's contract (and
+// every caller built on it, including connect-go and net/http itself)
+// dereferences the response whenever err == nil, so returning a nil
+// response with a nil error is a guaranteed nil-pointer panic. If the
+// attempt loop completes without ever finding a matching transport for any
+// configured lane, an explicit error is returned instead of a nil lastErr.
 func (r *laneRouter) RoundTrip(req *http.Request) (*http.Response, error) {
 	order := r.attemptOrder()
 	if len(order) == 0 {
@@ -155,8 +170,17 @@ func (r *laneRouter) RoundTrip(req *http.Request) (*http.Response, error) {
 			return resp, nil
 		}
 
+		if req.Context().Err() != nil ||
+			errors.Is(roundTripErr, context.Canceled) ||
+			errors.Is(roundTripErr, context.DeadlineExceeded) {
+			return nil, roundTripErr
+		}
+
 		r.markFailed(lane)
 		lastErr = fmt.Errorf("lane %s: %w", lane, roundTripErr)
+	}
+	if lastErr == nil {
+		lastErr = errors.New("client: no lane attempted (no matching transport for any configured lane)")
 	}
 	return nil, lastErr
 }
@@ -271,7 +295,8 @@ func (r *laneRouter) maybeRetry(lane Lane) {
 // onSuccess records lane as the last-successful lane, clears its cooldown
 // (a successful round trip proves it is no longer failing, even if it was
 // only attempted as a cooling last resort), and — for H2 successes with
-// AltSvcUpgrade enabled — checks the response for an Alt-Svc hint.
+// Alt-Svc upgrade enabled (Config.DisableAltSvcUpgrade is false) — checks
+// the response for an Alt-Svc hint.
 func (r *laneRouter) onSuccess(lane Lane, resp *http.Response) {
 	if st, ok := r.state[lane]; ok {
 		st.mu.Lock()
@@ -286,7 +311,13 @@ func (r *laneRouter) onSuccess(lane Lane, resp *http.Response) {
 }
 
 // maybeUpgradeFromAltSvc inspects resp's Alt-Svc header(s) for an h3 entry
-// and, if found, promotes LaneH3 for future requests via promote.
+// and, if its authority passes the same-origin check in
+// resolveAltSvcAuthority, promotes LaneH3 for future requests via promote.
+// An advertisement naming a different host than the request is ignored
+// entirely — no promotion, no error, just a debug log — since a server (or
+// an on-path attacker able to inject/modify response headers) must never
+// be able to redirect the client's future traffic to a host the caller
+// didn't configure via BaseURL.
 func (r *laneRouter) maybeUpgradeFromAltSvc(resp *http.Response) {
 	reqHost := ""
 	if resp.Request != nil && resp.Request.URL != nil {
@@ -297,7 +328,15 @@ func (r *laneRouter) maybeUpgradeFromAltSvc(resp *http.Response) {
 		if authority == "" {
 			continue
 		}
-		r.promote(LaneH3, resolveAltSvcAuthority(reqHost, authority))
+		resolved := resolveAltSvcAuthority(reqHost, authority)
+		if resolved == "" {
+			if r.logger != nil {
+				r.logger.Debug("alt-svc upgrade: ignoring cross-host advertisement",
+					zap.String("advertised_authority", authority), zap.String("request_host", reqHost))
+			}
+			return
+		}
+		r.promote(LaneH3, resolved)
 		return
 	}
 }
@@ -370,16 +409,38 @@ func parseAltSvcH3(value string) string {
 	return ""
 }
 
-// resolveAltSvcAuthority resolves an Alt-Svc authority (which may be a
-// bare ":port" meaning "same host, different port") against reqHost into a
-// full host:port suitable for http.Request.URL.Host.
+// resolveAltSvcAuthority resolves an Alt-Svc authority against reqHost into
+// a full host:port suitable for http.Request.URL.Host, enforcing a
+// same-origin rule: only a host the caller already configured (via
+// BaseURL) may ever be dialed as a result of a server-supplied header.
+//
+// Two shapes are accepted:
+//   - a bare ":port" (same host, alternate UDP port) — always accepted,
+//     resolved against reqHost's host.
+//   - an explicit "host:port" whose host matches reqHost's host
+//     case-insensitively — accepted as-is.
+//
+// Any other authority — most importantly one naming a different host — is
+// rejected by returning "", which the caller (maybeUpgradeFromAltSvc)
+// treats as "ignore this advertisement entirely, do not promote".
 func resolveAltSvcAuthority(reqHost, altSvcAuthority string) string {
+	reqHostOnly := reqHost
+	if h, _, err := net.SplitHostPort(reqHost); err == nil {
+		reqHostOnly = h
+	}
+
 	if strings.HasPrefix(altSvcAuthority, ":") {
-		host := reqHost
-		if h, _, err := net.SplitHostPort(reqHost); err == nil {
-			host = h
-		}
-		return host + altSvcAuthority
+		return reqHostOnly + altSvcAuthority
+	}
+
+	advHostOnly, _, err := net.SplitHostPort(altSvcAuthority)
+	if err != nil {
+		// Malformed authority (e.g. missing port) — reject rather than
+		// guess.
+		return ""
+	}
+	if !strings.EqualFold(advHostOnly, reqHostOnly) {
+		return ""
 	}
 	return altSvcAuthority
 }

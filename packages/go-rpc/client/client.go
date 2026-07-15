@@ -27,15 +27,22 @@ type Client struct {
 
 // New creates a Client from cfg. Lanes defaults to [LaneH3, LaneH2] when
 // empty; DialTimeout/IdleTimeout default per DefaultClientConfig's values
-// when zero or negative. If cfg.Lanes includes LaneZiti, New returns
-// ErrLaneUnavailable — Phase 1 does not implement that lane. TLSConfig's
-// MinVersion is forced to tls.VersionTLS13 regardless of the value supplied
-// (mutating the caller's pointer in place when non-nil, mirroring
-// server.New()'s behavior), per spec §3.
+// when zero or negative. Every entry in a non-empty cfg.Lanes is validated:
+// LaneZiti causes New to return ErrLaneUnavailable (Phase 1 does not
+// implement that lane), and any value that is not LaneH3 or LaneH2 causes
+// New to return an "unknown lane" error — this keeps an invalid lane
+// string from ever reaching laneRouter.RoundTrip, where it would otherwise
+// silently match no transport. TLSConfig's MinVersion is forced to
+// tls.VersionTLS13 regardless of the value supplied (mutating the caller's
+// pointer in place when non-nil, mirroring server.New()'s behavior), per
+// spec §3.
 func New(cfg Config, logger *zap.Logger) (*Client, error) {
 	for _, lane := range cfg.Lanes {
 		if lane == LaneZiti {
 			return nil, ErrLaneUnavailable
+		}
+		if lane != LaneH3 && lane != LaneH2 {
+			return nil, fmt.Errorf("client: unknown lane %q", lane)
 		}
 	}
 
@@ -92,7 +99,7 @@ func New(cfg Config, logger *zap.Logger) (*Client, error) {
 		LaneH3: h3Transport,
 	}
 
-	router := newLaneRouter(cfg.Lanes, transports, cfg.AltSvcUpgrade, logger)
+	router := newLaneRouter(cfg.Lanes, transports, !cfg.DisableAltSvcUpgrade, logger)
 
 	return &Client{
 		cfg:    cfg,
@@ -111,7 +118,12 @@ func (c *Client) HTTPClient() *http.Client {
 
 // Protocol returns the last lane a request succeeded on ("h3" or "h2"). If
 // no request has succeeded yet, it reports the currently preferred
-// (first non-cooling) lane instead, or "" if no lane is configured.
+// (first non-cooling) lane instead, or "" if no lane is configured. This
+// pre-first-request fallback is a go-rpc extension beyond a strict "last
+// successful lane" definition: it is a best-effort preference report only
+// (per-request lane selection can still fail over to a different lane at
+// RoundTrip time), not a guarantee of which lane the next request will
+// actually use.
 func (c *Client) Protocol() string {
 	if lane, ok := c.router.lastSuccessLane(); ok {
 		return string(lane)
