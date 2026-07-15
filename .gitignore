@@ -34,9 +34,13 @@ yarn-error.log*
 # Python
 __pycache__/
 *.pyc
+.venv/
+packages/**/.venv/
 
 # Testing
 coverage/
+.coverage
+.coverage.*
 .nyc_output/
 
 # Package manager locks (keep package-lock.json)
