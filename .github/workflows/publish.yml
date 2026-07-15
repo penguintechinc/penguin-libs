@@ -789,7 +789,11 @@ jobs:
   publish-rust-rpc:
     name: Publish Rust RPC
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/rust-rpc-v')
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      (github.event.inputs.package == 'rust-rpc' || github.event.inputs.package == 'all') ||
+      startsWith(github.ref, 'refs/tags/rust-rpc-v') ||
+      startsWith(github.ref, 'refs/tags/v')
     permissions:
       id-token: write
       contents: read
