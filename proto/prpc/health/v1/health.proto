@@ -1,0 +1,19 @@
+syntax = "proto3";
+package prpc.health.v1;
+
+// HealthService reports serving status per pRPC §8 (Operational Conventions).
+service HealthService {
+  rpc Check(CheckRequest) returns (CheckResponse) {}
+  rpc Watch(CheckRequest) returns (stream CheckResponse) {}
+}
+message CheckRequest {
+  string service = 1; // empty = whole-process health
+}
+message CheckResponse {
+  ServingStatus status = 1;
+}
+enum ServingStatus {
+  SERVING_STATUS_UNSPECIFIED = 0;
+  SERVING_STATUS_SERVING = 1;
+  SERVING_STATUS_NOT_SERVING = 2;
+}
