@@ -4,7 +4,6 @@
 package client
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -127,11 +126,19 @@ func newLaneRouter(order []Lane, transports map[Lane]http.RoundTripper, altSvcUp
 // another lane with a stale/consumed body.
 //
 // A caller context cancellation/deadline is never treated as a lane
-// failure: if req.Context().Err() is set, or the transport error is (or
-// wraps) context.Canceled/context.DeadlineExceeded, that error is returned
-// immediately without marking the lane failed or attempting another lane —
-// the caller gave up, the transport didn't. Only genuine transport/dial
-// errors mark a lane and fail over.
+// failure: if req.Context().Err() is set, that error is returned immediately
+// without marking the lane failed or attempting another lane — the caller
+// gave up, the transport didn't. req.Context().Err() is the ONLY correct
+// discriminator for this: matching on the transport error's shape (e.g.
+// errors.Is(roundTripErr, context.DeadlineExceeded)) over-matches, because
+// net.Dialer.DialContext derives its OWN internal deadline from the
+// configured dial timeout and returns an error wrapping
+// context.DeadlineExceeded even when the caller's context was never
+// touched — that is a genuine transport failure, not caller cancellation,
+// and must still mark the lane failed and fail over. Only
+// req.Context().Err() reliably answers "did the caller give up", because
+// context cancellation always sets Err() before unblocking any
+// caller-observable operation.
 //
 // RoundTrip never returns (nil, nil): http.RoundTripper's contract (and
 // every caller built on it, including connect-go and net/http itself)
@@ -170,9 +177,13 @@ func (r *laneRouter) RoundTrip(req *http.Request) (*http.Response, error) {
 			return resp, nil
 		}
 
-		if req.Context().Err() != nil ||
-			errors.Is(roundTripErr, context.Canceled) ||
-			errors.Is(roundTripErr, context.DeadlineExceeded) {
+		if req.Context().Err() != nil {
+			// Caller cancelled or the caller's deadline elapsed — not a
+			// lane fault. When req.Context().Err() == nil, ANY error is a
+			// genuine transport failure and MUST mark+failover, even one
+			// that wraps context.DeadlineExceeded (that is a
+			// transport-internal dial timeout, e.g. net.Dialer.DialContext,
+			// not caller cancellation).
 			return nil, roundTripErr
 		}
 
@@ -430,7 +441,13 @@ func resolveAltSvcAuthority(reqHost, altSvcAuthority string) string {
 	}
 
 	if strings.HasPrefix(altSvcAuthority, ":") {
-		return reqHostOnly + altSvcAuthority
+		// net.JoinHostPort brackets an IPv6 reqHostOnly (e.g. "2001:db8::1")
+		// correctly ("[2001:db8::1]:8443"). Naive concatenation
+		// (reqHostOnly + altSvcAuthority) produces an unbracketed
+		// "2001:db8::1:8443", which net.SplitHostPort rejects as "too many
+		// colons" — breaking every subsequent H3 dial against an IPv6
+		// origin.
+		return net.JoinHostPort(reqHostOnly, strings.TrimPrefix(altSvcAuthority, ":"))
 	}
 
 	advHostOnly, _, err := net.SplitHostPort(altSvcAuthority)

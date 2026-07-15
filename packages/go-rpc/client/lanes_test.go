@@ -6,7 +6,9 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -185,6 +187,38 @@ func TestResolveAltSvcAuthority(t *testing.T) {
 	}
 	if got := resolveAltSvcAuthority("127.0.0.1:8080", "attacker.evil.example:9999"); got != "" {
 		t.Errorf("cross-host: got %q, want \"\" (advertisement must be ignored)", got)
+	}
+}
+
+// TestResolveAltSvcAuthority_IPv6_BarePort_ReBrackets is the RED/GREEN
+// regression test for the Important IPv6 correctness bug: a bare ":port"
+// Alt-Svc advertisement resolved against an IPv6 request host must produce
+// a bracketed, net.SplitHostPort-parseable authority. Before the fix, the
+// bare-port branch built the authority via naive string concatenation
+// (reqHostOnly + altSvcAuthority), which for reqHostOnly "2001:db8::1"
+// produced "2001:db8::1:8443" — not a valid authority (net.SplitHostPort
+// rejects it with "too many colons") — so every subsequent H3 dial against
+// an IPv6 origin failed, cooled down, and looped.
+func TestResolveAltSvcAuthority_IPv6_BarePort_ReBrackets(t *testing.T) {
+	got := resolveAltSvcAuthority("[2001:db8::1]:443", ":8443")
+	want := "[2001:db8::1]:8443"
+	if got != want {
+		t.Fatalf("resolveAltSvcAuthority() = %q, want %q", got, want)
+	}
+	if _, _, err := net.SplitHostPort(got); err != nil {
+		t.Fatalf("resolved authority %q is not net.SplitHostPort-parseable: %v", got, err)
+	}
+}
+
+// TestResolveAltSvcAuthority_IPv6_CrossHost_Rejected proves the
+// net.JoinHostPort construction used for Fix B did not weaken the
+// same-origin security check: an explicit IPv6 authority naming a DIFFERENT
+// host must still be rejected, exactly as the IPv4/hostname cross-host case
+// already is.
+func TestResolveAltSvcAuthority_IPv6_CrossHost_Rejected(t *testing.T) {
+	got := resolveAltSvcAuthority("[2001:db8::1]:443", "[2001:db8::2]:8443")
+	if got != "" {
+		t.Fatalf("resolveAltSvcAuthority() = %q, want \"\" (cross-host IPv6 advertisement must be rejected)", got)
 	}
 }
 
@@ -392,6 +426,63 @@ func TestLaneRouter_ContextCanceled_NoFailoverNoCooldown(t *testing.T) {
 	}
 	if r.isCooling(LaneH3) {
 		t.Error("LaneH3 must not be marked cooling after a context-cancellation error")
+	}
+}
+
+// TestLaneRouter_DialTimeout_ShapedError_StillFailsOver is the RED/GREEN
+// regression test for the Critical over-broad-discriminator bug: a
+// transport error that WRAPS context.DeadlineExceeded — exactly the shape
+// net.Dialer.DialContext returns when its own internal dial timeout fires
+// (see client.go) — must still mark the lane failed and fail over to the
+// next lane, PROVIDED the caller's own request context was never canceled
+// or deadlined (req.Context().Err() == nil here; the request uses
+// context.Background() implicitly). Before the fix, matching on
+// errors.Is(roundTripErr, context.DeadlineExceeded) misclassified this as
+// caller cancellation and returned the dial-timeout error immediately
+// without marking LaneH3 failed or attempting LaneH2 — defeating failover
+// for the most common H3 failure mode (a black-holed/unreachable UDP path),
+// and letting anyone who blocks the H3 UDP path suppress H2 failover
+// entirely. The existing failover test
+// (TestLaneRouter_FailsOverAndRewindsBody) only used a plain errors.New, so
+// it never exercised this path.
+func TestLaneRouter_DialTimeout_ShapedError_StillFailsOver(t *testing.T) {
+	var h3Calls, h2Calls int
+	h3RT := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		h3Calls++
+		// Shaped exactly like net.Dialer.DialContext's own internal dial
+		// timeout: wraps context.DeadlineExceeded even though nobody
+		// touched the caller's context.
+		return nil, fmt.Errorf("dial tcp 10.0.0.1:443: %w", context.DeadlineExceeded)
+	})
+	h2RT := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		h2Calls++
+		return okResponse(req, "ok"), nil
+	})
+
+	r := newLaneRouter([]Lane{LaneH3, LaneH2}, map[Lane]http.RoundTripper{LaneH3: h3RT, LaneH2: h2RT}, false, zap.NewNop())
+
+	// A plain request with no cancellation/deadline: req.Context().Err()
+	// must be nil throughout this RoundTrip.
+	req, err := http.NewRequest(http.MethodGet, "https://example.test/rpc", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+
+	resp, err := r.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("RoundTrip: %v, want success via failover to LaneH2", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("StatusCode = %d, want 200", resp.StatusCode)
+	}
+	if h3Calls != 1 {
+		t.Errorf("h3Calls = %d, want 1", h3Calls)
+	}
+	if h2Calls != 1 {
+		t.Errorf("h2Calls = %d, want 1 (must fail over from a DeadlineExceeded-shaped dial error when the caller's context was never canceled)", h2Calls)
+	}
+	if !r.isCooling(LaneH3) {
+		t.Error("expected LaneH3 to be marked cooling after a genuine dial-timeout transport error")
 	}
 }
 
