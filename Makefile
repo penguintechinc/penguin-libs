@@ -1,6 +1,6 @@
 # === Development Targets ===
 
-.PHONY: lint test security build pre-commit install-tools install-hooks prpc-proto prpc-generate prpc-generate-check
+.PHONY: lint test security build pre-commit install-tools install-hooks prpc-proto prpc-generate prpc-generate-check prpc-integration
 
 build: ## Build/compile all packages
 	@echo "=== Building Go packages ==="
@@ -74,6 +74,9 @@ prpc-generate: ## Regenerate Go stubs for prpc/* protos into packages/go-rpc/gen
 prpc-generate-check: prpc-generate ## CI drift gate: fail if checked-in go-rpc stubs are stale
 	git add -N packages/go-rpc/gen/
 	git diff --exit-code packages/go-rpc/gen/
+
+prpc-integration: ## Run cross-lane integration tests for go-rpc (real sockets, build tag: integration)
+	cd packages/go-rpc && go test -race -tags=integration ./integration/...
 
 pre-commit: build lint security test ## Run full pre-commit gate
 	@echo "=== All checks passed ==="

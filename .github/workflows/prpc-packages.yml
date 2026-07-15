@@ -140,7 +140,30 @@ jobs:
           cargo install cargo-deny --version 0.18.9 --locked
           cargo deny check
 
-  # NOTE: Cross-language integration job (mirroring h3-packages.yml's
-  # integration-test job — building the Go server, exercising it from the
-  # Python client, etc.) is intentionally deferred to Phase 1, once the first
-  # pRPC server implementation exists. Do not add a placeholder job here.
+  integration-go:
+    name: Integration Test (Go, cross-lane)
+    needs: [proto-lint]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/go-rpc
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: '1.25'
+      - name: Integration Test
+        run: go test -race -tags=integration ./integration/...
+
+  codegen-check:
+    name: Codegen Drift Check
+    needs: [proto-lint]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: '1.25'
+      - uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
+      - name: Codegen drift check
+        run: make prpc-generate-check
