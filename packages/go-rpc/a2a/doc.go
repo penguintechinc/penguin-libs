@@ -28,11 +28,42 @@
 // # Authentication
 //
 // The agent card is unauthenticated discovery by design (spec/SPEC.md §7)
-// — Mount serves it to any caller. The JSON-RPC endpoint is not: per
-// spec/SPEC.md §7 it MUST inherit the server's standard transport (§3) and
-// zero-trust identity/auth profile (§6) unchanged, so anonymous A2A task
-// requests MUST be rejected the same as any other pRPC procedure. Mount
-// applies no authentication itself — callers wrap mux (or the handler chain
-// serving it) with the same interceptor/middleware stack used for every
-// other pRPC endpoint (see the auth package) before serving it.
+// — Mount serves it to any caller, unwrapped, always. The JSON-RPC endpoint
+// is different: per spec/SPEC.md §7 it MUST inherit the server's standard
+// transport (§3) and zero-trust identity/auth profile (§6) unchanged, and
+// anonymous A2A task requests MUST NOT be permitted.
+//
+// handler, as Mount receives and installs it, is a raw http.Handler mounted
+// directly on mux at JSONRPCPath via mux.Handle — it is not a generated
+// connect.Handler and it sits entirely outside any connect.WithInterceptors
+// chain, including the one auth.Interceptors builds. Connect interceptors
+// only run inside a generated Connect handler constructor; they cannot wrap
+// an arbitrary http.Handler registered on the same mux, so
+// auth.Interceptors' output has no effect at all on a request to /a2a.
+//
+// To satisfy spec §7, wrap mux — or, to leave the public agent-card route
+// unaffected, wrap only handler before passing it to Mount — with
+// auth.HTTPMiddleware, the net/http-level primitive built for exactly this
+// case (handlers outside the Connect interceptor chain):
+//
+//	mw, err := auth.HTTPMiddleware(auth.HTTPConfig{
+//		Mode: auth.ModeOIDC,
+//		OIDC: relyingParty,
+//	})
+//	if err != nil {
+//		// handle error
+//	}
+//	if err := a2a.Mount(mux, cardBytes, mw(jsonRPCHandler)); err != nil {
+//		// handle error
+//	}
+//	// WellKnownAgentCardPath was registered with the unwrapped mux.Handle
+//	// call inside Mount and stays public; only jsonRPCHandler is wrapped.
+//
+// Mount applies no authentication itself, to either route: wiring
+// auth.HTTPMiddleware around the JSON-RPC handler (or the whole mux) is the
+// caller's responsibility. Passing an unwrapped handler to Mount, or
+// serving Mount's mux without wrapping it first, serves /a2a's JSON-RPC
+// endpoint to anonymous callers — a direct violation of spec §7 — even
+// though the agent card at WellKnownAgentCardPath is correctly public
+// either way.
 package a2a

@@ -20,11 +20,15 @@ const Path = "/mcp"
 // go-sdk. The same server instance answers every session — the SDK's
 // getServer callback simply returns it on each request, which its own docs
 // call an explicitly supported use ("It is OK for getServer to return the
-// same server multiple times"). Mount installs no authentication of its
-// own; per spec/SPEC.md §7 the caller is responsible for wrapping mux (or
-// the handler chain serving it) with the same zero-trust middleware used
-// for every other pRPC endpoint, so /mcp inherits identity/auth unchanged.
-// Mount rejects a nil mux or nil server with an error instead of a panic.
+// same server multiple times").
+//
+// Mount installs no authentication of its own, and the handler it installs
+// is a raw http.Handler that sits outside any Connect interceptor chain —
+// auth.Interceptors' output has no effect on it. Per spec/SPEC.md §7 the
+// caller MUST wrap mux (or this handler specifically) with
+// auth.HTTPMiddleware before serving, or /mcp is reachable anonymously; see
+// doc.go for the full rationale and a usage sketch. Mount rejects a nil mux
+// or nil server with an error instead of a panic.
 func Mount(mux *http.ServeMux, server *mcpsdk.Server) error {
 	if mux == nil {
 		return errors.New("mcp: Mount requires a non-nil mux")

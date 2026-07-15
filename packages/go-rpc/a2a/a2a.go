@@ -29,9 +29,13 @@ const JSONRPCPath = "/a2a"
 // discovery per spec/SPEC.md §7) and mounts handler — the A2A JSON-RPC
 // endpoint — at JSONRPCPath. card MUST be non-empty, valid JSON; Mount
 // returns an error, never panics, for a nil mux, nil handler, or invalid
-// card. Mount applies no authentication to handler itself: see the package
-// doc comment ("Authentication") for the shared zero-trust chain this
-// endpoint is expected to inherit.
+// card. Mount applies no authentication to handler itself and has no way
+// to: handler is a raw http.Handler outside any Connect interceptor chain,
+// so auth.Interceptors cannot cover it. Callers MUST wrap handler (or mux)
+// with auth.HTTPMiddleware before passing it in, or /a2a's JSON-RPC
+// endpoint serves anonymous callers in violation of spec/SPEC.md §7 — see
+// the package doc comment ("Authentication") for the full rationale and a
+// usage sketch.
 func Mount(mux *http.ServeMux, card []byte, handler http.Handler) error {
 	if mux == nil {
 		return errors.New("a2a: Mount requires a non-nil mux")
@@ -66,7 +70,17 @@ func Mount(mux *http.ServeMux, card []byte, handler http.Handler) error {
 // hold the official go-sdk's typed a2a.AgentCard and a2asrv.RequestHandler
 // rather than raw bytes: it marshals card to JSON and builds the JSON-RPC
 // handler via a2asrv.NewJSONRPCHandler(requestHandler, opts...), then
-// mounts both through Mount, preserving Mount's path and auth contracts.
+// mounts both through Mount, preserving Mount's path and (lack of) auth
+// contract — see Mount's doc comment.
+//
+// Because MountAgent builds the http.Handler internally, there is no
+// handler argument left for a caller to pre-wrap with auth.HTTPMiddleware
+// the way Mount's own usage sketch does. Callers needing auth on the
+// JSON-RPC endpoint (i.e. every production deployment, per spec/SPEC.md §7)
+// should call Mount directly with a2asrv.NewJSONRPCHandler(requestHandler,
+// opts...) wrapped in auth.HTTPMiddleware, rather than MountAgent — wrapping
+// mux as a whole after MountAgent returns is NOT equivalent, since it would
+// also put the intentionally-public agent-card route behind auth.
 func MountAgent(mux *http.ServeMux, card *a2a.AgentCard, requestHandler a2asrv.RequestHandler, opts ...a2asrv.TransportOption) error {
 	if card == nil {
 		return errors.New("a2a: MountAgent requires a non-nil card")
