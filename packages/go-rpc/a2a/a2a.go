@@ -29,9 +29,9 @@ const JSONRPCPath = "/a2a"
 // discovery per spec/SPEC.md §7) and mounts handler — the A2A JSON-RPC
 // endpoint — at JSONRPCPath. card MUST be non-empty, valid JSON; Mount
 // returns an error, never panics, for a nil mux, nil handler, or invalid
-// card. Mount applies no authentication to handler itself and has no way
-// to: handler is a raw http.Handler outside any Connect interceptor chain,
-// so auth.Interceptors cannot cover it. Callers MUST wrap handler (or mux)
+// card. Mount applies no authentication to handler itself, and cannot:
+// handler is a raw http.Handler outside any Connect interceptor chain, so
+// auth.Interceptors cannot cover it. Callers MUST wrap handler (or mux)
 // with auth.HTTPMiddleware before passing it in, or /a2a's JSON-RPC
 // endpoint serves anonymous callers in violation of spec/SPEC.md §7 — see
 // the package doc comment ("Authentication") for the full rationale and a
