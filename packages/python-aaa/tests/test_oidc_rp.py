@@ -163,9 +163,7 @@ class TestOIDCRelyingPartyVerifyToken:
         rp = OIDCRelyingParty(config)
 
         sentinel_claims = MagicMock()
-        with patch.object(
-            rp, "validate_token", return_value=sentinel_claims
-        ) as mock_validate:
+        with patch.object(rp, "validate_token", return_value=sentinel_claims) as mock_validate:
             mock_validate.return_value = sentinel_claims
             result = await rp.verify_token("some-raw-token")
 

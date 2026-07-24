@@ -62,3 +62,6 @@ pubspec.lock
 
 # git
 .egg-info/
+
+# Git worktrees (house rule: never commit)
+.worktrees/
