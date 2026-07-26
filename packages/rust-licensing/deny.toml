@@ -1,0 +1,52 @@
+# cargo-deny configuration for penguin-licensing.
+#
+# Run locally with: cargo deny check
+# CI wiring lives outside this crate.
+
+[graph]
+all-features = true
+
+[advisories]
+# Fail on any known vulnerability or unmaintained dependency.
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "deny"
+ignore = []
+
+[licenses]
+# The crate itself is AGPL-3.0-only. Dependencies must be permissive
+# enough to be linked into an AGPL work; copyleft-with-linking-exception
+# and permissive licenses only. Anything else needs an explicit exception.
+#
+# No `OpenSSL` entry: the TLS stack is rustls end to end
+# (reqwest default-features = false, features = ["rustls"]).
+confidence-threshold = 0.9
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+]
+exceptions = []
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Dependencies are pinned to exact versions in Cargo.toml per house policy.
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

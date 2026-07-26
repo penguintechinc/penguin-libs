@@ -1,6 +1,7 @@
 //! Wire and domain types for license validation and feature flags.
 
 use std::collections::HashMap;
+use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -122,9 +123,60 @@ impl LicenseInfo {
         self.metadata.get("server_id").and_then(|v| v.as_str())
     }
 
-    /// Whether the named feature is entitled on this license.
+    /// Whether the license is still usable at `now`, allowing `grace`
+    /// beyond `expires_at`. A missing `expires_at` never expires.
+    ///
+    /// The grace window exists so a briefly unreachable license server
+    /// cannot hard-cut a healthy customer at the moment of renewal; past
+    /// it, entitlement fails closed.
+    pub fn is_live_at(&self, now: DateTime<Utc>, grace: Duration) -> bool {
+        let Some(expires_at) = self.expires_at else {
+            return true;
+        };
+        match chrono::Duration::from_std(grace) {
+            Ok(grace) => now <= expires_at + grace,
+            // Absurd grace value: fall back to strict expiry.
+            Err(_) => now <= expires_at,
+        }
+    }
+
+    /// Whether the license is still usable now, allowing `grace` beyond
+    /// `expires_at`. See [`LicenseInfo::is_live_at`].
+    pub fn is_live(&self, grace: Duration) -> bool {
+        self.is_live_at(Utc::now(), grace)
+    }
+
+    /// Returns this license if it is still live, else the community
+    /// fallback. Applied on every entitlement read so an expired license
+    /// cannot keep granting gated features.
+    pub fn enforce_expiry(&self, grace: Duration) -> Self {
+        if self.is_live(grace) {
+            self.clone()
+        } else {
+            Self::community_fallback(
+                &self.product,
+                Some("license expired beyond offline grace period".to_owned()),
+            )
+        }
+    }
+
+    /// Whether the named feature is entitled on this license. An invalid
+    /// license entitles nothing.
+    ///
+    /// # Warning — this does NOT check expiry
+    ///
+    /// This is the raw per-feature lookup: it ignores `expires_at`, so it
+    /// returns `true` for a long-expired license. It is only safe on a
+    /// value already passed through [`LicenseInfo::enforce_expiry`] (the
+    /// grace window lives in [`crate::LicenseConfig::offline_grace`]).
+    ///
+    /// **For gating decisions use
+    /// [`crate::LicenseClient::check_feature`] instead** — it applies
+    /// expiry enforcement, revocation state, and domain bypass for you.
+    /// Reach for this method only when you are inspecting a
+    /// [`LicenseInfo`] you obtained yourself and have already enforced.
     pub fn feature_entitled(&self, name: &str) -> bool {
-        self.features.iter().any(|f| f.name == name && f.entitled)
+        self.valid && self.features.iter().any(|f| f.name == name && f.entitled)
     }
 }
 
@@ -163,6 +215,70 @@ mod tests {
         let info = LicenseInfo::community_fallback("skauswatch", None);
         assert!(info.valid);
         assert_eq!(info.tier, Tier::Free);
+        assert!(!info.feature_entitled("sso"));
+    }
+
+    fn licensed(expires_at: Option<DateTime<Utc>>) -> LicenseInfo {
+        LicenseInfo {
+            valid: true,
+            customer: "ACME".to_owned(),
+            product: "skauswatch".to_owned(),
+            tier: Tier::Enterprise,
+            expires_at,
+            issued_at: None,
+            features: vec![Feature {
+                name: "sso".to_owned(),
+                entitled: true,
+                units: -1,
+                description: String::new(),
+                metadata: serde_json::Value::Null,
+            }],
+            limits: serde_json::Value::Null,
+            metadata: serde_json::Value::Null,
+            message: None,
+        }
+    }
+
+    /// Regression: `expires_at` used to be parsed and then ignored, so an
+    /// expired license kept granting Enterprise features forever.
+    #[test]
+    fn expiry_is_enforced_past_the_grace_window() {
+        let grace = Duration::from_secs(72 * 60 * 60);
+        let now = Utc::now();
+        let expired = licensed(Some(now - chrono::Duration::hours(100)));
+
+        assert!(!expired.is_live(grace));
+        let enforced = expired.enforce_expiry(grace);
+        assert_eq!(enforced.tier, Tier::Free);
+        assert!(!enforced.feature_entitled("sso"));
+    }
+
+    #[test]
+    fn expiry_within_grace_still_entitles() {
+        let grace = Duration::from_secs(72 * 60 * 60);
+        let now = Utc::now();
+        let just_expired = licensed(Some(now - chrono::Duration::hours(1)));
+
+        assert!(just_expired.is_live(grace));
+        assert!(just_expired.enforce_expiry(grace).feature_entitled("sso"));
+    }
+
+    #[test]
+    fn live_license_and_never_expiring_license_are_entitled() {
+        let grace = Duration::from_secs(0);
+        let future = licensed(Some(Utc::now() + chrono::Duration::days(30)));
+        assert!(future.is_live(grace));
+        assert!(future.enforce_expiry(grace).feature_entitled("sso"));
+
+        let perpetual = licensed(None);
+        assert!(perpetual.is_live(grace));
+        assert!(perpetual.enforce_expiry(grace).feature_entitled("sso"));
+    }
+
+    #[test]
+    fn invalid_license_entitles_nothing() {
+        let mut info = licensed(None);
+        info.valid = false;
         assert!(!info.feature_entitled("sso"));
     }
 }

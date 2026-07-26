@@ -13,9 +13,20 @@ pub enum LicenseError {
     #[error("license transport error: {0}")]
     Transport(String),
 
-    /// The server answered with a non-success status.
+    /// The server answered with an outage-shaped status — `5xx`, `408`, or
+    /// `429`. These are the *only* statuses for which cached state is
+    /// retained.
     #[error("license server returned status {0}")]
     Status(u16),
+
+    /// The server did not affirm the license: an explicit refusal (401,
+    /// 403, 404 — revoked, unknown, wrong product) or any other
+    /// unexpected, uninterpretable status (400, 418, a stray 3xx, …).
+    /// Fail-closed: the cached snapshot is replaced with the community
+    /// fallback. Only the outage statuses listed on
+    /// [`LicenseError::Status`] preserve entitlement.
+    #[error("license rejected by server (status {0})")]
+    Rejected(u16),
 
     /// The response body could not be decoded.
     #[error("license response decode error: {0}")]

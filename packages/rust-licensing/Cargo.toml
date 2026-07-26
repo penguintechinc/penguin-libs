@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.97"
 description = "PenguinTech license entitlement + PostHog-compatible feature flags client (license.penguintech.io)"
-license = "MIT"
+license-file = "LICENSE"
 repository = "https://github.com/penguintechinc/penguin-libs"
 authors = ["Penguin Tech Inc <support@penguintech.io>"]
 keywords = ["licensing", "feature-flags", "posthog"]
@@ -37,7 +37,7 @@ wiremock = "=0.6.5"
 
 [lints.rust]
 unsafe_code = "deny"
-missing_docs = "warn"
+missing_docs = "deny"
 
 [lints.clippy]
 unwrap_used = "deny"

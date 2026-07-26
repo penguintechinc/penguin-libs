@@ -8,14 +8,24 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::routing::get;
-use penguin_licensing::axum::{FlagGate, TierGate, flag_gate, tier_gate};
+use penguin_licensing::axum::{
+    FeatureGate, FlagGate, TierGate, feature_gate, flag_gate, tier_gate,
+};
 use penguin_licensing::{LicenseClient, LicenseConfig, Tier};
 use url::Url;
 
-fn offline_client(release_mode: bool) -> Arc<LicenseClient> {
+/// A client that can never reach a license server. `bypassed` selects an
+/// internal deployment domain (gating off) versus a customer domain
+/// (gating on) — the only bypass lever there is.
+fn offline_client(bypassed: bool) -> Arc<LicenseClient> {
     let mut cfg = LicenseConfig::new("skauswatch").unwrap();
-    cfg.release_mode = release_mode;
+    cfg = if bypassed {
+        cfg.with_deployment_domain("skauswatch.penguintech.cloud")
+    } else {
+        cfg.with_deployment_domain("customer.example.com")
+    };
     cfg.server_url = Url::parse("http://127.0.0.1:1").unwrap();
+    cfg.posthog_host = cfg.server_url.clone();
     cfg.cache_ttl = Duration::from_secs(300);
     LicenseClient::new(cfg).unwrap()
 }
@@ -28,6 +38,13 @@ fn app(client: Arc<LicenseClient>) -> Router {
             flag_gate,
         ))
         .route(
+            "/sso",
+            get(|| async { "ok" }).layer(axum::middleware::from_fn_with_state(
+                FeatureGate::new(client.clone(), "sso"),
+                feature_gate,
+            )),
+        )
+        .route(
             "/analytics",
             get(|| async { "ok" }).layer(axum::middleware::from_fn_with_state(
                 TierGate::new(client, Tier::Enterprise),
@@ -37,11 +54,18 @@ fn app(client: Arc<LicenseClient>) -> Router {
 }
 
 #[tokio::test]
-async fn gates_deny_with_403_in_release_mode_when_unlicensed() {
-    let server = axum_test::TestServer::new(app(offline_client(true)));
+async fn gates_deny_with_403_when_unlicensed() {
+    let server = axum_test::TestServer::new(app(offline_client(false)));
     let res = server.get("/icebox").await;
     res.assert_status(http::StatusCode::FORBIDDEN);
     res.assert_json_contains(&serde_json::json!({ "error": "feature_disabled" }));
+
+    let res = server.get("/sso").await;
+    res.assert_status(http::StatusCode::FORBIDDEN);
+    res.assert_json_contains(&serde_json::json!({
+        "error": "feature_not_licensed",
+        "feature": "sso"
+    }));
 
     let res = server.get("/analytics").await;
     res.assert_status(http::StatusCode::FORBIDDEN);
@@ -49,8 +73,9 @@ async fn gates_deny_with_403_in_release_mode_when_unlicensed() {
 }
 
 #[tokio::test]
-async fn gates_allow_under_dev_bypass() {
-    let server = axum_test::TestServer::new(app(offline_client(false)));
+async fn gates_allow_under_domain_bypass() {
+    let server = axum_test::TestServer::new(app(offline_client(true)));
     server.get("/icebox").await.assert_status_ok();
+    server.get("/sso").await.assert_status_ok();
     server.get("/analytics").await.assert_status_ok();
 }
