@@ -109,7 +109,11 @@ func (rp *OIDCRelyingParty) Exchange(ctx context.Context, code string, opts ...o
 		return nil, fmt.Errorf("oidc_rp: code exchange failed: %w", err)
 	}
 
-	idTokenRaw, _ := token.Extra("id_token").(string)
+	idTokenRaw, ok := token.Extra("id_token").(string)
+	if !ok || idTokenRaw == "" {
+		return nil, fmt.Errorf("oidc_rp: id_token missing or invalid in exchange response")
+	}
+
 	expiresIn := int64(0)
 	if !token.Expiry.IsZero() {
 		expiresIn = int64(time.Until(token.Expiry).Seconds())

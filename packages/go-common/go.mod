@@ -1,6 +1,6 @@
 module github.com/penguintechinc/penguin-libs/packages/go-common
 
-go 1.24
+go 1.25
 
 require go.uber.org/zap v1.27.0
 
