@@ -7,7 +7,7 @@ name = "penguin-pytest"
 version = "0.1.0"
 description = "Shared pytest fixtures and test helpers for PenguinTech Python packages"
 readme = "README.md"
-license = {text = "AGPL-3.0"}
+license = {file = "LICENSE"}
 requires-python = ">=3.12"
 authors = [
     {name = "Penguin Tech Inc", email = "dev@penguintech.io"}
@@ -16,7 +16,6 @@ keywords = ["penguintech", "pytest", "testing", "fixtures"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Framework :: Pytest",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
@@ -47,6 +46,9 @@ Repository = "https://github.com/penguintechinc/penguin-libs"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+penguin_pytest = ["py.typed"]
 
 [tool.ruff]
 line-length = 100

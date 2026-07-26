@@ -156,6 +156,11 @@ class StaticKeyVerifier:
         """
         try:
             return self.validate_token(raw_token)
-        except Exception as exc:  # noqa: BLE001 — fail closed on any error
-            logger.warning("Static-key JWT verification failed: %s", exc)
+        except (jwt.InvalidTokenError, jwt.DecodeError, jwt.InvalidAlgorithmError) as exc:
+            # Crypto/signature verification failures
+            logger.warning("Static-key JWT validation failed (%s)", type(exc).__name__, exc_info=True)
+            return None
+        except Exception as exc:
+            # Network, transient, or other unexpected errors
+            logger.warning("Static-key JWT verification error (%s)", type(exc).__name__, exc_info=True)
             return None

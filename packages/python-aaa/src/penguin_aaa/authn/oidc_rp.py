@@ -101,6 +101,7 @@ class OIDCRelyingParty:
             await self.discover()
 
         assert self._jwks_client is not None
+        assert self._discovery is not None
         signing_key = self._jwks_client.get_signing_key_from_jwt(raw_token)
 
         skew_seconds = int(self._config.clock_skew.total_seconds())
@@ -109,6 +110,7 @@ class OIDCRelyingParty:
             signing_key.key,
             algorithms=self._config.algorithms,
             audience=self._config.client_id,
+            issuer=self._discovery["issuer"],
             leeway=skew_seconds,
         )
 

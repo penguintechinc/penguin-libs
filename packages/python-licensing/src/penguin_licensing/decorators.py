@@ -5,18 +5,35 @@
 
 import inspect
 from functools import wraps
+from typing import Any, Callable, TypeVar
 
 import structlog
 
+from .exceptions import FeatureNotAvailableError, LicenseRequiredError
+
 logger = structlog.get_logger()
 
+F = TypeVar("F", bound=Callable[..., Any])
 
-def license_required(required_tier: str = "enterprise"):
+# Re-exported for backwards compatibility; canonical definitions live in
+# penguin_licensing.exceptions so every layer raises the same classes.
+__all__ = [
+    "FeatureNotAvailableError",
+    "LicenseRequiredError",
+    "feature_required",
+    "license_required",
+]
+
+
+def license_required(required_tier: str = "enterprise") -> Callable[[F], F]:
     """
     Decorator to enforce license tier requirements for enterprise features.
 
     Checks if the current license meets the minimum tier requirement.
     Tier hierarchy: community < professional < enterprise
+
+    Uses the shared license client, so a validation cached before a license
+    server outage keeps gating decisions stable while the server is down.
 
     Args:
         required_tier: Minimum license tier required (default: enterprise)
@@ -32,40 +49,64 @@ def license_required(required_tier: str = "enterprise"):
             # Only accessible with enterprise license
             pass
 
-    Example Response (403 when license insufficient):
-        {
-            "error": "License Required",
-            "message": "This feature requires an enterprise license",
-            "required_tier": "enterprise",
-            "current_tier": "professional",
-            "upgrade_url": "https://penguintech.io/elder/pricing"
-        }
+    Raises:
+        LicenseRequiredError: When license tier does not meet requirement
     """
 
-    def decorator(func):
+    def decorator(func: F) -> F:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # TEMPORARY: License checks disabled for development
-            # TODO: Re-enable license enforcement in production
-            logger.debug(
-                "license_check_bypassed",
-                required_tier=required_tier,
-                endpoint=func.__name__,
-                note="License enforcement temporarily disabled",
-            )
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            from penguin_licensing.client import get_license_client
 
-            # Bypass license check - allow all features
-            if inspect.iscoroutinefunction(func):
-                return await func(*args, **kwargs)
-            else:
-                return func(*args, **kwargs)
+            client = get_license_client()
+            validation = client.validate()
 
-        return wrapper
+            tier_levels = {"community": 0, "professional": 1, "enterprise": 2}
+            current_level = tier_levels.get(validation.tier, 0)
+            required_level = tier_levels.get(required_tier, 99)
+
+            if not validation.valid or current_level < required_level:
+                logger.warning(
+                    "license_tier_insufficient",
+                    required_tier=required_tier,
+                    current_tier=validation.tier,
+                    endpoint=func.__name__,
+                )
+                raise LicenseRequiredError(required_tier, validation.tier)
+
+            return await func(*args, **kwargs)
+
+        @wraps(func)
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+            from penguin_licensing.client import get_license_client
+
+            client = get_license_client()
+            validation = client.validate()
+
+            tier_levels = {"community": 0, "professional": 1, "enterprise": 2}
+            current_level = tier_levels.get(validation.tier, 0)
+            required_level = tier_levels.get(required_tier, 99)
+
+            if not validation.valid or current_level < required_level:
+                logger.warning(
+                    "license_tier_insufficient",
+                    required_tier=required_tier,
+                    current_tier=validation.tier,
+                    endpoint=func.__name__,
+                )
+                raise LicenseRequiredError(required_tier, validation.tier)
+
+            return func(*args, **kwargs)
+
+        if inspect.iscoroutinefunction(func):
+            return async_wrapper  # type: ignore[return-value]
+        else:
+            return sync_wrapper  # type: ignore[return-value]
 
     return decorator
 
 
-def feature_required(feature_name: str):
+def feature_required(feature_name: str) -> Callable[[F], F]:
     """
     Decorator to enforce specific feature entitlement.
 
@@ -85,33 +126,44 @@ def feature_required(feature_name: str):
             # Only accessible if 'advanced_analytics' feature is entitled
             pass
 
-    Example Response (403 when feature not entitled):
-        {
-            "error": "Feature Not Available",
-            "message": "This feature is not included in your license",
-            "required_feature": "advanced_analytics",
-            "upgrade_url": "https://penguintech.io/elder/pricing"
-        }
+    Raises:
+        FeatureNotAvailableError: When feature is not entitled
     """
 
-    def decorator(func):
+    def decorator(func: F) -> F:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # TEMPORARY: Feature checks disabled for development
-            # TODO: Re-enable feature enforcement in production
-            logger.debug(
-                "feature_check_bypassed",
-                feature=feature_name,
-                endpoint=func.__name__,
-                note="Feature enforcement temporarily disabled",
-            )
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            from penguin_licensing.client import get_license_client
 
-            # Bypass feature check - allow all features
-            if inspect.iscoroutinefunction(func):
-                return await func(*args, **kwargs)
-            else:
-                return func(*args, **kwargs)
+            client = get_license_client()
+            if not client.check_feature(feature_name):
+                logger.warning(
+                    "feature_not_entitled",
+                    feature=feature_name,
+                    endpoint=func.__name__,
+                )
+                raise FeatureNotAvailableError(feature_name)
 
-        return wrapper
+            return await func(*args, **kwargs)
+
+        @wraps(func)
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+            from penguin_licensing.client import get_license_client
+
+            client = get_license_client()
+            if not client.check_feature(feature_name):
+                logger.warning(
+                    "feature_not_entitled",
+                    feature=feature_name,
+                    endpoint=func.__name__,
+                )
+                raise FeatureNotAvailableError(feature_name)
+
+            return func(*args, **kwargs)
+
+        if inspect.iscoroutinefunction(func):
+            return async_wrapper  # type: ignore[return-value]
+        else:
+            return sync_wrapper  # type: ignore[return-value]
 
     return decorator

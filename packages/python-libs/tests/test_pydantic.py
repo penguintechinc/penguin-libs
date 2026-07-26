@@ -667,17 +667,20 @@ class TestModelResponse:
 
 class TestOpenAPI:
     def test_generate_openapi_schema(self):
-        from penguin_libs.pydantic.openapi import generate_openapi_schema
+        try:
+            from penguin_libs.pydantic.openapi import generate_openapi_schema
 
-        class UserModel(BaseModel):
-            name: str
-            age: int
-            email: str | None = None
+            class UserModel(BaseModel):
+                name: str
+                age: int
+                email: str | None = None
 
-        schema = generate_openapi_schema(UserModel)
-        assert "properties" in schema
-        assert "name" in schema["properties"]
-        assert "age" in schema["properties"]
+            schema = generate_openapi_schema(UserModel)
+            assert "properties" in schema
+            assert "name" in schema["properties"]
+            assert "age" in schema["properties"]
+        except ImportError:
+            pytest.skip("flask-restx not installed")
 
     def test_pydantic_to_restx_field_basic_types(self):
         try:

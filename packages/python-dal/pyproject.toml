@@ -7,7 +7,7 @@ name = "penguin-dal"
 version = "0.2.0"
 description = "SQLAlchemy runtime wrapper with PyDAL ergonomics for Penguin Tech applications"
 readme = "README.md"
-license = {text = "AGPL-3.0"}
+license = {file = "LICENSE"}
 requires-python = ">=3.11"
 authors = [
     {name = "Penguin Tech Inc", email = "dev@penguintech.io"}
@@ -16,7 +16,6 @@ keywords = ["penguintech", "dal", "database", "sqlalchemy", "orm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
