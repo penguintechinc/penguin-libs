@@ -1,14 +1,15 @@
-namespace: penguin-libs-beta
 buildValidator:
+  replicas: 3
   image:
-    pullPolicy: Always
+    tag: "20-alpine"
   resources:
     requests:
-      memory: "256Mi"
-      cpu: "250m"
-    limits:
       memory: "512Mi"
       cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
 config:
-  nodeEnv: "test"
+  nodeEnv: "production"
   npmRegistry: "https://registry.npmjs.org"

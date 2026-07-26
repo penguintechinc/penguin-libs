@@ -14,13 +14,18 @@ on:
       - 'packages/python-libs/src/penguin_libs/h3/**'
       - 'proto/**'
 
+permissions:
+  contents: read
+
 jobs:
   proto-lint:
     name: Lint Protobuf
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: bufbuild/buf-setup-action@v1
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
+      - uses: bufbuild/buf-setup-action@35c243d7f2a909b1d4e40399b348a7fdab27d78d # v1.34.0
       - run: cd proto && buf lint
 
   build-go-h3:
@@ -31,8 +36,10 @@ jobs:
       run:
         working-directory: packages/go-h3
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.25'
       - run: go mod download
@@ -45,8 +52,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: proto-lint
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.13'
       - name: Install dependencies
@@ -67,11 +76,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-go-h3, build-python-h3]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.25'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.13'
       - name: Generate test certificates

@@ -51,6 +51,7 @@ temp/
 # Local development
 .PLAN
 .TODO
+.worktrees/
 
 # Flutter / Dart
 .dart_tool/
@@ -60,5 +61,8 @@ pubspec.lock
 .flutter-plugins
 .flutter-plugins-dependencies
 
-# git
-.egg-info/
+# Package management
+*.egg-info/
+.coverage
+.coverage.*
+

@@ -39,16 +39,17 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  id-token: write  # For PyPI trusted publishing
 
 jobs:
   # ============================================
-  # React Libraries - GitHub Packages (npm)
+  # React Libraries - npm (public registry)
   # ============================================
   publish-react-libs:
     name: Publish React Libraries
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'react-libs' || github.event.inputs.package == 'all') ||
@@ -61,14 +62,18 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
 
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          registry-url: 'https://npm.pkg.github.com'
+          registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
+          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -80,10 +85,10 @@ jobs:
       - name: Run type check
         run: npm run typecheck
 
-      - name: Publish to GitHub Packages
-        run: npm publish
+      - name: Publish to npm (public registry)
+        run: npm publish --provenance
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create release summary
         run: |
@@ -91,7 +96,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: @penguintechinc/react-libs" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry**: GitHub Packages (npm)" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: npm (public registry)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
   # Python Libs - PyPI
@@ -99,6 +104,9 @@ jobs:
   publish-python-libs:
     name: Publish Python Libs
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     environment: pypi
     if: |
       github.event_name == 'workflow_dispatch' &&
@@ -112,10 +120,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
         with:
           python-version: '3.13'
 
@@ -131,7 +141,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
         with:
           packages-dir: packages/python-libs/dist/
 
@@ -150,6 +160,9 @@ jobs:
   publish-python-licensing:
     name: Publish Python Licensing
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     environment: pypi
     if: |
       github.event_name == 'workflow_dispatch' &&
@@ -163,10 +176,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
         with:
           python-version: '3.13'
 
@@ -182,7 +197,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
         with:
           packages-dir: packages/python-licensing/dist/
 
@@ -201,6 +216,9 @@ jobs:
   publish-python-secrets:
     name: Publish Python Secrets
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     environment: pypi-secrets
     if: |
       github.event_name == 'workflow_dispatch' &&
@@ -214,10 +232,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
         with:
           python-version: '3.13'
 
@@ -233,7 +253,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
         with:
           packages-dir: packages/python-secrets/dist/
 
@@ -252,6 +272,9 @@ jobs:
   publish-python-utils:
     name: Publish Python Utils
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     environment: pypi-utils
     if: |
       github.event_name == 'workflow_dispatch' &&
@@ -265,10 +288,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
         with:
           python-version: '3.13'
 
@@ -284,7 +309,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
         with:
           packages-dir: packages/python-utils/dist/
 
@@ -313,12 +338,15 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
           go-version: '1.25'
+          cache: false
 
       - name: Download dependencies
         run: go mod download
@@ -348,7 +376,7 @@ jobs:
           echo "**go-h3**: Ready for use via \`go get\`" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
-  # Flutter Libraries - pub.dev (dry-run)
+  # Flutter Libraries - validation only (git dependency, publish_to: none)
   # ============================================
   publish-flutter-libs:
     name: Publish Flutter Libraries
@@ -365,12 +393,14 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1c5eb12d812966ca84680edc38353a0851c8fd56 # v2.14.0
         with:
-          flutter-version: '3.24.x'
+          flutter-version: '3.44.8'  # keep in sync with .fvmrc
           channel: 'stable'
 
       - name: Install dependencies
@@ -382,17 +412,14 @@ jobs:
       - name: Run tests
         run: flutter test
 
-      - name: Dry run publish
-        run: dart pub publish --dry-run
-
       - name: Create release summary
         run: |
           VERSION=$(grep 'version:' pubspec.yaml | head -1 | awk '{print $2}')
-          echo "## Published Package" >> $GITHUB_STEP_SUMMARY
+          echo "## Validated Package" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: flutter_libs" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry**: pub.dev (dry-run)" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: not published (publish_to: none — consumed as a git dependency)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
   # Python AAA - PyPI
@@ -400,6 +427,9 @@ jobs:
   publish-python-aaa:
     name: Publish Python AAA
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     environment: pypi-aaa
     if: |
       github.event_name == 'workflow_dispatch' &&
@@ -413,10 +443,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
         with:
           python-version: '3.13'
 
@@ -432,7 +464,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
         with:
           packages-dir: packages/python-aaa/dist/
 
@@ -451,6 +483,9 @@ jobs:
   publish-python-dal:
     name: Publish Python DAL
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     environment: pypi-dal
     if: |
       github.event_name == 'workflow_dispatch' &&
@@ -464,10 +499,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
         with:
           python-version: '3.13'
 
@@ -483,7 +520,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
         with:
           packages-dir: packages/python-dal/dist/
 
@@ -497,11 +534,14 @@ jobs:
           echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
-  # React AAA - GitHub Packages (npm)
+  # React AAA - npm (public registry)
   # ============================================
   publish-react-aaa:
     name: Publish React AAA
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'react-aaa' || github.event.inputs.package == 'all') ||
@@ -514,14 +554,18 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
 
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          registry-url: 'https://npm.pkg.github.com'
+          registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
+          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -533,10 +577,10 @@ jobs:
       - name: Run type check
         run: npm run typecheck
 
-      - name: Publish to GitHub Packages
-        run: npm publish
+      - name: Publish to npm (public registry)
+        run: npm publish --provenance
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create release summary
         run: |
@@ -544,7 +588,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: @penguintechinc/react-aaa" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry**: GitHub Packages (npm)" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: npm (public registry)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
   # Go AAA - No publish needed (go get from repo)
@@ -562,12 +606,15 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
           go-version: '1.25'
+          cache: false
 
       - name: Download dependencies
         run: go mod download
@@ -588,11 +635,14 @@ jobs:
           echo "**go-aaa**: Ready for use via \`go get\`" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
-  # React Testutils - GitHub Packages (npm)
+  # React Testutils - npm (public registry)
   # ============================================
   publish-react-testutils:
     name: Publish React Testutils
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'react-testutils' || github.event.inputs.package == 'all') ||
@@ -605,14 +655,18 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
 
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          registry-url: 'https://npm.pkg.github.com'
+          registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
+          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -621,10 +675,10 @@ jobs:
       - name: Run type check
         run: npm run typecheck
 
-      - name: Publish to GitHub Packages
-        run: npm publish
+      - name: Publish to npm (public registry)
+        run: npm publish --provenance
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create release summary
         run: |
@@ -632,7 +686,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: @penguintechinc/react-testutils" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry**: GitHub Packages (npm)" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: npm (public registry)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
   # Python pytest (penguin-pytest) - PyPI
@@ -640,6 +694,9 @@ jobs:
   publish-penguin-pytest:
     name: Publish penguin-pytest
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     environment: pypi-pytest
     if: |
       github.event_name == 'workflow_dispatch' &&
@@ -653,10 +710,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
         with:
           python-version: '3.13'
 
@@ -672,7 +731,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
         with:
           packages-dir: packages/python-pytest/dist/
 
