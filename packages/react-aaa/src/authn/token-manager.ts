@@ -1,5 +1,7 @@
 import { decodeJwt } from 'jose';
+import { MemoryTokenStorage, SessionStorageTokenStorage } from './token-storage.js';
 import type { TokenSet } from './types.js';
+import type { TokenStorage } from './token-storage.js';
 
 const STORAGE_KEY = 'oidc_token_set';
 const REFRESH_BUFFER_MS = 60_000;
@@ -9,10 +11,19 @@ export type TokenExpiredCallback = () => void;
 
 export type RefreshHandler = (refreshToken: string) => Promise<TokenSet>;
 
+export type TokenStorageType = 'memory' | 'session' | TokenStorage;
+
 export interface TokenManagerOptions {
   onTokenRefreshed?: TokenRefreshedCallback;
   onTokenExpired?: TokenExpiredCallback;
   onRefresh?: RefreshHandler;
+  /**
+   * Token storage backend.
+   * 'memory' (default): In-memory storage, XSS-safe, cleared on page refresh
+   * 'session': sessionStorage, XSS-exfiltrable, persists for session
+   * TokenStorage: custom implementation
+   */
+  storage?: TokenStorageType;
 }
 
 export class TokenManager {
@@ -20,15 +31,26 @@ export class TokenManager {
   private readonly onTokenRefreshed: TokenRefreshedCallback | undefined;
   private readonly onTokenExpired: TokenExpiredCallback | undefined;
   private readonly onRefresh: RefreshHandler | undefined;
+  private readonly storage: TokenStorage;
 
   constructor(options: TokenManagerOptions = {}) {
     this.onTokenRefreshed = options.onTokenRefreshed;
     this.onTokenExpired = options.onTokenExpired;
     this.onRefresh = options.onRefresh;
+
+    // Initialize storage backend
+    const storageOpt = options.storage ?? 'memory';
+    if (storageOpt === 'memory') {
+      this.storage = new MemoryTokenStorage();
+    } else if (storageOpt === 'session') {
+      this.storage = new SessionStorageTokenStorage();
+    } else {
+      this.storage = storageOpt;
+    }
   }
 
   store(tokens: TokenSet): void {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(tokens));
+    this.storage.set(STORAGE_KEY, tokens);
     this.scheduleRefresh(tokens);
   }
 
@@ -60,20 +82,11 @@ export class TokenManager {
 
   clear(): void {
     this.cancelRefresh();
-    sessionStorage.removeItem(STORAGE_KEY);
+    this.storage.remove(STORAGE_KEY);
   }
 
   private loadTokens(): TokenSet | null {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return null;
-    }
-
-    try {
-      return JSON.parse(raw) as TokenSet;
-    } catch {
-      return null;
-    }
+    return this.storage.get(STORAGE_KEY);
   }
 
   private scheduleRefresh(tokens: TokenSet): void {
