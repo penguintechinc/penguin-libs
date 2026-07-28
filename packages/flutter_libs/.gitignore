@@ -1,0 +1,5 @@
+# pubspec.lock must be committed for this package (app/plugin package with
+# tests, not a published library where it'd be irrelevant to consumers) —
+# the root .gitignore excludes pubspec.lock repo-wide; negate that here so
+# dependency resolution stays reproducible for flutter_libs.
+!pubspec.lock
