@@ -49,4 +49,4 @@ manager.close()
 
 ## License
 
-AGPL-3.0 — Penguin Tech Inc
+MIT — Penguin Tech Inc
