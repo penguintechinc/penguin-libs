@@ -22,6 +22,16 @@ type Config struct {
 	TLSConfig *tls.Config
 	// GracePeriod is the shutdown grace period. Default 30s.
 	GracePeriod time.Duration
+	// ReadHeaderTimeout is the timeout for reading request headers. Default 10s.
+	ReadHeaderTimeout time.Duration
+	// ReadTimeout is the timeout for reading the entire request. Default 30s.
+	ReadTimeout time.Duration
+	// WriteTimeout is the timeout for writing the response. Default 30s.
+	WriteTimeout time.Duration
+	// IdleTimeout is the timeout for idle connections. Default 60s.
+	IdleTimeout time.Duration
+	// QUICMaxIdleTimeout is the QUIC max idle timeout. Default 60s.
+	QUICMaxIdleTimeout time.Duration
 	// Interceptors are ConnectRPC interceptors applied to all handlers.
 	Interceptors []connect.Interceptor
 }
@@ -29,11 +39,16 @@ type Config struct {
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		H2Addr:      ":8080",
-		H3Addr:      ":8443",
-		H2Enabled:   true,
-		H3Enabled:   true,
-		GracePeriod: 30 * time.Second,
+		H2Addr:             ":8080",
+		H3Addr:             ":8443",
+		H2Enabled:          true,
+		H3Enabled:          true,
+		GracePeriod:        30 * time.Second,
+		ReadHeaderTimeout:  10 * time.Second,
+		ReadTimeout:        30 * time.Second,
+		WriteTimeout:       30 * time.Second,
+		IdleTimeout:        60 * time.Second,
+		QUICMaxIdleTimeout: 60 * time.Second,
 	}
 }
 
