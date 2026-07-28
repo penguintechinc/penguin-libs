@@ -24,6 +24,14 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# npm auth tokens — use ${GITHUB_TOKEN} env var in .npmrc instead of hardcoded tokens
+# If you need a local .npmrc with a real token, keep it outside the repo
+.npmrc.local
+
+# Python test coverage data — generated, not source
+.coverage
+**/.coverage
+
 # Logs
 logs/
 *.log
@@ -34,9 +42,13 @@ yarn-error.log*
 # Python
 __pycache__/
 *.pyc
+.venv/
+packages/**/.venv/
 
 # Testing
 coverage/
+.coverage
+.coverage.*
 .nyc_output/
 
 # Package manager locks (keep package-lock.json)
@@ -51,6 +63,7 @@ temp/
 # Local development
 .PLAN
 .TODO
+.worktrees/
 
 # Flutter / Dart
 .dart_tool/
@@ -60,5 +73,8 @@ pubspec.lock
 .flutter-plugins
 .flutter-plugins-dependencies
 
-# git
-.egg-info/
+# Package management
+*.egg-info/
+.coverage
+.coverage.*
+

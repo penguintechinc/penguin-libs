@@ -86,9 +86,10 @@ check_prerequisites() {
   print_section "Checking Prerequisites"
 
   local missing_tools=()
+  local required_tools=("docker" "kubectl" "helm")
 
   # Check required tools
-  for tool in docker kubectl kustomize helm git; do
+  for tool in "${required_tools[@]}"; do
     if ! command -v "$tool" &> /dev/null; then
       missing_tools+=("$tool")
     else
@@ -98,7 +99,6 @@ check_prerequisites() {
 
   if [ ${#missing_tools[@]} -ne 0 ]; then
     log_error "Missing required tools: ${missing_tools[*]}"
-    log_error "Please install: docker, kubectl, kustomize, helm, git"
     exit 1
   fi
 
@@ -153,33 +153,6 @@ validate_kube_context() {
   fi
 }
 
-validate_paths() {
-  print_section "Validating Paths"
-
-  if [ ! -d "$SCRIPT_DIR" ]; then
-    log_error "Script directory not found: $SCRIPT_DIR"
-    exit 1
-  fi
-  log_debug "Script directory: $SCRIPT_DIR"
-
-  if [ ! -d "$SCRIPT_DIR/$CHART_PATH" ]; then
-    log_error "Helm chart path not found: $SCRIPT_DIR/$CHART_PATH"
-    exit 1
-  fi
-  log_success "Helm chart found: $SCRIPT_DIR/$CHART_PATH"
-
-  if [ ! -f "$SCRIPT_DIR/$CHART_PATH/Chart.yaml" ]; then
-    log_error "Chart.yaml not found in: $SCRIPT_DIR/$CHART_PATH"
-    exit 1
-  fi
-  log_success "Chart.yaml found"
-
-  if [ ! -d "$SCRIPT_DIR/k8s/kustomize" ]; then
-    log_error "Kustomize directory not found: $SCRIPT_DIR/k8s/kustomize"
-    exit 1
-  fi
-  log_success "Kustomize directory found"
-}
 
 ################################################################################
 # Build & Push Functions
@@ -254,7 +227,7 @@ create_namespace() {
 deploy_with_helm() {
   print_section "Deploying with Helm"
 
-  local values_file="$SCRIPT_DIR/$CHART_PATH/values-beta.yaml"
+  local values_file="$SCRIPT_DIR/$CHART_PATH/beta.yml"
 
   if [ ! -f "$values_file" ]; then
     log_warn "Values file not found: $values_file"
@@ -268,6 +241,7 @@ deploy_with_helm() {
     "$RELEASE_NAME"
     "$SCRIPT_DIR/$CHART_PATH"
     "--namespace" "$NAMESPACE"
+    "--values" "$SCRIPT_DIR/$CHART_PATH/values.yaml"
     "--values" "$values_file"
     "--create-namespace"
     "--timeout" "5m"
@@ -284,36 +258,6 @@ deploy_with_helm() {
     log_success "Helm deployment successful"
   else
     log_error "Helm deployment failed"
-    return 1
-  fi
-}
-
-deploy_with_kustomize() {
-  print_section "Deploying with Kustomize (Beta Overlay)"
-
-  local overlay_path="$SCRIPT_DIR/k8s/kustomize/overlays/beta"
-
-  if [ ! -d "$overlay_path" ]; then
-    log_error "Beta overlay not found: $overlay_path"
-    return 1
-  fi
-
-  log_info "Building manifests from: $overlay_path"
-
-  local kustomize_cmd=(
-    "kustomize" "build" "$overlay_path"
-  )
-
-  if [ "$DRY_RUN" = true ]; then
-    log_warn "DRY RUN: Would apply kustomize manifests"
-  fi
-
-  log_debug "Executing: ${kustomize_cmd[*]}"
-
-  if "${kustomize_cmd[@]}" | kubectl apply $([ "$DRY_RUN" = true ] && echo "--dry-run=client" || echo ""); then
-    log_success "Kustomize deployment successful"
-  else
-    log_error "Kustomize deployment failed"
     return 1
   fi
 }
@@ -485,20 +429,16 @@ CONFIGURATION:
   Image Registry:   registry-dal2.penguintech.io
   App Host:         penguin-libs.penguintech.cloud
   Helm Chart:       k8s/helm/penguin-libs
-  Kustomize Base:   k8s/kustomize/base
-  Kustomize Overlay: k8s/kustomize/overlays/beta
 
 REQUIREMENTS:
   - Docker (running daemon)
   - kubectl (configured)
   - Helm 3.x
-  - Kustomize 4.x+
   - Kubernetes cluster access (dal2-beta context)
   - Docker registry credentials configured
 
 NOTES:
-  - The script uses Helm for deployment by default
-  - Kustomize overlay is available for alternative deployments
+  - The script uses Helm for deployment (Kustomize removed)
   - All deployments include health checks and verification
   - Failed deployments can be rolled back using --rollback
   - Verbose mode provides detailed debugging information
@@ -583,7 +523,6 @@ main() {
   # Standard deployment flow
   check_prerequisites
   validate_kube_context
-  validate_paths
   build_and_push
   create_namespace
   deploy_with_helm
@@ -591,13 +530,6 @@ main() {
   check_app_health
 
   print_header "Deployment Complete"
-
-  log_success "Penguin-libs successfully deployed to $NAMESPACE"
-  log_info "App URL: http://$APP_HOST"
-  log_info "Release: $RELEASE_NAME"
-  log_info "Namespace: $NAMESPACE"
-
-  exit 0
 }
 
 # Execute main function
