@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"html"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,7 +19,7 @@ import (
 
 func main() {
 	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 
 	cfg, err := server.ConfigFromEnv()
 	if err != nil {
@@ -43,13 +44,13 @@ func main() {
 			msg = "hello"
 		}
 		w.Header().Set("Content-Type", "text/plain")
-		fmt.Fprintf(w, "echo: %s (protocol: %s)\n", msg, r.Proto)
+		_, _ = fmt.Fprintf(w, "echo: %s (protocol: %s)\n", html.EscapeString(msg), r.Proto)
 	})
 
 	// Health check.
 	srv.Mux().HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "ok")
+		_, _ = fmt.Fprint(w, "ok")
 	})
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

@@ -2,16 +2,24 @@ version: v2
 modules:
   - path: .
     name: buf.build/penguintechinc/penguin-libs
+deps:
+  - buf.build/bufbuild/protovalidate
 lint:
   use:
     - STANDARD
   ignore_only:
     RPC_REQUEST_STANDARD_NAME:
       - examples/health/v1/health.proto
+      - prpc/health/v1/health.proto
+      - prpc/conformance/v1/conformance.proto
     RPC_RESPONSE_STANDARD_NAME:
       - examples/health/v1/health.proto
+      - prpc/health/v1/health.proto
+      - prpc/conformance/v1/conformance.proto
     RPC_REQUEST_RESPONSE_UNIQUE:
       - examples/health/v1/health.proto
+      - prpc/health/v1/health.proto
+      - prpc/conformance/v1/conformance.proto
 breaking:
   use:
     - FILE

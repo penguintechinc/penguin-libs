@@ -1,43 +1,7 @@
-// Shared theme type — all components accept themeMode?: 'dark' | 'light'
-export type { ThemeMode } from '../theme';
-
-// FormModalBuilder
-export { FormModalBuilder } from './FormModalBuilder';
-export type { FormField, FormTab, FormModalBuilderProps, ColorConfig } from './FormModalBuilder';
-
-// FormBuilder
-export { FormBuilder } from './FormBuilder';
-export type { FieldConfig, FormBuilderProps, FormConfig, FieldType, SelectOption, FormBuilderColorConfig } from './FormBuilder';
-
-// SidebarMenu
-export { SidebarMenu, SidebarMenuTrigger } from './SidebarMenu';
-export type { MenuItem, MenuCategory, SidebarColorConfig, SidebarMenuProps, SidebarMenuTriggerProps } from './SidebarMenu';
-
-// ConsoleVersion
-export {
-  ConsoleVersion,
-  AppConsoleVersion,
-  parseVersion,
-  logVersionToConsole,
-  useVersionInfo,
-  useApiVersionInfo,
-} from './ConsoleVersion';
-export type {
-  VersionInfo,
-  ConsoleStyleConfig,
-  ConsoleVersionProps,
-  AppConsoleVersionProps,
-  ApiStatusResponse,
-} from './ConsoleVersion';
-
-// LoginPageBuilder exports
+// Transition library — re-exports from focused packages
+export * from '@penguintechinc/react-form-builder';
 export {
   LoginPageBuilder,
-  ELDER_LOGIN_THEME,
-  mergeWithElderTheme,
-  resolveLoginTheme,
-  useCaptcha,
-  useCookieConsent,
   MFAModal,
   MFAInput,
   CaptchaWidget,
@@ -45,6 +9,10 @@ export {
   LoginDivider,
   CookieConsent,
   Footer,
+  useCaptcha,
+  useCookieConsent,
+  ELDER_LOGIN_THEME,
+  mergeWithElderTheme,
   GoogleIcon,
   GitHubIcon,
   MicrosoftIcon,
@@ -62,30 +30,16 @@ export {
   getProviderColors,
   buildSAMLRequest,
   buildSAMLRedirectUrl,
+  buildSAMLPostForm,
   initiateSAMLLogin,
+  initiateSAMLPostLogin,
   validateRelayState,
-} from './LoginPageBuilder';
-export type {
-  LoginPageBuilderProps,
-  LoginApiConfig,
-  LoginPayload,
-  LoginResponse,
-  BrandingConfig,
-  CaptchaConfig,
-  MFAConfig,
-  GDPRConfig,
-  SocialLoginConfig,
-  BuiltInOAuth2Provider,
-  CustomOAuth2Provider,
-  OIDCProvider,
-  SAMLProvider,
-  LoginColorConfig,
-  CookieConsentState,
-  UseCaptchaReturn,
-  MFAModalProps,
-  MFAInputProps,
-  CaptchaWidgetProps,
-  SocialLoginButtonsProps,
-  CookieConsentProps,
-  FooterProps,
-} from './LoginPageBuilder';
+  getStoredRequestId,
+  clearSAMLSession,
+  type BuiltInOAuth2Provider,
+  type ThemeMode as LoginThemeMode,
+  resolveLoginTheme,
+} from '@penguintechinc/react-login';
+export { SidebarMenu, SidebarMenuTrigger } from '@penguintechinc/react-sidebar';
+export * from '@penguintechinc/react-console-version';
+export { useBreakpoint, type Breakpoint, type UseBreakpointReturn } from '@penguintechinc/react-hooks';
