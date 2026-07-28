@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'release/**']
   pull_request:
-    branches: [main]
+    branches: [main, 'release/**']
 
 permissions:
   contents: read
@@ -13,13 +13,16 @@ jobs:
   build-react:
     name: Build & Test React Libs
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/react-libs/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
+          cache: false
       - run: npm ci
       - name: Security
         run: npm audit --omit=dev
@@ -30,13 +33,16 @@ jobs:
   build-react-aaa:
     name: Build & Test React AAA
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/react-aaa/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: 20
+          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -53,6 +59,7 @@ jobs:
   build-python:
     name: Build & Test Python Packages
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/python-crypto/') || startsWith(github.ref, 'refs/heads/release/python-security/') || startsWith(github.ref, 'refs/heads/release/python-http/') || startsWith(github.ref, 'refs/heads/release/python-libs/') || startsWith(github.ref, 'refs/heads/release/python-licensing/') || startsWith(github.ref, 'refs/heads/release/python-secrets/') || startsWith(github.ref, 'refs/heads/release/python-utils/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -80,6 +87,7 @@ jobs:
   build-python-aaa:
     name: Build & Test Python AAA
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/python-aaa/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -105,6 +113,7 @@ jobs:
   build-go:
     name: Build & Test Go Packages
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/go-common/') || startsWith(github.ref, 'refs/heads/release/go-h3/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -112,6 +121,7 @@ jobs:
       - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
           go-version: '1.25'
+          cache: false
       - run: go test ./...
         working-directory: packages/go-common
       - run: go mod download
@@ -134,6 +144,7 @@ jobs:
   build-go-aaa:
     name: Build & Test Go AAA
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/go-aaa/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -141,6 +152,7 @@ jobs:
       - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
           go-version: '1.25'
+          cache: false
       - name: Build
         run: cd packages/go-aaa && go build ./...
       - name: Vet
@@ -163,13 +175,16 @@ jobs:
   build-react-testutils:
     name: Build & Test react-testutils
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/react-testutils/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
+          cache: false
       - name: Install
         run: npm ci
       - name: Build (typecheck)
@@ -184,6 +199,7 @@ jobs:
   build-flutter:
     name: Build Flutter Libs
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/flutter_libs/') }}
     defaults:
       run:
         working-directory: packages/flutter_libs
@@ -202,6 +218,7 @@ jobs:
   build-penguin-pytest:
     name: Build & Test penguin-pytest
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/python-pytest/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -225,6 +242,7 @@ jobs:
   build-go-rpc:
     name: Build & Test Go RPC
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/go-rpc/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -232,6 +250,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.25'
+          cache: false
       - name: Build
         run: cd packages/go-rpc && go build ./...
       - name: Test (coverage-gated, 90% minimum)
@@ -258,6 +277,7 @@ jobs:
   build-python-rpc:
     name: Build & Test Python RPC
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/python-rpc/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -283,6 +303,7 @@ jobs:
   build-rust-rpc:
     name: Build & Test Rust RPC
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/rust-rpc/') }}
     defaults:
       run:
         working-directory: packages/rust-rpc
@@ -308,6 +329,7 @@ jobs:
   build-react-form-builder:
     name: Build & Test React Form Builder
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/react-form-builder/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -331,6 +353,7 @@ jobs:
   build-react-login:
     name: Build & Test React Login
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/react-login/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -354,6 +377,7 @@ jobs:
   build-react-sidebar:
     name: Build & Test React Sidebar
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/react-sidebar/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -377,6 +401,7 @@ jobs:
   build-react-console-version:
     name: Build & Test React Console Version
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/react-console-version/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -400,6 +425,7 @@ jobs:
   build-react-hooks:
     name: Build & Test React Hooks
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/react-hooks/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -423,6 +449,7 @@ jobs:
   build-python-split:
     name: Build & Test Python Split Packages
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/python-crypto/') || startsWith(github.ref, 'refs/heads/release/python-security/') || startsWith(github.ref, 'refs/heads/release/python-http/') || startsWith(github.ref, 'refs/heads/release/python-libs/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -454,6 +481,7 @@ jobs:
   build-go-split:
     name: Build & Test Go Split Packages
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/go-logging/') || startsWith(github.ref, 'refs/heads/release/go-common/') || startsWith(github.ref, 'refs/heads/release/go-dal/') || startsWith(github.ref, 'refs/heads/release/go-xdp/') || startsWith(github.ref, 'refs/heads/release/go-numa/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -461,6 +489,7 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.25'
+          cache: false
       - name: Build go-logging
         run: cd packages/go-logging && go build ./...
       - name: Vet go-logging
