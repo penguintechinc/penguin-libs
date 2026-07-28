@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
+import 'package:http/http.dart' as http;
 import '../login_types.dart';
 
 /// OAuth2 provider endpoint configurations.
@@ -14,8 +15,7 @@ const Map<BuiltInProviderType, _ProviderEndpoint> _providerEndpoints = {
     defaultScopes: ['user:email'],
   ),
   BuiltInProviderType.microsoft: _ProviderEndpoint(
-    authUrl:
-        'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+    authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
     defaultScopes: ['openid', 'email', 'profile'],
   ),
   BuiltInProviderType.apple: _ProviderEndpoint(
@@ -81,6 +81,26 @@ const Map<BuiltInProviderType, ProviderColors> providerColorMap = {
   ),
 };
 
+/// Result of building an OAuth2/OIDC authorization URL.
+///
+/// Carries the [url] to navigate/launch the user to, the CSRF [state] value
+/// (validate it against the callback's `state` param with
+/// [isValidCallbackState] before proceeding), and the PKCE [codeVerifier]
+/// the caller must retain (e.g. in memory or secure storage keyed by
+/// [state]) to exchange the authorization code for tokens once the
+/// callback fires.
+class OAuth2AuthorizationRequest {
+  const OAuth2AuthorizationRequest({
+    required this.url,
+    required this.state,
+    required this.codeVerifier,
+  });
+
+  final String url;
+  final String state;
+  final String codeVerifier;
+}
+
 /// Generate a cryptographically secure state parameter for CSRF protection.
 ///
 /// Returns a 32-byte hex string.
@@ -108,17 +128,25 @@ String generateCodeChallenge(String verifier) {
   return base64Url.encode(digest.bytes).replaceAll('=', '');
 }
 
-/// Build an OAuth2 authorization URL for a built-in provider.
+/// Build an OAuth2 authorization URL for a built-in provider, with PKCE
+/// (`S256`) and CSRF `state` wired in.
 ///
-/// The [state] parameter is included for CSRF protection.
-/// Stores state in the returned URL query parameters.
-String buildOAuth2Url(BuiltInOAuth2Provider provider, {String? state}) {
+/// The returned [OAuth2AuthorizationRequest.codeVerifier] must be retained
+/// by the caller and used at token-exchange time; the
+/// [OAuth2AuthorizationRequest.state] must be validated against the
+/// callback via [isValidCallbackState].
+OAuth2AuthorizationRequest buildOAuth2Url(
+  BuiltInOAuth2Provider provider, {
+  String? state,
+}) {
   final endpoint = _providerEndpoints[provider.provider];
   if (endpoint == null) {
     throw ArgumentError('Unknown provider: ${provider.provider}');
   }
 
   final oauthState = state ?? generateState();
+  final codeVerifier = generateCodeVerifier();
+  final codeChallenge = generateCodeChallenge(codeVerifier);
   final scopes = provider.scopes ?? endpoint.defaultScopes;
 
   final params = <String, String>{
@@ -126,6 +154,8 @@ String buildOAuth2Url(BuiltInOAuth2Provider provider, {String? state}) {
     'response_type': 'code',
     'scope': scopes.join(' '),
     'state': oauthState,
+    'code_challenge': codeChallenge,
+    'code_challenge_method': 'S256',
   };
 
   if (provider.redirectUri != null) {
@@ -133,18 +163,31 @@ String buildOAuth2Url(BuiltInOAuth2Provider provider, {String? state}) {
   }
 
   final uri = Uri.parse(endpoint.authUrl).replace(queryParameters: params);
-  return uri.toString();
+  return OAuth2AuthorizationRequest(
+    url: uri.toString(),
+    state: oauthState,
+    codeVerifier: codeVerifier,
+  );
 }
 
-/// Build an OAuth2 authorization URL for a custom provider.
-String buildCustomOAuth2Url(CustomOAuth2Provider provider, {String? state}) {
+/// Build an OAuth2 authorization URL for a custom provider, with PKCE
+/// (`S256`) and CSRF `state` wired in. See [buildOAuth2Url] for the
+/// caller-side contract on the returned request.
+OAuth2AuthorizationRequest buildCustomOAuth2Url(
+  CustomOAuth2Provider provider, {
+  String? state,
+}) {
   final oauthState = state ?? generateState();
+  final codeVerifier = generateCodeVerifier();
+  final codeChallenge = generateCodeChallenge(codeVerifier);
   final scopes = provider.scopes ?? [];
 
   final params = <String, String>{
     'client_id': provider.clientId,
     'response_type': 'code',
     'state': oauthState,
+    'code_challenge': codeChallenge,
+    'code_challenge_method': 'S256',
   };
 
   if (scopes.isNotEmpty) {
@@ -156,27 +199,81 @@ String buildCustomOAuth2Url(CustomOAuth2Provider provider, {String? state}) {
   }
 
   final uri = Uri.parse(provider.authUrl).replace(queryParameters: params);
-  return uri.toString();
+  return OAuth2AuthorizationRequest(
+    url: uri.toString(),
+    state: oauthState,
+    codeVerifier: codeVerifier,
+  );
 }
 
-/// Build an OIDC authorization URL using the issuer's discovery endpoint.
+/// Build an OIDC authorization URL using the issuer's discovery document.
 ///
-/// Note: In a real implementation, this would first fetch the
-/// `.well-known/openid-configuration` to get the authorization endpoint.
-/// For simplicity, this constructs the URL using `issuerUrl + /authorize`.
-String buildOIDCUrl(OIDCProvider provider, {String? state}) {
+/// Fetches `{issuerUrl}/.well-known/openid-configuration` (30s timeout) and
+/// uses its `authorization_endpoint`, rather than assuming a path — issuers
+/// are not required to serve authorization at `/authorize`. Wires in PKCE
+/// (`S256`) and CSRF `state`; see [buildOAuth2Url] for the caller-side
+/// contract on the returned request.
+///
+/// Throws on discovery fetch failure, a non-200 response, a malformed
+/// document, or a missing `authorization_endpoint` — callers should treat
+/// any exception as "social login unavailable" and surface an error rather
+/// than falling back to a guessed URL.
+///
+/// [client] is used for the discovery request if provided (e.g. an
+/// [http.testing.MockClient] in tests); otherwise an ephemeral client is
+/// created and closed for this call.
+Future<OAuth2AuthorizationRequest> buildOIDCUrl(
+  OIDCProvider provider, {
+  String? state,
+  http.Client? client,
+}) async {
   final oauthState = state ?? generateState();
+  final codeVerifier = generateCodeVerifier();
+  final codeChallenge = generateCodeChallenge(codeVerifier);
   final scopes = provider.scopes ?? ['openid', 'email', 'profile'];
 
-  final authEndpoint = provider.issuerUrl.endsWith('/')
-      ? '${provider.issuerUrl}authorize'
-      : '${provider.issuerUrl}/authorize';
+  final discoveryUrl = provider.issuerUrl.endsWith('/')
+      ? '${provider.issuerUrl}.well-known/openid-configuration'
+      : '${provider.issuerUrl}/.well-known/openid-configuration';
+
+  final ownedClient = client == null ? http.Client() : null;
+  final httpClient = client ?? ownedClient!;
+
+  final http.Response response;
+  try {
+    response = await httpClient
+        .get(Uri.parse(discoveryUrl))
+        .timeout(const Duration(seconds: 30));
+  } finally {
+    ownedClient?.close();
+  }
+
+  if (response.statusCode != 200) {
+    throw http.ClientException(
+      'OIDC discovery request failed with status ${response.statusCode}',
+    );
+  }
+
+  final decoded = json.decode(response.body);
+  if (decoded is! Map<String, dynamic>) {
+    throw const FormatException(
+        'OIDC discovery document was not a JSON object');
+  }
+
+  final authEndpoint = decoded['authorization_endpoint'] as String?;
+  if (authEndpoint == null || authEndpoint.isEmpty) {
+    throw const FormatException(
+      'OIDC discovery document is missing authorization_endpoint',
+    );
+  }
 
   final params = <String, String>{
     'client_id': provider.clientId,
     'response_type': 'code',
     'scope': scopes.join(' '),
     'state': oauthState,
+    'code_challenge': codeChallenge,
+    'code_challenge_method': 'S256',
   };
 
   if (provider.redirectUri != null) {
@@ -184,7 +281,11 @@ String buildOIDCUrl(OIDCProvider provider, {String? state}) {
   }
 
   final uri = Uri.parse(authEndpoint).replace(queryParameters: params);
-  return uri.toString();
+  return OAuth2AuthorizationRequest(
+    url: uri.toString(),
+    state: oauthState,
+    codeVerifier: codeVerifier,
+  );
 }
 
 /// Get the display label for a built-in provider.
