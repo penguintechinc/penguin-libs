@@ -7,9 +7,12 @@ import pytest
 
 import penguin_licensing.client as client_module
 from penguin_licensing.client import LicenseClient
+from flask import Flask
+
 from penguin_licensing.decorators import (
     FeatureNotAvailableError,
     LicenseRequiredError,
+    _is_bypass_domain,
     feature_required,
     license_required,
 )
@@ -418,3 +421,117 @@ class TestExceptionIdentity:
 
         assert excinfo.value.required_tier == "enterprise"
         assert excinfo.value.current_tier == "community"
+
+
+class TestDomainBypass:
+    """Managed PenguinTech domains skip license enforcement entirely.
+
+    Bypass is host-driven only — there is no env var or config flag — so these
+    tests pin both the matching rules and the zero-client-call guarantee.
+    """
+
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "elder.penguincloud.io",
+            "penguincloud.io",
+            "waddlebot.penguintech.cloud",
+            "penguintech.cloud",
+            "squawk.localhost.local",
+            "ELDER.PENGUINCLOUD.IO",
+            "elder.penguincloud.io:8443",
+        ],
+    )
+    def test_bypass_domains_match(self, host):
+        """Managed hosts match on a dot boundary, case- and port-insensitively."""
+        assert _is_bypass_domain(host) is True
+
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "evilpenguincloud.io",
+            "penguincloud.io.attacker.test",
+            "notpenguintech.cloud",
+            "example.com",
+            "localhost",
+        ],
+    )
+    def test_non_bypass_domains_do_not_match(self, host):
+        """Look-alike hosts must not slip past the dot-boundary check."""
+        assert _is_bypass_domain(host) is False
+
+    def test_bypass_host_allows_without_client_calls(self):
+        """A bypass-domain request runs the view with zero license client calls."""
+        app = Flask(__name__)
+
+        @license_required("enterprise")
+        def sync_func():
+            return "ran"
+
+        with patch("penguin_licensing.client.get_license_client") as mock_get:
+            with app.test_request_context("/", base_url="https://elder.penguincloud.io"):
+                assert sync_func() == "ran"
+            mock_get.assert_not_called()
+
+    def test_bypass_host_allows_feature_without_client_calls(self):
+        """feature_required is bypassed on managed domains, with no client calls."""
+        app = Flask(__name__)
+
+        @feature_required("sso")
+        def sync_func():
+            return "ran"
+
+        with patch("penguin_licensing.client.get_license_client") as mock_get:
+            with app.test_request_context("/", base_url="https://waddlebot.penguintech.cloud"):
+                assert sync_func() == "ran"
+            mock_get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_bypass_host_allows_async_without_client_calls(self):
+        """The async wrapper short-circuits on managed domains too."""
+        app = Flask(__name__)
+
+        @license_required("enterprise")
+        async def async_func():
+            return "ran"
+
+        with patch("penguin_licensing.client.get_license_client") as mock_get:
+            with app.test_request_context("/", base_url="https://elder.penguincloud.io"):
+                assert await async_func() == "ran"
+            mock_get.assert_not_called()
+
+    @patch("penguin_licensing.client.LicenseClient")
+    def test_non_bypass_host_still_enforced(self, mock_client_class):
+        """A non-managed host gets the normal fail-closed tier check."""
+        app = Flask(__name__)
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_validation = MagicMock()
+        mock_validation.valid = True
+        mock_validation.tier = "community"
+        mock_client.validate.return_value = mock_validation
+
+        @license_required("enterprise")
+        def sync_func():
+            return "ran"
+
+        with app.test_request_context("/", base_url="https://customer.example.com"):
+            with pytest.raises(LicenseRequiredError):
+                sync_func()
+
+    @patch("penguin_licensing.client.LicenseClient")
+    def test_no_flask_context_fails_closed(self, mock_client_class):
+        """Outside a Flask request there is no trusted host, so gating still runs."""
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_validation = MagicMock()
+        mock_validation.valid = True
+        mock_validation.tier = "community"
+        mock_client.validate.return_value = mock_validation
+
+        @license_required("enterprise")
+        def sync_func():
+            return "ran"
+
+        with pytest.raises(LicenseRequiredError):
+            sync_func()

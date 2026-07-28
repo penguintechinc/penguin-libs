@@ -23,13 +23,25 @@ lint: ## Run linters on all packages
 	cd packages/go-aaa && golangci-lint run ./...
 	cd packages/go-common && golangci-lint run ./...
 	cd packages/go-rpc && golangci-lint run ./...
+	cd packages/go-dal && golangci-lint run ./...
+	cd packages/go-logging && golangci-lint run ./...
+	cd packages/go-numa && golangci-lint run ./...
+	cd packages/go-xdp && golangci-lint run ./...
 	@echo "=== Python lint ==="
 	cd packages/python-aaa && ruff check src/ tests/ && ruff format --check src/ tests/
 	cd packages/python-utils && ruff check src/ tests/ && ruff format --check src/ tests/
 	cd packages/python-rpc && ruff check src/ tests/ && ruff format --check src/ tests/
+	cd packages/python-crypto && ruff check src/
+	cd packages/python-security && ruff check src/
+	cd packages/python-http && ruff check src/
 	@echo "=== React lint ==="
 	cd packages/react-aaa && npm run lint
 	cd packages/react-libs && npm run lint
+	cd packages/react-form-builder && npm run lint
+	cd packages/react-login && npm run lint
+	cd packages/react-sidebar && npm run lint
+	cd packages/react-console-version && npm run lint
+	cd packages/react-hooks && npm run lint
 	@echo "=== Rust lint ==="
 	cd packages/rust-rpc && cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --all --check
 	@echo "=== Containers/shell lint ==="
@@ -41,15 +53,29 @@ test: ## Run tests on all packages
 	cd packages/go-common && go test -race -v ./...
 	cd packages/go-aaa && go test -race -v ./...
 	cd packages/go-rpc && go test -race -v ./...
+	cd packages/go-dal && go test -race -v ./...
+	cd packages/go-logging && go test -race -v ./...
+	cd packages/go-numa && go test -race -v ./...
+	cd packages/go-xdp && go test -race -v ./...
 	@echo "=== Python tests ==="
 	cd packages/python-aaa && pytest tests/ -v --tb=short
 	cd packages/python-utils && pytest tests/ -v --tb=short
 	cd packages/python-rpc && pytest tests/ -v --tb=short
 	cd packages/python-email && pytest tests/ -v --tb=short
 	cd packages/python-limiter && pytest tests/ -v --tb=short
+	cd packages/python-licensing && pytest tests/ -v --tb=short
+	cd packages/python-dal && pytest tests/ -v --tb=short
+	cd packages/python-crypto && pytest tests/ -v --tb=short
+	cd packages/python-security && pytest tests/ -v --tb=short
+	cd packages/python-http && pytest tests/ -v --tb=short
 	@echo "=== React tests ==="
 	cd packages/react-aaa && npm test
 	cd packages/react-libs && npm test
+	cd packages/react-form-builder && npm test
+	cd packages/react-login && npm test
+	cd packages/react-sidebar && npm test
+	cd packages/react-console-version && npm test
+	cd packages/react-hooks && npm test
 	@echo "=== Rust tests ==="
 	cd packages/rust-rpc && cargo test --workspace
 
@@ -86,8 +112,12 @@ prpc-integration: ## Run cross-lane integration tests for go-rpc (real sockets, 
 
 security: test-security ## Alias for test-security
 
-pre-commit: build lint security test ## Run full pre-commit gate
-	@echo "=== All checks passed ==="
+pre-commit: ## Run full pre-commit gate
+	@echo "=== Pre-commit checks ==="
+	@$(MAKE) lint
+	@$(MAKE) test-security
+	@$(MAKE) test
+	@echo "=== Pre-commit complete ==="
 
 install-tools: ## Install Go development tools
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
@@ -131,3 +161,52 @@ helm-template-alpha:
 
 helm-template-beta:
 	@helm template $(PROJECT_NAME) ./$(HELM_DIR) --values ./$(HELM_DIR)/values.yaml --values ./$(HELM_DIR)/beta.yml
+
+# House-standard targets (penguin-libs is a library repo — several are no-ops by design)
+.PHONY: dev test-unit test-integration test-e2e test-functional smoke-test docker-build docker-push deploy-dev deploy-prod seed-mock-data clean
+
+dev: ## Install all Python packages in editable mode for local development
+	@for p in aaa dal email libs licensing limiter pytest secrets utils crypto security http; do \
+		[ -d packages/python-$$p ] && pip3 install -e "packages/python-$$p" || true; \
+	done
+	@npm install
+
+test-unit: test ## Unit tests (alias for the full per-package test loop)
+
+test-integration: ## Integration tests — none defined for a library repo
+	@echo "No integration tests defined (library repo)"
+
+test-e2e: ## End-to-end tests — none defined for a library repo
+	@echo "No e2e tests defined (library repo)"
+
+test-functional: ## Functional tests — none defined for a library repo
+	@echo "No functional tests defined (library repo)"
+
+smoke-test: ## Fast import/build smoke check across packages
+	@echo "=== Python import smoke ==="
+	@PYTHONPATH=packages/python-dal/src python3 -c "import penguin_dal; print('penguin_dal OK')"
+	@PYTHONPATH=packages/python-licensing/src python3 -c "import penguin_licensing; print('penguin_licensing OK')"
+	@echo "=== Go build smoke ==="
+	@for d in packages/go-*/; do [ -f "$$d/go.mod" ] && (cd "$$d" && go build ./... && echo "$$d OK"); done
+	@echo "=== React build smoke ==="
+	@npm run build --workspaces --if-present
+
+docker-build: ## No container images in this library repo
+	@echo "Library repo — no Docker images"
+
+docker-push: ## No container images in this library repo
+	@echo "Library repo — no Docker images"
+
+deploy-dev: ## Publishing happens via CI tags (PyPI / npm)
+	@echo "Library repo — publish via CI tags to PyPI/npm"
+
+deploy-prod: ## Publishing happens via CI tags (PyPI / npm)
+	@echo "Library repo — publish via CI tags to PyPI/npm"
+
+seed-mock-data: ## No mock data in this library repo
+	@echo "Library repo — no mock data"
+
+clean: ## Remove build artifacts and caches
+	@find . -type d -name __pycache__ -not -path "*/node_modules/*" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name "*.egg-info" -not -path "*/node_modules/*" -exec rm -rf {} + 2>/dev/null || true
+	@find . -name "*.pyc" -not -path "*/node_modules/*" -delete 2>/dev/null || true

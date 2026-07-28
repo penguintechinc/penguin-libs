@@ -5,24 +5,48 @@
 
 ## Summary
 
-All 8 packages in the penguin-libs monorepo are now properly configured for automated publishing via GitHub Actions.
+All 32 published artifacts in the penguin-libs monorepo are configured for automated publishing via GitHub Actions.
 
 ## Package Publishing Configuration
 
 | # | Package | Registry | Package Name | Tag Trigger | Workflow Job | Status |
 |---|---------|----------|--------------|-------------|--------------|--------|
-| 1 | react-libs | GitHub Packages (npm) | @penguintechinc/react-libs | `react-libs-v*` | `publish-react-libs` | ✅ Configured |
-| 2 | python-libs | PyPI | penguin-libs | `python-libs-v*` | `publish-python-libs` | ✅ Configured |
-| 3 | python-licensing | PyPI | penguin-licensing | `python-licensing-v*` | `publish-python-licensing` | ✅ Configured |
-| 4 | python-secrets | PyPI | penguin-sal | `python-secrets-v*` | `publish-python-secrets` | ✅ Configured |
-| 5 | python-utils | PyPI | penguin-utils | `python-utils-v*` | `publish-python-utils` | ✅ **NEWLY ADDED** |
-| 6 | go-common | GitHub (go get) | github.com/.../go-common | `v*` | `validate-go-common` | ✅ Configured |
-| 7 | go-h3 | GitHub (go get) | github.com/.../go-h3 | `v*` | `validate-go-common` | ✅ Configured |
-| 8 | flutter_libs | pub.dev | flutter_libs | `flutter-libs-v*` | `publish-flutter-libs` | ✅ Configured (dry-run) |
-| 9 | python-rpc | PyPI | penguin-rpc | `penguin-rpc-v*` | `publish-python-rpc` | 🔜 Not yet published |
-| 10 | go-rpc | GitHub (go get) | github.com/.../go-rpc | `go-rpc-v*` | `validate-go-rpc` | 🔜 Not yet published |
-| 11 | rust-rpc (penguin-rpc) | crates.io | penguin-rpc | `rust-rpc-v*` | `publish-rust-rpc` | 🔜 Not yet published |
-| 12 | rust-rpc (penguin-h3-tower) | crates.io | penguin-h3-tower | `rust-rpc-v*` | `publish-rust-rpc` | 🔜 Not yet published |
+| 1 | react-libs | npm (public) | @penguintechinc/react-libs | `react-libs-v*` | `publish-react-libs` | ✅ Configured |
+| 2 | react-aaa | npm (public) | @penguintechinc/react-aaa | `react-aaa-v*` | `publish-react-aaa` | ✅ Configured |
+| 3 | react-testutils | npm (public) | @penguintechinc/react-testutils | `react-testutils-v*` | `publish-react-testutils` | ✅ Configured |
+| 4 | react-form-builder | npm (public) | @penguintechinc/react-form-builder | `react-form-builder-v*` | `publish-react-form-builder` | 🔜 Pending first publish |
+| 5 | react-login | npm (public) | @penguintechinc/react-login | `react-login-v*` | `publish-react-login` | 🔜 Pending first publish |
+| 6 | react-sidebar | npm (public) | @penguintechinc/react-sidebar | `react-sidebar-v*` | `publish-react-sidebar` | 🔜 Pending first publish |
+| 7 | react-console-version | npm (public) | @penguintechinc/react-console-version | `react-console-version-v*` | `publish-react-console-version` | 🔜 Pending first publish |
+| 8 | react-hooks | npm (public) | @penguintechinc/react-hooks | `react-hooks-v*` | `publish-react-hooks` | 🔜 Pending first publish |
+| 9 | python-libs | PyPI | penguin-libs | `penguin-libs-v*` | `publish-python-libs` | ✅ Configured |
+| 10 | python-licensing | PyPI | penguin-licensing | `penguin-licensing-v*` | `publish-python-licensing` | ✅ Configured |
+| 11 | python-secrets | PyPI | penguin-sal | `penguin-secrets-v*` | `publish-python-secrets` | ✅ Configured |
+| 12 | python-utils | PyPI | penguin-utils | `penguin-utils-v*` | `publish-python-utils` | ✅ Configured |
+| 13 | python-aaa | PyPI | penguin-aaa | `penguin-aaa-v*` | `publish-python-aaa` | ✅ Configured |
+| 14 | python-dal | PyPI | penguin-dal | `penguin-dal-v*` | `publish-python-dal` | ✅ Configured |
+| 15 | python-pytest | PyPI | penguin-pytest | `penguin-pytest-v*` | `publish-penguin-pytest` | ✅ Configured |
+| 16 | python-email | PyPI | penguin-email | `penguin-email-v*` | `publish-python-email` | ✅ Configured |
+| 17 | python-limiter | PyPI | penguin-limiter | `penguin-limiter-v*` | `publish-python-limiter` | ✅ Configured |
+| 18 | python-crypto | PyPI | penguin-crypto | `penguin-crypto-v*` | `publish-python-crypto.yml` | 🔜 Pending first publish |
+| 19 | python-security | PyPI | penguin-security | `penguin-security-v*` | `publish-python-security.yml` | 🔜 Pending first publish |
+| 20 | python-http | PyPI | penguin-http | `penguin-http-v*` | `publish-python-http.yml` | 🔜 Pending first publish |
+| 21 | python-rpc | PyPI | penguin-rpc | `penguin-rpc-v*` | `publish-python-rpc` | 🔜 Pending first publish |
+| 22 | go-common | GitHub (go get) | github.com/.../go-common | `v*` | `validate-go-common` | ✅ Configured |
+| 23 | go-h3 | GitHub (go get) | github.com/.../go-h3 | `v*` | `validate-go-common` | ✅ Configured |
+| 24 | go-aaa | GitHub (go get) | github.com/.../go-aaa | `go-aaa-v*` | `validate-go-aaa` | ✅ Configured |
+| 25 | go-rpc | GitHub (go get) | github.com/.../go-rpc | `go-rpc-v*` | `validate-go-rpc` | 🔜 Pending first publish |
+| 26 | go-logging | GitHub (go get) | github.com/.../go-logging | `go-logging-v*` | `validate-go-split` | 🔜 Pending first publish |
+| 27 | go-numa | GitHub (go get) | github.com/.../go-numa | `go-numa-v*` | `validate-go-split` | 🔜 Pending first publish |
+| 28 | go-xdp | GitHub (go get) | github.com/.../go-xdp | `go-xdp-v*` | `validate-go-split` | 🔜 Pending first publish |
+| 29 | go-dal | GitHub (go get) | github.com/.../go-dal | `go-dal-v*` | `validate-go-split` | 🔜 Pending first publish |
+| 30 | flutter_libs | pub.dev | flutter_libs | `flutter-libs-v*` | `publish-flutter-libs` | ✅ Configured (dry-run) |
+| 31 | rust-rpc (penguin-rpc) | crates.io | penguin-rpc | `rust-rpc-v*` | `publish-rust-rpc` | 🔜 Pending first publish |
+| 32 | rust-rpc (penguin-h3-tower) | crates.io | penguin-h3-tower | `rust-rpc-v*` | `publish-rust-rpc` | 🔜 Pending first publish |
+
+**Licensing:** every package in this table ships under **MIT** except the pRPC packages
+(`python-rpc`, `go-rpc`, `rust-rpc`), which are **Apache-2.0**. The root `LICENSE` (MIT) is
+vendored into each package directory.
 
 ## Changes Made
 
@@ -122,17 +146,35 @@ GitHub UI: **Actions → Publish Packages → Run workflow → Select package**
 - `penguin-libs` (python-libs)
 - `penguin-licensing` (python-licensing)
 - `penguin-sal` (python-secrets)
-- `penguin-utils` (python-utils) ← **NEWLY ADDED**
+- `penguin-utils` (python-utils)
+- `penguin-aaa` (python-aaa)
+- `penguin-dal` (python-dal)
+- `penguin-email` (python-email)
+- `penguin-limiter` (python-limiter)
+- `penguin-pytest` (python-pytest)
+- `penguin-crypto` (python-crypto) ← **NEW**
+- `penguin-security` (python-security) ← **NEW**
+- `penguin-http` (python-http) ← **NEW**
+- `penguin-rpc` (python-rpc, Apache-2.0)
 
-### GitHub Packages (npm)
+### npm (public registry)
 
-- **Authentication**: `GITHUB_TOKEN` (automatic)
+- **Authentication**: `NPM_TOKEN` secret
 - **Scope**: `@penguintechinc`
-- **Registry**: `https://npm.pkg.github.com`
-- **Permissions**: `packages: write`
+- **Registry**: `https://registry.npmjs.org`
+- **Permissions**: `contents: read`, `id-token: write` (provenance)
+- **Publish command**: `npm publish --provenance`
+- **No GitHub Packages**: all `@penguintechinc` packages publish to public npm only
 
 **Packages:**
 - `@penguintechinc/react-libs`
+- `@penguintechinc/react-aaa`
+- `@penguintechinc/react-testutils`
+- `@penguintechinc/react-form-builder`
+- `@penguintechinc/react-login`
+- `@penguintechinc/react-sidebar`
+- `@penguintechinc/react-console-version`
+- `@penguintechinc/react-hooks`
 
 ### GitHub (Go Modules)
 
@@ -143,6 +185,12 @@ GitHub UI: **Actions → Publish Packages → Run workflow → Select package**
 **Packages:**
 - `github.com/penguintechinc/penguin-libs/packages/go-common`
 - `github.com/penguintechinc/penguin-libs/packages/go-h3`
+- `github.com/penguintechinc/penguin-libs/packages/go-aaa`
+- `github.com/penguintechinc/penguin-libs/packages/go-rpc` (Apache-2.0)
+- `github.com/penguintechinc/penguin-libs/packages/go-logging` ← **NEW**
+- `github.com/penguintechinc/penguin-libs/packages/go-numa` ← **NEW**
+- `github.com/penguintechinc/penguin-libs/packages/go-xdp` ← **NEW**
+- `github.com/penguintechinc/penguin-libs/packages/go-dal` ← **NEW**
 
 ### pub.dev (Flutter)
 
@@ -201,7 +249,7 @@ gh workflow run publish.yml -f package=python-utils
 - **GitHub Actions**: https://github.com/penguintechinc/penguin-libs/actions
 - **Workflow file**: `.github/workflows/publish.yml`
 - **PyPI packages**: https://pypi.org/user/penguintechinc/
-- **GitHub Packages**: https://github.com/orgs/penguintechinc/packages
+- **npm packages**: https://www.npmjs.com/org/penguintechinc
 
 ## Documentation
 

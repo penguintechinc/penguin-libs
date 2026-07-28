@@ -12,7 +12,7 @@ import (
 	"github.com/penguintechinc/penguin-libs/packages/go-aaa/audit"
 	"github.com/penguintechinc/penguin-libs/packages/go-aaa/authn"
 	"github.com/penguintechinc/penguin-libs/packages/go-aaa/authz"
-	"github.com/penguintechinc/penguin-libs/packages/go-common/logging"
+	"github.com/penguintechinc/penguin-libs/packages/go-logging/logging"
 )
 
 // This file proves and pins the fix for the Critical spec-compliance defect

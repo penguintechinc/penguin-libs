@@ -1,11 +1,9 @@
 """License validation decorators for Elder enterprise features."""
 
-# flake8: noqa: E501
-
-
 import inspect
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 import structlog
 
@@ -24,19 +22,58 @@ __all__ = [
     "license_required",
 ]
 
+# Managed deployment domains — license enforcement is bypassed because these
+# deployments are billed separately. Bypass is domain-driven only; there is
+# deliberately no environment variable or config flag that can disable gating.
+_BYPASS_DOMAINS = (
+    ".penguincloud.io",
+    ".penguintech.cloud",
+    ".localhost.local",
+)
+
+
+def _is_bypass_domain(host: str) -> bool:
+    """
+    Return True when host is a managed PenguinTech domain that skips license checks.
+
+    Matches on a dot boundary only, so ``evilpenguincloud.io`` never matches
+    ``.penguincloud.io``; the bare apex (``penguincloud.io``) does match.
+    """
+    h = host.split(":")[0].lower()
+    return any(h == d.lstrip(".") or h.endswith(d) for d in _BYPASS_DOMAINS)
+
+
+def _bypass_active() -> bool:
+    """
+    Return True when the in-flight request targets a managed bypass domain.
+
+    Reads the host from the active Flask request. Outside a Flask request
+    context there is no host to trust, so this fails closed (no bypass) and
+    the normal license check runs.
+    """
+    try:
+        from flask import request  # noqa: PLC0415
+
+        host = request.host
+    except (ImportError, RuntimeError):
+        return False
+    if not host or not _is_bypass_domain(host):
+        return False
+    logger.debug("license_check_domain_bypass", host=host)
+    return True
+
 
 def license_required(required_tier: str = "enterprise") -> Callable[[F], F]:
     """
-    Decorator to enforce license tier requirements for enterprise features.
+    Enforce license tier requirements for enterprise features.
 
-    Checks if the current license meets the minimum tier requirement.
     Tier hierarchy: community < professional < enterprise
 
     Uses the shared license client, so a validation cached before a license
     server outage keeps gating decisions stable while the server is down.
 
     Args:
-        required_tier: Minimum license tier required (default: enterprise)
+        required_tier: Minimum tier required (default: enterprise)
 
     Returns:
         Decorated function that checks license before execution
@@ -56,6 +93,9 @@ def license_required(required_tier: str = "enterprise") -> Callable[[F], F]:
     def decorator(func: F) -> F:
         @wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            if _bypass_active():
+                return await func(*args, **kwargs)
+
             from penguin_licensing.client import get_license_client
 
             client = get_license_client()
@@ -78,6 +118,9 @@ def license_required(required_tier: str = "enterprise") -> Callable[[F], F]:
 
         @wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+            if _bypass_active():
+                return func(*args, **kwargs)
+
             from penguin_licensing.client import get_license_client
 
             client = get_license_client()
@@ -108,9 +151,7 @@ def license_required(required_tier: str = "enterprise") -> Callable[[F], F]:
 
 def feature_required(feature_name: str) -> Callable[[F], F]:
     """
-    Decorator to enforce specific feature entitlement.
-
-    Checks if the license includes entitlement for a specific feature.
+    Enforce specific feature entitlement.
 
     Args:
         feature_name: Feature identifier to check
@@ -133,6 +174,9 @@ def feature_required(feature_name: str) -> Callable[[F], F]:
     def decorator(func: F) -> F:
         @wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            if _bypass_active():
+                return await func(*args, **kwargs)
+
             from penguin_licensing.client import get_license_client
 
             client = get_license_client()
@@ -148,6 +192,9 @@ def feature_required(feature_name: str) -> Callable[[F], F]:
 
         @wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+            if _bypass_active():
+                return func(*args, **kwargs)
+
             from penguin_licensing.client import get_license_client
 
             client = get_license_client()

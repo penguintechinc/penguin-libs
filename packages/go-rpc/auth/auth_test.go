@@ -21,7 +21,7 @@ import (
 	"github.com/penguintechinc/penguin-libs/packages/go-aaa/authz"
 	"github.com/penguintechinc/penguin-libs/packages/go-aaa/crypto"
 	"github.com/penguintechinc/penguin-libs/packages/go-aaa/middleware"
-	"github.com/penguintechinc/penguin-libs/packages/go-common/logging"
+	"github.com/penguintechinc/penguin-libs/packages/go-logging/logging"
 	healthv1 "github.com/penguintechinc/penguin-libs/packages/go-rpc/gen/prpc/health/v1"
 	"github.com/penguintechinc/penguin-libs/packages/go-rpc/gen/prpc/health/v1/healthv1connect"
 )

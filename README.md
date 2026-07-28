@@ -5,32 +5,52 @@
 
 Shared libraries for Penguin Tech applications across all languages.
 
-## Packages
-
-### JavaScript/TypeScript
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| [@penguintechinc/react-libs](./packages/react-libs) | 1.2.0 | React components (LoginPageBuilder, FormModalBuilder, SidebarMenu) |
+## Package Directory
 
 ### Python
 
 | Package | Version | Coverage | Description |
 |---------|---------|----------|-------------|
-| [penguin-aaa](./packages/python-aaa) | 0.1.0 | 99% | Authentication, authorization, and audit (OIDC, RBAC, SPIFFE, tenant isolation) |
-| [penguin-dal](./packages/python-dal) | 0.1.0 | 98% | Database access layer — PyDAL-style API over SQLAlchemy |
-| [penguin-libs](./packages/python-libs) | 0.1.0 | 98% | H3 protocol, HTTP client, validation, Pydantic base models |
+| [penguin-aaa](./packages/python-aaa) | 0.2.0 | 99% | Authentication, authorization, and audit (OIDC, RBAC, SPIFFE, tenant isolation) |
+| [penguin-crypto](./packages/python-crypto) | 0.1.0 | — | Cryptographic primitives and key handling |
+| [penguin-dal](./packages/python-dal) | 0.3.0 | 98% | Database access layer — PyDAL-style API over SQLAlchemy, plus storage/cache/stream/document backends |
+| [penguin-email](./packages/python-email) | 0.1.0 | — | SMTP delivery helpers |
+| [penguin-http](./packages/python-http) | 0.1.0 | — | HTTP client utilities |
+| [penguin-libs](./packages/python-libs) | 0.3.0 | 98% | Transition meta-package — re-exports the split packages |
 | [penguin-licensing](./packages/python-licensing) | 0.1.0 | 100% | PenguinTech License Server integration |
-| [penguin-sal](./packages/python-secrets) | 0.1.0 | 100% | Secrets and authentication library |
-| [penguin-utils](./packages/python-utils) | 0.1.0 | 99% | Sanitized logging and Flask utilities |
+| [penguin-limiter](./packages/python-limiter) | 0.1.0 | — | Rate limiting middleware (HTTP + gRPC) |
+| [penguin-pytest](./packages/python-pytest) | 0.1.0 | — | Shared pytest fixtures and helpers |
+| [penguin-sal](./packages/python-secrets) | 0.2.1 | 100% | Secrets and authentication library |
+| [penguin-security](./packages/python-security) | 0.1.0 | — | Security primitives and hardening helpers |
+| [penguin-utils](./packages/python-utils) | 0.2.0 | 99% | Sanitized logging and Flask utilities |
 | [penguin-rpc](./packages/python-rpc) | 0.1.0 | 100% | pRPC — Connect RPC over HTTP/3/QUIC, Python implementation (Apache-2.0) |
+
+### TypeScript / React
+
+All published to **public npm** (npmjs.com) under the `@penguintechinc` scope.
+
+| Package | Version | Description |
+|---------|---------|-------------|
+| [@penguintechinc/react-libs](./packages/react-libs) | 1.3.5 | Shared React components — transition package re-exporting the split packages |
+| [@penguintechinc/react-aaa](./packages/react-aaa) | 0.1.5 | Auth context, OIDC client, token manager, protected routes |
+| [@penguintechinc/react-testutils](./packages/react-testutils) | 0.1.3 | Test helpers and render utilities |
+| [@penguintechinc/react-console-version](./packages/react-console-version) | 0.1.0 | Sanitized console version banner |
+| [@penguintechinc/react-form-builder](./packages/react-form-builder) | 0.1.0 | Declarative form/modal builder |
+| [@penguintechinc/react-hooks](./packages/react-hooks) | 0.1.0 | Shared React hooks |
+| [@penguintechinc/react-login](./packages/react-login) | 0.1.0 | Login page builder (SSO buttons, MFA, WebAuthn) |
+| [@penguintechinc/react-sidebar](./packages/react-sidebar) | 0.1.0 | Collapsible sidebar navigation |
 
 ### Go
 
 | Package | Version | Description |
 |---------|---------|-------------|
-| [go-common](./packages/go-common) | - | Common Go utilities and helpers |
+| [go-aaa](./packages/go-aaa) | - | Authentication, authorization, audit (OIDC RP, PKCE, SPIFFE) |
+| [go-common](./packages/go-common) | - | Common Go utilities and helpers (transition) |
+| [go-dal](./packages/go-dal) | - | Database/storage/cache/stream/document access layer |
 | [go-h3](./packages/go-h3) | - | Go H3 protocol interceptors and middleware |
+| [go-logging](./packages/go-logging) | - | Sanitized structured logging and sinks |
+| [go-numa](./packages/go-numa) | - | NUMA-aware buffer pools and aligned allocation |
+| [go-xdp](./packages/go-xdp) | - | XDP / AF_XDP networking helpers |
 | [go-rpc](./packages/go-rpc) | 0.1.0 | pRPC — Connect RPC over HTTP/3/QUIC, Go implementation (Apache-2.0) |
 
 ### Rust
@@ -39,12 +59,15 @@ Shared libraries for Penguin Tech applications across all languages.
 |---------|---------|-------------|
 | [penguin-rpc](./packages/rust-rpc/crates/penguin-rpc) | 0.1.0 | pRPC — Connect RPC over HTTP/3/QUIC, Rust implementation (Apache-2.0) |
 | [penguin-h3-tower](./packages/rust-rpc/crates/penguin-h3-tower) | 0.1.0 | HTTP/3 bridge for Tower services, used by penguin-rpc (Apache-2.0) |
+| [penguin-licensing](./packages/rust-licensing) | 0.1.0 | License entitlement + PostHog feature-flag client |
 
 ### Flutter/Dart
 
-| Package | Version | Description |
-|---------|---------|-------------|
-| [flutter_libs](./packages/flutter_libs) | - | Flutter UI components and utilities |
+| Package | Version | Install |
+|---------|---------|---------|
+| `flutter_libs` | [![pub](https://img.shields.io/pub/v/flutter_libs)](https://pub.dev/packages/flutter_libs) | Add to `pubspec.yaml` (see Installation) |
+
+**Note**: `penguin-email` and `penguin-limiter` are standalone packages for SMTP and API rate limiting respectively. They are not bundled in the transition `penguin-libs` package — install them directly.
 
 ## Installation
 

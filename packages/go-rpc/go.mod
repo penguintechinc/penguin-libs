@@ -5,6 +5,7 @@ go 1.25.0
 replace (
 	github.com/penguintechinc/penguin-libs/packages/go-aaa => ../go-aaa
 	github.com/penguintechinc/penguin-libs/packages/go-common => ../go-common
+	github.com/penguintechinc/penguin-libs/packages/go-logging => ../go-logging
 )
 
 require (
@@ -16,7 +17,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/penguintechinc/penguin-libs/packages/go-aaa v0.0.0-00010101000000-000000000000
-	github.com/penguintechinc/penguin-libs/packages/go-common v0.0.0-00010101000000-000000000000
+	github.com/penguintechinc/penguin-libs/packages/go-logging v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
 	github.com/quic-go/quic-go v0.60.0
 	go.uber.org/goleak v1.3.0
@@ -42,6 +43,7 @@ require (
 	github.com/lestrrat-go/jwx/v2 v2.1.6 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/penguintechinc/penguin-libs/packages/go-common v0.0.0-00010101000000-000000000000 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect

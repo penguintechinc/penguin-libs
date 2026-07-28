@@ -18,6 +18,19 @@ from penguin_sal.core.exceptions import (
 from penguin_sal.core.types import ConnectionConfig, Secret
 
 
+def _make_client_error(code: str, message: str) -> BaseException:
+    """Build the exception the adapter actually catches: a genuine botocore
+    ClientError when botocore is installed, else a duck-typed Exception."""
+    response = {"Error": {"Code": code, "Message": message}}
+    try:
+        import botocore.exceptions  # type: ignore[import-not-found]
+        return botocore.exceptions.ClientError(response, "TestOperation")  # type: ignore[arg-type]
+    except ImportError:
+        err = Exception(message)
+        err.response = response  # type: ignore[attr-defined]
+        return err
+
+
 class TestAWSSecretsManagerAdapterInit:
     """Test adapter initialization."""
 
@@ -156,8 +169,7 @@ class TestAuthenticate:
         adapter = AWSSecretsManagerAdapter(config)
 
         mock_client = MagicMock()
-        error = Exception("invalid signature")
-        error.response = {"Error": {"Code": "InvalidSignatureException"}}  # type: ignore
+        error = _make_client_error("InvalidSignatureException", "invalid signature")
         mock_client.list_secrets.side_effect = error
         adapter._client = mock_client
         adapter._connected = True
@@ -170,8 +182,7 @@ class TestAuthenticate:
         adapter = AWSSecretsManagerAdapter(config)
 
         mock_client = MagicMock()
-        error = Exception("connection error")
-        error.response = {"Error": {"Code": "RequestLimitExceeded"}}  # type: ignore
+        error = _make_client_error("RequestLimitExceeded", "connection error")
         mock_client.list_secrets.side_effect = error
         adapter._client = mock_client
         adapter._connected = True
@@ -277,8 +288,7 @@ class TestGet:
         adapter = AWSSecretsManagerAdapter(config)
 
         mock_client = MagicMock()
-        error = Exception("not found")
-        error.response = {"Error": {"Code": "ResourceNotFoundException"}}  # type: ignore
+        error = _make_client_error("ResourceNotFoundException", "not found")
         mock_client.get_secret_value.side_effect = error
         adapter._client = mock_client
         adapter._connected = True
@@ -291,8 +301,7 @@ class TestGet:
         adapter = AWSSecretsManagerAdapter(config)
 
         mock_client = MagicMock()
-        error = Exception("access denied")
-        error.response = {"Error": {"Code": "AccessDenied"}}  # type: ignore
+        error = _make_client_error("AccessDenied", "access denied")
         mock_client.get_secret_value.side_effect = error
         adapter._client = mock_client
         adapter._connected = True
@@ -327,8 +336,7 @@ class TestSet:
         adapter = AWSSecretsManagerAdapter(config)
 
         mock_client = MagicMock()
-        error = Exception("not found")
-        error.response = {"Error": {"Code": "ResourceNotFoundException"}}  # type: ignore
+        error = _make_client_error("ResourceNotFoundException", "not found")
         mock_client.put_secret_value.side_effect = error
         mock_client.create_secret.return_value = {
             "ARN": "arn:aws:...",
@@ -381,8 +389,7 @@ class TestSet:
         adapter = AWSSecretsManagerAdapter(config)
 
         mock_client = MagicMock()
-        error = Exception("access denied")
-        error.response = {"Error": {"Code": "AccessDenied"}}  # type: ignore
+        error = _make_client_error("AccessDenied", "access denied")
         mock_client.put_secret_value.side_effect = error
         adapter._client = mock_client
         adapter._connected = True
@@ -416,8 +423,7 @@ class TestDelete:
         adapter = AWSSecretsManagerAdapter(config)
 
         mock_client = MagicMock()
-        error = Exception("not found")
-        error.response = {"Error": {"Code": "ResourceNotFoundException"}}  # type: ignore
+        error = _make_client_error("ResourceNotFoundException", "not found")
         mock_client.delete_secret.side_effect = error
         adapter._client = mock_client
         adapter._connected = True
@@ -431,8 +437,7 @@ class TestDelete:
         adapter = AWSSecretsManagerAdapter(config)
 
         mock_client = MagicMock()
-        error = Exception("access denied")
-        error.response = {"Error": {"Code": "AccessDenied"}}  # type: ignore
+        error = _make_client_error("AccessDenied", "access denied")
         mock_client.delete_secret.side_effect = error
         adapter._client = mock_client
         adapter._connected = True
@@ -512,8 +517,7 @@ class TestList:
         adapter = AWSSecretsManagerAdapter(config)
 
         mock_client = MagicMock()
-        error = Exception("access denied")
-        error.response = {"Error": {"Code": "AccessDenied"}}  # type: ignore
+        error = _make_client_error("AccessDenied", "access denied")
         mock_client.get_paginator.side_effect = error
         adapter._client = mock_client
         adapter._connected = True
@@ -543,8 +547,7 @@ class TestExists:
         adapter = AWSSecretsManagerAdapter(config)
 
         mock_client = MagicMock()
-        error = Exception("not found")
-        error.response = {"Error": {"Code": "ResourceNotFoundException"}}  # type: ignore
+        error = _make_client_error("ResourceNotFoundException", "not found")
         mock_client.describe_secret.side_effect = error
         adapter._client = mock_client
         adapter._connected = True
