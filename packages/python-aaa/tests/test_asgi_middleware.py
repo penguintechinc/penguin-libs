@@ -177,9 +177,7 @@ class TestOIDCAuthMiddleware:
     async def test_api_key_from_header_passes_through(self):
         """API key from x-api-key header bypasses Bearer requirement."""
         rp = self._rp()
-        middleware = OIDCAuthMiddleware(
-            _ok_app, rp, api_key_verifier=self._good_api_key_verifier
-        )
+        middleware = OIDCAuthMiddleware(_ok_app, rp, api_key_verifier=self._good_api_key_verifier)
         scope = _http_scope(headers=[(b"x-api-key", b"good-key")])
         messages, send = _make_send()
         await middleware(scope, AsyncMock(), send)
@@ -190,9 +188,7 @@ class TestOIDCAuthMiddleware:
     async def test_raw_auth_header_without_bearer_prefix(self):
         """Raw (non-Bearer) Authorization header is treated as API key."""
         rp = self._rp()
-        middleware = OIDCAuthMiddleware(
-            _ok_app, rp, api_key_verifier=self._good_api_key_verifier
-        )
+        middleware = OIDCAuthMiddleware(_ok_app, rp, api_key_verifier=self._good_api_key_verifier)
         scope = _http_scope(headers=[(b"authorization", b"good-key")])
         messages, send = _make_send()
         await middleware(scope, AsyncMock(), send)
@@ -203,9 +199,7 @@ class TestOIDCAuthMiddleware:
     async def test_bearer_jwt_fails_verifier_succeeds(self):
         """When Bearer JWT fails, fallback to verifier if set."""
         rp = self._rp(raises=True)
-        middleware = OIDCAuthMiddleware(
-            _ok_app, rp, api_key_verifier=self._good_api_key_verifier
-        )
+        middleware = OIDCAuthMiddleware(_ok_app, rp, api_key_verifier=self._good_api_key_verifier)
         # Authorization: Bearer good-key (not a JWT, so rp.verify_token raises)
         scope = _http_scope(headers=[(b"authorization", b"Bearer good-key")])
         messages, send = _make_send()
@@ -217,9 +211,7 @@ class TestOIDCAuthMiddleware:
     async def test_bad_api_key_returns_401(self):
         """Bad API key returns 401 with API-key-specific error message."""
         rp = self._rp()
-        middleware = OIDCAuthMiddleware(
-            _ok_app, rp, api_key_verifier=self._good_api_key_verifier
-        )
+        middleware = OIDCAuthMiddleware(_ok_app, rp, api_key_verifier=self._good_api_key_verifier)
         scope = _http_scope(headers=[(b"x-api-key", b"bad-key")])
         messages, send = _make_send()
         await middleware(scope, AsyncMock(), send)
@@ -234,9 +226,7 @@ class TestOIDCAuthMiddleware:
         expected_claims = {"sub": "jwt-user", "scopes": ["read"]}
         rp = self._rp(claims=expected_claims)
         # verifier rejects everything, but should not be called
-        middleware = OIDCAuthMiddleware(
-            _ok_app, rp, api_key_verifier=self._bad_api_key_verifier
-        )
+        middleware = OIDCAuthMiddleware(_ok_app, rp, api_key_verifier=self._bad_api_key_verifier)
         scope = _http_scope(headers=[(b"authorization", b"Bearer valid-jwt")])
         messages, send = _make_send()
         await middleware(scope, AsyncMock(), send)
@@ -272,9 +262,7 @@ class TestOIDCAuthMiddleware:
             return await original_verifier(key)
 
         rp = self._rp()
-        middleware = OIDCAuthMiddleware(
-            _ok_app, rp, api_key_verifier=tracking_verifier
-        )
+        middleware = OIDCAuthMiddleware(_ok_app, rp, api_key_verifier=tracking_verifier)
         # Both api_key_header and raw auth present; api_key_header should be used
         scope = _http_scope(
             headers=[
