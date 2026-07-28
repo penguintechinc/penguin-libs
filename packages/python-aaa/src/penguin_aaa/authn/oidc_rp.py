@@ -1,6 +1,9 @@
 """OIDC Relying Party — token validation and authorization flow helpers."""
 
+import base64
+import hashlib
 import hmac
+import os
 import secrets
 import urllib.parse
 from dataclasses import dataclass, field
@@ -80,18 +83,19 @@ class OIDCRelyingParty:
         self._jwks_client = PyJWKClient(document["jwks_uri"])
         return document
 
-    async def validate_token(self, raw_token: str) -> Claims:
+    async def validate_token(self, raw_token: str, expected_nonce: str | None = None) -> Claims:
         """
         Validate a raw JWT token string and return its parsed claims.
 
         Args:
             raw_token: The encoded JWT string.
+            expected_nonce: Optional nonce to verify against id_token payload.
 
         Returns:
             Validated Claims instance.
 
         Raises:
-            jwt.PyJWTError: On signature, expiry, or audience failures.
+            jwt.PyJWTError: On signature, expiry, audience, or nonce mismatches.
             ValueError: If required claims are missing or malformed.
         """
         if len(raw_token) > 8192:
@@ -101,6 +105,7 @@ class OIDCRelyingParty:
             await self.discover()
 
         assert self._jwks_client is not None
+        assert self._discovery is not None
         signing_key = self._jwks_client.get_signing_key_from_jwt(raw_token)
 
         skew_seconds = int(self._config.clock_skew.total_seconds())
@@ -109,8 +114,15 @@ class OIDCRelyingParty:
             signing_key.key,
             algorithms=self._config.algorithms,
             audience=self._config.client_id,
+            issuer=self._discovery["issuer"],
             leeway=skew_seconds,
         )
+
+        # Verify nonce if expected
+        if expected_nonce is not None:
+            token_nonce = payload.get("nonce")
+            if not hmac.compare_digest(token_nonce or "", expected_nonce):
+                raise jwt.PyJWTError("Nonce mismatch")
 
         # jwt.decode returns dict[str, Any]; normalise before pydantic validation
         _normalise_list_fields(payload, ("aud", "scope", "roles", "teams"))
@@ -124,6 +136,10 @@ class OIDCRelyingParty:
                 payload[field_name] = datetime.fromtimestamp(val, tz=UTC)
 
         return Claims.model_validate(payload)
+
+    async def verify_token(self, raw_token: str) -> Claims:
+        """Alias for validate_token — the ASGI OIDCAuthMiddleware calls verify_token()."""
+        return await self.validate_token(raw_token)
 
     def validate_state(self, returned_state: str, expected_state: str) -> bool:
         """
@@ -147,13 +163,21 @@ class OIDCRelyingParty:
         """
         return secrets.token_urlsafe(32)
 
-    def build_authorization_url(self, state: str, nonce: str | None = None) -> str:
+    def build_authorization_url(
+        self,
+        state: str,
+        nonce: str | None = None,
+        code_challenge: str | None = None,
+        code_challenge_method: str = "S256",
+    ) -> str:
         """
         Build the authorization redirect URL for the code flow.
 
         Args:
             state: CSRF state token (from generate_state()).
             nonce: Optional nonce for id_token replay protection.
+            code_challenge: Optional PKCE code challenge.
+            code_challenge_method: PKCE method ("S256" or "plain"; default "S256").
 
         Returns:
             The full authorization endpoint URL with query parameters.
@@ -173,9 +197,33 @@ class OIDCRelyingParty:
         }
         if nonce is not None:
             params["nonce"] = nonce
+        if code_challenge is not None:
+            params["code_challenge"] = code_challenge
+            params["code_challenge_method"] = code_challenge_method
 
         base: str = self._discovery["authorization_endpoint"]
         return base + "?" + urllib.parse.urlencode(params)
+
+
+# ---------------------------------------------------------------------------
+# Public helper functions
+# ---------------------------------------------------------------------------
+
+
+def generate_pkce_pair() -> tuple[str, str]:
+    """
+    Generate a PKCE (Proof Key for Public Clients) verifier and challenge.
+
+    Returns:
+        A tuple of (verifier, challenge_s256) where verifier is 32 random bytes
+        base64url-encoded and challenge is the SHA256 hash of the verifier,
+        also base64url-encoded.
+    """
+    verifier = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode()
+    challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+    )
+    return verifier, challenge
 
 
 # ---------------------------------------------------------------------------

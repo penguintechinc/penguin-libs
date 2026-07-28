@@ -1,0 +1,56 @@
+name: Publish penguin-http
+
+on:
+  push:
+    tags:
+      - 'penguin-http-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish penguin-http to PyPI
+    runs-on: ubuntu-latest
+    environment: pypi
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.13'
+
+      - name: Install build tools
+        run: |
+          python3 -m pip install --upgrade pip
+          pip3 install build twine
+
+      - name: Build package
+        run: python3 -m build
+        working-directory: packages/python-http
+
+      - name: Check package
+        run: twine check dist/*
+        working-directory: packages/python-http
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
+        with:
+          packages-dir: packages/python-http/dist/
+
+      - name: Create release summary
+        run: |
+          VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "## Published Package" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: penguin-http" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: \$VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
+        working-directory: packages/python-http
