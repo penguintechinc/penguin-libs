@@ -95,26 +95,117 @@ class ExampleHome extends StatelessWidget {
   }
 }
 
-class LoginExample extends StatelessWidget {
+/// Demonstrates [LoginPageBuilder] wired up with social login (PKCE/CSRF
+/// state handling via `onSocialLoginInitiated`) and secure token storage.
+class LoginExample extends StatefulWidget {
   const LoginExample({super.key});
 
   @override
+  State<LoginExample> createState() => _LoginExampleState();
+}
+
+class _LoginExampleState extends State<LoginExample> {
+  // Persist tokens to the platform Keychain/Keystore on a successful login.
+  // Call `_tokenStorage.clear()` wherever your app implements logout — this
+  // widget has no logout UI of its own.
+  final _tokenStorage = TokenStorage();
+
+  // In-memory holder for the pending OAuth request. A real app would
+  // persist this (e.g. secure storage keyed by `state`) so it survives the
+  // process being backgrounded while the browser is open, then read it
+  // back in the deep-link/callback handler to validate `state` (via
+  // `isValidCallbackState`) and complete the PKCE token exchange with
+  // `codeVerifier`.
+  String? _pendingOAuthState;
+  String? _pendingCodeVerifier;
+
+  @override
   Widget build(BuildContext context) {
-    return LoginPageBuilder(
-      apiConfig: const LoginApiConfig(
-        loginUrl: 'https://api.example.com/auth/login',
-      ),
-      branding: const BrandingConfig(
-        appName: 'Example App',
-        tagline: 'Welcome back! Please sign in.',
-      ),
-      onLoginSuccess: (response) {
-        debugPrint('Login success: ${response.user?.email}');
-        Navigator.pop(context);
-      },
-      onLoginError: (error) {
-        debugPrint('Login error: $error');
-      },
+    return Stack(
+      children: [
+        LoginPageBuilder(
+          apiConfig: LoginApiConfig(
+            loginUrl: 'https://api.example.com/auth/login',
+          ),
+          branding: const BrandingConfig(
+            appName: 'Example App',
+            tagline: 'Welcome back! Please sign in.',
+          ),
+          socialProviders: const [
+            BuiltInOAuth2Provider(
+              provider: BuiltInProviderType.google,
+              clientId: 'your-google-client-id',
+              redirectUri: 'https://example.com/auth/callback',
+            ),
+          ],
+          tokenStorage: _tokenStorage,
+          onSocialLoginInitiated: (provider, state, codeVerifier) {
+            // Called just before launching the provider's authorization
+            // URL. Stash state/codeVerifier now; your deep-link handler
+            // for `redirectUri` should call
+            // isValidCallbackState(_pendingOAuthState, returnedState)
+            // before exchanging the authorization code using
+            // _pendingCodeVerifier — see _handleOAuthCallback below.
+            _pendingOAuthState = state;
+            _pendingCodeVerifier = codeVerifier;
+            debugPrint('[LoginExample] social login initiated { provider: '
+                '${provider.runtimeType} }');
+          },
+          onLoginSuccess: (response) {
+            debugPrint('Login success: ${response.user?.email}');
+            Navigator.pop(context);
+          },
+          onLoginError: (error) {
+            debugPrint('Login error: $error');
+          },
+        ),
+
+        // Debug-only stand-in for your real deep-link handler firing after
+        // the browser redirects back with `state` + `code`. A real app
+        // wires _handleOAuthCallback to uni_links/app_links instead of a
+        // button.
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton.small(
+            heroTag: 'simulate-oauth-callback',
+            tooltip: 'Simulate OAuth callback (debug)',
+            backgroundColor: ElderColors.slate700,
+            onPressed: () => _handleOAuthCallback(
+              returnedState: _pendingOAuthState ?? '',
+              authorizationCode: 'debug-authorization-code',
+            ),
+            child: const Icon(Icons.bug_report, color: ElderColors.amber400),
+          ),
+        ),
+      ],
     );
+  }
+
+  /// Illustrates the deep-link/callback handler your app registers for
+  /// [BuiltInOAuth2Provider.redirectUri]. Wire your actual
+  /// `uni_links`/`app_links` (or platform channel) callback to call
+  /// something like this with the provider's returned `state` and
+  /// authorization `code`.
+  Future<void> _handleOAuthCallback({
+    required String returnedState,
+    required String authorizationCode,
+  }) async {
+    final expectedState = _pendingOAuthState;
+    final codeVerifier = _pendingCodeVerifier;
+    if (expectedState == null || codeVerifier == null) {
+      debugPrint('[LoginExample] OAuth callback with no pending request');
+      return;
+    }
+    if (!isValidCallbackState(expectedState, returnedState)) {
+      debugPrint('[LoginExample] OAuth callback state mismatch — rejecting');
+      return;
+    }
+    // Exchange `authorizationCode` + `codeVerifier` for tokens with your
+    // backend here, then persist via `_tokenStorage.saveTokens(...)`.
+    debugPrint('[LoginExample] OAuth callback validated, ready to exchange '
+        'code (verifier length: ${codeVerifier.length})');
+    _pendingOAuthState = null;
+    _pendingCodeVerifier = null;
   }
 }
