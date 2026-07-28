@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { OIDCClient } from '../authn/oidc-client.js';
 import { TokenManager } from '../authn/token-manager.js';
+import { sanitizeRedirectPath } from '../utils/redirect-sanitizer.js';
 import type { OIDCClientConfig } from '../authn/oidc-client.js';
 
 export interface LoginCallbackProps {
@@ -34,10 +35,11 @@ export function LoginCallback({
       .handleCallback(params)
       .then((tokens) => {
         manager.store(tokens);
+        const sanitized = sanitizeRedirectPath(redirectPath);
         if (onSuccess) {
-          onSuccess(redirectPath);
+          onSuccess(sanitized);
         } else {
-          window.location.replace(redirectPath);
+          window.location.replace(sanitized);
         }
       })
       .catch((err: unknown) => {
