@@ -1,6 +1,7 @@
 package crypto_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -63,7 +64,7 @@ func TestJWKSHandler_StatusOK(t *testing.T) {
 	}
 
 	handler := crypto.JWKSHandler(ks)
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/jwks.json", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/jwks.json", nil)
 	rec := httptest.NewRecorder()
 
 	handler(rec, req)
@@ -80,7 +81,7 @@ func TestJWKSHandler_ContentTypeJSON(t *testing.T) {
 	}
 
 	handler := crypto.JWKSHandler(ks)
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/jwks.json", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/jwks.json", nil)
 	rec := httptest.NewRecorder()
 
 	handler(rec, req)
@@ -98,7 +99,7 @@ func TestJWKSHandler_BodyIsValidJWKS(t *testing.T) {
 	}
 
 	handler := crypto.JWKSHandler(ks)
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/jwks.json", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/jwks.json", nil)
 	rec := httptest.NewRecorder()
 
 	handler(rec, req)

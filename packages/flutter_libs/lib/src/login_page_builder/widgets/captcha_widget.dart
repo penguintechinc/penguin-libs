@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 import '../../theme/elder_colors.dart';
+import '../utils/altcha_solver.dart';
 
-/// ALTCHA CAPTCHA widget placeholder for Flutter.
+/// ALTCHA (https://altcha.org) proof-of-work CAPTCHA widget.
 ///
-/// In Flutter, the actual ALTCHA web widget cannot be used directly.
-/// This provides a simple challenge-response UI as a fallback.
-/// For web platforms, consider using HtmlElementView with the ALTCHA widget.
+/// Fetches a challenge from [challengeUrl], solves the proof-of-work on a
+/// background isolate, and reports the resulting verification token via
+/// [onVerified]. Any failure — network error, malformed response,
+/// unsupported algorithm, or an unsolved challenge — fails closed: no token
+/// is ever produced and [onError] is invoked instead.
 class CaptchaWidget extends StatefulWidget {
   const CaptchaWidget({
     super.key,
     required this.challengeUrl,
     required this.onVerified,
     this.onError,
+    this.fetchChallenge = fetchAltchaChallenge,
+    this.solveChallenge = solveAltchaChallenge,
     this.backgroundColor = ElderColors.slate900,
     this.borderColor = ElderColors.slate600,
     this.textColor = ElderColors.amber400,
@@ -21,6 +26,17 @@ class CaptchaWidget extends StatefulWidget {
   final String challengeUrl;
   final ValueChanged<String> onVerified;
   final ValueChanged<String>? onError;
+
+  /// Fetches the ALTCHA challenge for [challengeUrl]. Overridable for
+  /// testing; defaults to the real network implementation.
+  final Future<AltchaChallenge> Function(String challengeUrl) fetchChallenge;
+
+  /// Solves an [AltchaChallenge]. Defaults to [solveAltchaChallenge], which
+  /// runs on a background isolate via `compute()`. Overridable for testing
+  /// — `flutter_test`'s fake-clock pump loop doesn't reliably wait on a real
+  /// isolate, so widget tests that need a solved/unsolved result should
+  /// inject a synchronous wrapper around `solveAltchaSync` instead.
+  final Future<int> Function(AltchaChallenge challenge) solveChallenge;
   final Color backgroundColor;
   final Color borderColor;
   final Color textColor;
@@ -42,17 +58,20 @@ class _CaptchaWidgetState extends State<CaptchaWidget> {
     });
 
     try {
-      // Simulate CAPTCHA verification
-      // In production, this would call the challengeUrl and solve
-      // the proof-of-work challenge
-      await Future<void>.delayed(const Duration(seconds: 1));
+      final challenge = await widget.fetchChallenge(widget.challengeUrl);
+      final number = await widget.solveChallenge(challenge);
+      final payload = buildAltchaPayload(challenge, number);
+
+      if (!mounted) return;
       setState(() {
         _isVerified = true;
         _isVerifying = false;
       });
-      widget.onVerified('captcha_verified_token');
+      widget.onVerified(payload);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
+        _isVerified = false;
         _error = 'Verification failed. Please try again.';
         _isVerifying = false;
       });

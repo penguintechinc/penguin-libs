@@ -9,7 +9,7 @@ Built on structlog for structured, production-ready logging.
 import logging
 import re
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from structlog.types import EventDict, Processor
@@ -62,7 +62,7 @@ def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(data, dict):
         return data
 
-    sanitized = {}
+    sanitized: dict[str, Any] = {}
     for key, value in data.items():
         key_lower = key.lower()
 
@@ -80,11 +80,11 @@ def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
             else:
                 sanitized[key] = value
         elif isinstance(value, dict):
-            sanitized[key] = sanitize_log_data(value)
+            sanitized[key] = cast(Any, sanitize_log_data(value))
         elif isinstance(value, list):
-            sanitized[key] = [
+            sanitized[key] = cast(Any, [
                 sanitize_log_data(item) if isinstance(item, dict) else item for item in value
-            ]
+            ])
         else:
             sanitized[key] = value
 
@@ -93,7 +93,7 @@ def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
 
 def _sanitize_processor(logger: Any, method: str, event_dict: EventDict) -> EventDict:
     """structlog processor that sanitizes all dict values in the event."""
-    return sanitize_log_data(event_dict)  # type: ignore[return-value]
+    return cast(EventDict, sanitize_log_data(cast(dict[str, Any], event_dict)))
 
 
 class _SinkProcessor:
@@ -162,7 +162,7 @@ def get_logger(name: str, level: int = logging.INFO) -> structlog.stdlib.BoundLo
         Configured structlog BoundLogger instance.
     """
     logging.getLogger(name).setLevel(level)
-    return structlog.get_logger(name)
+    return cast(structlog.stdlib.BoundLogger, structlog.get_logger(name))
 
 
 class SanitizedLogger:
@@ -205,7 +205,7 @@ class SanitizedLogger:
         self._log("critical", message, data)
 
 
-def configure_logging_from_env() -> list:
+def configure_logging_from_env() -> list["Sink"]:
     """Build log sinks from environment variables.
 
     Checks for the following env vars:
@@ -220,7 +220,7 @@ def configure_logging_from_env() -> list:
 
     from penguintechinc_utils.sinks import CloudWatchSink, GCPCloudLoggingSink, KafkaSink
 
-    sinks: list = []
+    sinks: list["Sink"] = []
 
     cw_group = os.environ.get("LOG_CLOUDWATCH_GROUP")
     cw_stream = os.environ.get("LOG_CLOUDWATCH_STREAM")
