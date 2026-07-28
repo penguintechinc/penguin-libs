@@ -1,0 +1,61 @@
+{
+  "name": "@penguintechinc/react-sidebar",
+  "version": "0.1.0",
+  "description": "PenguinTech SidebarMenu React component",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "lint": "eslint src --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest watch",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "author": "Penguin Tech Inc <dev@penguintech.io>",
+  "license": "MIT",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "10.4.0",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/node": "20.0.0",
+    "@types/react": "18.3.28",
+    "@types/react-dom": "18.3.7",
+    "@typescript-eslint/eslint-plugin": "6.21.0",
+    "@typescript-eslint/parser": "6.21.0",
+    "@vitest/coverage-v8": "4.1.10",
+    "eslint": "8.57.1",
+    "eslint-config-prettier": "9.1.0",
+    "eslint-plugin-react": "7.33.0",
+    "eslint-plugin-react-hooks": "4.6.0",
+    "jsdom": "28.1.0",
+    "prettier": "3.2.0",
+    "typescript": "5.9.3",
+    "vitest": "4.0.18"
+  }
+}

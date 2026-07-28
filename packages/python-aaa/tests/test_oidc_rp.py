@@ -155,6 +155,49 @@ class TestOIDCRelyingPartyValidateToken:
         with pytest.raises(ValueError, match="exceeds maximum"):
             await rp.validate_token(oversized)
 
+    @pytest.mark.asyncio
+    async def test_validate_token_rejects_mismatched_issuer(self):
+        """Regression test: issuer validation must reject mismatched issuer claim."""
+        keystore = MemoryKeyStore(algorithm="RS256")
+        config = _make_rp_config()
+        rp = OIDCRelyingParty(config)
+
+        # Issue token with wrong issuer
+        wrong_issuer_token = _issue_test_token(
+            keystore, extra_claims={"iss": "https://wrong-idp.example.com"}
+        )
+
+        signing_key, kid = keystore.get_signing_key()
+        public_key = signing_key.public_key()
+
+        mock_signing_key = MagicMock()
+        mock_signing_key.key = public_key
+
+        mock_jwks_client = MagicMock()
+        mock_jwks_client.get_signing_key_from_jwt.return_value = mock_signing_key
+
+        rp._discovery = _make_discovery_doc(keystore)
+        rp._jwks_client = mock_jwks_client
+
+        # jwt.decode should reject mismatched issuer
+        with pytest.raises(jwt.InvalidIssuerError):
+            await rp.validate_token(wrong_issuer_token)
+
+
+class TestOIDCRelyingPartyVerifyToken:
+    @pytest.mark.asyncio
+    async def test_verify_token_delegates_to_validate_token(self):
+        config = _make_rp_config()
+        rp = OIDCRelyingParty(config)
+
+        sentinel_claims = MagicMock()
+        with patch.object(rp, "validate_token", return_value=sentinel_claims) as mock_validate:
+            mock_validate.return_value = sentinel_claims
+            result = await rp.verify_token("some-raw-token")
+
+        mock_validate.assert_awaited_once_with("some-raw-token")
+        assert result is sentinel_claims
+
 
 class TestOIDCRelyingPartyStateHelpers:
     def test_generate_state_is_urlsafe_string(self):
