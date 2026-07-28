@@ -26,6 +26,21 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.TLSConfig != nil {
 		t.Error("expected TLSConfig nil, got non-nil")
 	}
+	if cfg.ReadHeaderTimeout != 10*time.Second {
+		t.Errorf("expected ReadHeaderTimeout 10s, got %v", cfg.ReadHeaderTimeout)
+	}
+	if cfg.ReadTimeout != 30*time.Second {
+		t.Errorf("expected ReadTimeout 30s, got %v", cfg.ReadTimeout)
+	}
+	if cfg.WriteTimeout != 30*time.Second {
+		t.Errorf("expected WriteTimeout 30s, got %v", cfg.WriteTimeout)
+	}
+	if cfg.IdleTimeout != 60*time.Second {
+		t.Errorf("expected IdleTimeout 60s, got %v", cfg.IdleTimeout)
+	}
+	if cfg.QUICMaxIdleTimeout != 60*time.Second {
+		t.Errorf("expected QUICMaxIdleTimeout 60s, got %v", cfg.QUICMaxIdleTimeout)
+	}
 }
 
 func TestConfigFromEnv_NoVars(t *testing.T) {

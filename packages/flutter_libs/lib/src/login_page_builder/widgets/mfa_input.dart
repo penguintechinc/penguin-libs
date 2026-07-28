@@ -37,6 +37,7 @@ class MFAInput extends StatefulWidget {
 class _MFAInputState extends State<MFAInput> {
   late final List<TextEditingController> _controllers;
   late final List<FocusNode> _focusNodes;
+  late final List<FocusNode> _keyListenerFocusNodes;
 
   @override
   void initState() {
@@ -46,6 +47,13 @@ class _MFAInputState extends State<MFAInput> {
       (_) => TextEditingController(),
     );
     _focusNodes = List.generate(
+      widget.length,
+      (_) => FocusNode(),
+    );
+    // Focus nodes for the per-digit KeyboardListener (backspace handling).
+    // Created once here — not inline in build() — so they don't leak a new
+    // FocusNode on every rebuild.
+    _keyListenerFocusNodes = List.generate(
       widget.length,
       (_) => FocusNode(),
     );
@@ -59,11 +67,13 @@ class _MFAInputState extends State<MFAInput> {
     for (final f in _focusNodes) {
       f.dispose();
     }
+    for (final f in _keyListenerFocusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 
-  String get _currentCode =>
-      _controllers.map((c) => c.text).join();
+  String get _currentCode => _controllers.map((c) => c.text).join();
 
   void _onChanged(int index, String value) {
     // Handle paste (multi-character input)
@@ -122,7 +132,7 @@ class _MFAInputState extends State<MFAInput> {
             right: index < widget.length - 1 ? 8 : 0,
           ),
           child: KeyboardListener(
-            focusNode: FocusNode(),
+            focusNode: _keyListenerFocusNodes[index],
             onKeyEvent: (event) => _onKeyEvent(index, event),
             child: TextField(
               controller: _controllers[index],
@@ -130,7 +140,11 @@ class _MFAInputState extends State<MFAInput> {
               autofocus: widget.autoFocus && index == 0,
               textAlign: TextAlign.center,
               keyboardType: TextInputType.number,
-              maxLength: 1,
+              // No `maxLength` here: Flutter enforces it via a
+              // LengthLimitingTextInputFormatter that truncates the value
+              // *before* onChanged runs, which would break pasting a full
+              // code into one box. Truncation to a single visible digit is
+              // instead handled manually in _onChanged/_handlePaste below.
               style: TextStyle(
                 color: widget.textColor,
                 fontSize: 24,
