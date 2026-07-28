@@ -1,8 +1,5 @@
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
-import * as jestDomMatchers from '@testing-library/jest-dom/matchers';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-
-expect.extend(jestDomMatchers);
 
 // RTL can't auto-register cleanup when vitest globals are off
 afterEach(() => cleanup());

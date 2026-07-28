@@ -1,8 +1,13 @@
-"""Authentication subpackage — OIDC RP, OIDC Provider, SPIFFE, and types."""
+"""Authentication subpackage — OIDC RP, OIDC Provider, SPIFFE, static keys, and types."""
 
 from penguin_aaa.authn.oidc_provider import OIDCProvider, OIDCProviderConfig
 from penguin_aaa.authn.oidc_rp import OIDCRelyingParty, OIDCRPConfig
 from penguin_aaa.authn.spiffe import SPIFFEAuthenticator, SPIFFEConfig
+from penguin_aaa.authn.static_key import (
+    StaticKeyConfig,
+    StaticKeyVerifier,
+    load_key_from_env_or_file,
+)
 from penguin_aaa.authn.types import (
     ALLOWED_PROVIDER_ALGORITHMS,
     ALLOWED_RP_ALGORITHMS,
@@ -25,4 +30,7 @@ __all__ = [
     "OIDCProvider",
     "SPIFFEConfig",
     "SPIFFEAuthenticator",
+    "StaticKeyConfig",
+    "StaticKeyVerifier",
+    "load_key_from_env_or_file",
 ]

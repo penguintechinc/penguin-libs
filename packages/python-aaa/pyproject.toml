@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "penguin-aaa"
-version = "0.1.0"
+version = "0.2.0"
 description = "PenguinTech Authentication, Authorization, and Accounting library"
 readme = "README.md"
-license = {text = "AGPL-3.0"}
+license = {text = "MIT"}
 requires-python = ">=3.11"
 authors = [
     {name = "Penguin Tech Inc", email = "dev@penguintech.io"}
@@ -16,7 +16,7 @@ keywords = ["penguintech", "authentication", "authorization", "oidc", "jwt", "sp
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -35,8 +35,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+redis = [
+    "redis>=5.0",
+]
+flask = [
+    "flask>=3.0",
+]
 spiffe = [
-    "py-spiffe",
+    "py-spiffe>=0.8.0",
 ]
 grpc = [
     "grpcio>=1.60",
@@ -51,6 +57,8 @@ dev = [
     "bandit>=1.7",
     "pip-audit>=2.6",
     "hypothesis>=6.0",
+    "redis>=5.0",
+    "flask>=3.0",
 ]
 
 [project.urls]
@@ -60,6 +68,9 @@ Issues = "https://github.com/penguintechinc/penguin-libs/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+penguin_aaa = ["py.typed"]
 
 [tool.ruff]
 line-length = 100
@@ -82,4 +93,4 @@ asyncio_mode = "strict"
 
 [tool.bandit]
 exclude_dirs = ["tests"]
-skips = ["B101", "B105", "B110"]
+skips = ["B101", "B105"]
