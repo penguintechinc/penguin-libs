@@ -56,4 +56,4 @@ import { LoginPageBuilder, SidebarMenu, FormModalBuilder } from '@penguintechinc
 
 ## License
 
-AGPL-3.0 — Penguin Tech Inc
+MIT — Penguin Tech Inc

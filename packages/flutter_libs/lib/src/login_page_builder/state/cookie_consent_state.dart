@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -83,6 +85,12 @@ class CookieConsentNotifier extends ChangeNotifier {
   bool get loaded => _loaded;
 
   /// Load saved consent from persistent storage.
+  ///
+  /// Reads the current JSON-encoded format; if that's not present but a
+  /// legacy comma/colon-encoded value is (from before the JSON migration),
+  /// parses that instead so a prior user's consent is never silently reset
+  /// to "not accepted". The next [_save] call re-persists in JSON, so the
+  /// legacy branch only runs once per installation.
   Future<void> load() async {
     if (!enabled) {
       _loaded = true;
@@ -92,29 +100,43 @@ class CookieConsentNotifier extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_storageKey);
     if (raw != null) {
-      try {
-        // Simple JSON-like parsing for stored consent
-        // In practice, use dart:convert json
-        final parts = raw.split(',');
-        _consent = CookieConsentData(
-          accepted: parts.contains('accepted:true'),
-          functional: parts.contains('functional:true'),
-          analytics: parts.contains('analytics:true'),
-          marketing: parts.contains('marketing:true'),
-          timestamp: int.tryParse(
-            parts
-                .firstWhere((p) => p.startsWith('timestamp:'),
-                    orElse: () => 'timestamp:0')
-                .split(':')
-                .last,
-          ),
-        );
-      } catch (_) {
-        _consent = const CookieConsentData();
-      }
+      _consent = _parseStored(raw) ?? const CookieConsentData();
     }
     _loaded = true;
     notifyListeners();
+  }
+
+  /// Parse a stored consent value, trying the current JSON format first
+  /// and falling back to the legacy comma/colon format. Returns `null`
+  /// only if neither can be parsed (genuinely corrupt data).
+  CookieConsentData? _parseStored(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return CookieConsentData.fromJson(decoded);
+      }
+    } on FormatException {
+      // Not JSON — fall through to the legacy format below.
+    }
+
+    try {
+      final parts = raw.split(',');
+      return CookieConsentData(
+        accepted: parts.contains('accepted:true'),
+        functional: parts.contains('functional:true'),
+        analytics: parts.contains('analytics:true'),
+        marketing: parts.contains('marketing:true'),
+        timestamp: int.tryParse(
+          parts
+              .firstWhere((p) => p.startsWith('timestamp:'),
+                  orElse: () => 'timestamp:0')
+              .split(':')
+              .last,
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Accept all cookie categories.
@@ -162,14 +184,6 @@ class CookieConsentNotifier extends ChangeNotifier {
 
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
-    final value = [
-      'accepted:${_consent.accepted}',
-      'essential:${_consent.essential}',
-      'functional:${_consent.functional}',
-      'analytics:${_consent.analytics}',
-      'marketing:${_consent.marketing}',
-      'timestamp:${_consent.timestamp}',
-    ].join(',');
-    await prefs.setString(_storageKey, value);
+    await prefs.setString(_storageKey, jsonEncode(_consent.toJson()));
   }
 }
