@@ -40,7 +40,7 @@ from ..config import Algorithm, RateLimitConfig
 from ..ip import should_rate_limit
 from ..storage import RateLimitStorage
 
-_PEER_RE = re.compile(r"^(?:ipv[46]:)?\[?([^\]]+)\]?(?::\d+)?$")
+_PEER_RE = re.compile(r"^(?:ipv[46]:)?\[?([^\]]+?)\]?(?::\d+)?$")
 
 
 def _peer_to_ip(peer: str) -> str:

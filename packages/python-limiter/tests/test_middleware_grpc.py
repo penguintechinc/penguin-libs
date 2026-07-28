@@ -94,7 +94,10 @@ class TestGrpcRateLimitInterceptor:
 
             ctx3 = self._make_context("ipv4:5.5.5.5:50051")
             wrapped.unary_unary(MagicMock(), ctx3)
-            ctx3.abort.assert_called_once_with(grpc.StatusCode.RESOURCE_EXHAUSTED, pytest.approx)
+            ctx3.abort.assert_called_once()
+            code, message = ctx3.abort.call_args.args
+            assert code == grpc.StatusCode.RESOURCE_EXHAUSTED
+            assert message.startswith("Rate limit exceeded")
         except ImportError:
             pytest.skip("grpcio not installed")
 
