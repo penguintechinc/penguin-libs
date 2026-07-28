@@ -18,6 +18,10 @@ All packages are published automatically via GitHub Actions when version tags ar
 | go-common | GitHub (go get) | github.com/penguintechinc/penguin-libs/packages/go-common | `v*` (validation only) | ✅ Active |
 | go-h3 | GitHub (go get) | github.com/penguintechinc/penguin-libs/packages/go-h3 | `v*` (validation only) | ✅ Active |
 | flutter_libs | pub.dev | flutter_libs | `flutter-libs-v*` | ⚠️ Dry-run only |
+| python-rpc | PyPI | penguin-rpc | `penguin-rpc-v*` | 🔜 Not yet published |
+| go-rpc | GitHub (go get) | github.com/penguintechinc/penguin-libs/packages/go-rpc | `go-rpc-v*` (validation only) | 🔜 Not yet published |
+| rust-rpc (penguin-rpc) | crates.io | penguin-rpc | `rust-rpc-v*` | 🔜 Not yet published |
+| rust-rpc (penguin-h3-tower) | crates.io | penguin-h3-tower | `rust-rpc-v*` | 🔜 Not yet published |
 
 ## Publishing Methods
 
