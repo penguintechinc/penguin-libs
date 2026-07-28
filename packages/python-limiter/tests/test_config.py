@@ -1,71 +1,79 @@
-"""Tests for RateLimitConfig."""
+"""Tests for rate-limit config and limit-string parsing."""
+
+from __future__ import annotations
 
 import pytest
 
-from penguin_limiter import RateLimitConfig
+from penguin_limiter.config import Algorithm, RateLimitConfig, parse_limit, parse_multi_tier
+
+
+class TestParseLimitString:
+    @pytest.mark.parametrize("spec,limit,window", [
+        ("100/minute", 100, 60),
+        ("10/second", 10, 1),
+        ("5000/hour", 5000, 3600),
+        ("1/day", 1, 86400),
+        ("50/min", 50, 60),
+        ("30/sec", 30, 1),
+        ("200/hr", 200, 3600),
+        ("  100 / minute  ", 100, 60),  # whitespace tolerance
+        ("100/MINUTE", 100, 60),        # case insensitive
+    ])
+    def test_valid_specs(self, spec: str, limit: int, window: int) -> None:
+        l, w = parse_limit(spec)
+        assert l == limit
+        assert w == window
+
+    def test_invalid_spec_raises(self) -> None:
+        with pytest.raises(ValueError, match="Invalid rate-limit spec"):
+            parse_limit("100 per minute")
+
+    def test_invalid_unit_raises(self) -> None:
+        with pytest.raises(ValueError):
+            parse_limit("100/week")
+
+
+class TestParseMultiTier:
+    def test_single_tier(self) -> None:
+        tiers = parse_multi_tier("100/minute")
+        assert tiers == [(100, 60)]
+
+    def test_multi_tier(self) -> None:
+        tiers = parse_multi_tier("10/second;100/minute;1000/hour")
+        assert tiers == [(10, 1), (100, 60), (1000, 3600)]
+
+    def test_whitespace_around_semicolons(self) -> None:
+        tiers = parse_multi_tier("10/second ; 100/minute")
+        assert tiers == [(10, 1), (100, 60)]
 
 
 class TestRateLimitConfig:
-    """Test RateLimitConfig parsing and methods."""
+    def test_from_string_sets_limit_and_window(self) -> None:
+        config = RateLimitConfig.from_string("100/minute")
+        assert config.limit == 100
+        assert config.window == 60
 
-    def test_from_string_hour(self) -> None:
-        """Test parsing hour-based config."""
-        config = RateLimitConfig.from_string("100/hour")
-        assert config.rate == 100
-        assert config.unit == "hour"
-        assert config.to_seconds() == 3600
+    def test_from_string_defaults(self) -> None:
+        config = RateLimitConfig.from_string("50/second")
+        assert config.algorithm == Algorithm.SLIDING_WINDOW
+        assert config.skip_private_ips is True
+        assert config.fail_open is True
+        assert config.add_headers is True
 
-    def test_from_string_minute(self) -> None:
-        """Test parsing minute-based config."""
-        config = RateLimitConfig.from_string("60/minute")
-        assert config.rate == 60
-        assert config.unit == "minute"
-        assert config.to_seconds() == 60
+    def test_from_string_override_skip_private_ips(self) -> None:
+        config = RateLimitConfig.from_string("100/minute", skip_private_ips=False)
+        assert config.skip_private_ips is False
 
-    def test_from_string_second(self) -> None:
-        """Test parsing second-based config."""
-        config = RateLimitConfig.from_string("10/second")
-        assert config.rate == 10
-        assert config.unit == "second"
-        assert config.to_seconds() == 1
+    def test_from_string_multi_tier_stores_tiers(self) -> None:
+        config = RateLimitConfig.from_string("10/second;100/minute")
+        assert config.limit == 10  # tightest tier is primary
+        assert config.window == 1
+        assert config.tiers == [(10, 1), (100, 60)]
 
-    def test_from_string_day(self) -> None:
-        """Test parsing day-based config."""
-        config = RateLimitConfig.from_string("1000/day")
-        assert config.rate == 1000
-        assert config.unit == "day"
-        assert config.to_seconds() == 86400
+    def test_rate_per_second(self) -> None:
+        config = RateLimitConfig(limit=120, window=60)
+        assert config.rate_per_second == pytest.approx(2.0)
 
-    def test_from_string_with_whitespace(self) -> None:
-        """Test parsing with extra whitespace."""
-        config = RateLimitConfig.from_string("  100  /  hour  ")
-        assert config.rate == 100
-        assert config.unit == "hour"
-
-    def test_from_string_invalid_format(self) -> None:
-        """Test error on invalid format."""
-        with pytest.raises(ValueError, match="Invalid rate limit format"):
-            RateLimitConfig.from_string("100-hour")
-
-    def test_from_string_invalid_rate(self) -> None:
-        """Test error on invalid rate value."""
-        with pytest.raises(ValueError, match="Invalid rate value"):
-            RateLimitConfig.from_string("abc/hour")
-
-    def test_from_string_invalid_unit(self) -> None:
-        """Test error on invalid unit."""
-        with pytest.raises(ValueError, match="Invalid unit"):
-            RateLimitConfig.from_string("100/week")
-
-    def test_direct_construction(self) -> None:
-        """Test direct construction."""
-        config = RateLimitConfig(rate=50, unit="minute")
-        assert config.rate == 50
-        assert config.unit == "minute"
-        assert config.to_seconds() == 60
-
-    def test_frozen(self) -> None:
-        """Test that config is immutable."""
-        config = RateLimitConfig(rate=100, unit="hour")
-        with pytest.raises(AttributeError):
-            config.rate = 200  # type: ignore
+    def test_manual_construction(self) -> None:
+        config = RateLimitConfig(limit=10, window=1, algorithm=Algorithm.TOKEN_BUCKET)
+        assert config.algorithm == Algorithm.TOKEN_BUCKET

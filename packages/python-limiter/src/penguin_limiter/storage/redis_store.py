@@ -1,63 +1,120 @@
-"""Redis-backed rate limit storage."""
+"""Redis-backed storage backend.
+
+Requires ``pip install 'penguin-limiter[redis]'`` (or ``redis>=5.0``).
+
+All counter operations use atomic Lua scripts to avoid TOCTOU races in
+multi-instance deployments — the same safety guarantee as ``INCR`` + ``EXPIRE``
+but with proper ``SETNX``-style initialisation.
+"""
 
 from __future__ import annotations
 
-from typing import Tuple
+import time
+from typing import TYPE_CHECKING, Any
 
-try:
-    import redis
-except ImportError as e:
-    raise ImportError(
-        "redis package required for RedisStorage. Install with: pip install 'penguin-limiter[redis]'"
-    ) from e
+if TYPE_CHECKING:
+    pass  # redis types resolved lazily
 
-from .base import RateLimitStorage
+# Lua script: increment key, set TTL only on first call within a window
+_INCR_SCRIPT = """
+local current = redis.call('INCR', KEYS[1])
+if current == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return current
+"""
+
+# Lua script: append timestamp, prune old entries, return new count
+_SLIDE_SCRIPT = """
+local key   = KEYS[1]
+local now   = tonumber(ARGV[1])
+local cutoff = tonumber(ARGV[2])
+local ttl   = tonumber(ARGV[3])
+redis.call('ZADD', key, now, now .. ':' .. redis.call('INCR', key .. ':seq'))
+redis.call('ZREMRANGEBYSCORE', key, '-inf', cutoff)
+redis.call('EXPIRE', key, ttl)
+return redis.call('ZCARD', key)
+"""
 
 
-class RedisStorage(RateLimitStorage):
-    """Redis-backed rate limit storage.
+class RedisStorage:
+    """Redis-backed rate-limit storage.
 
-    Uses Redis INCR and EXPIRE commands for atomic operations and automatic
-    key expiration.
+    Parameters
+    ----------
+    client:
+        A ``redis.Redis`` (sync) client instance.  Pass a ``fakeredis.FakeRedis``
+        instance in tests.
+    key_prefix:
+        Optional namespace prefix applied to all keys (default: ``"penguin_rl"``).
     """
 
-    def __init__(self, url: str) -> None:
-        """Initialize Redis storage.
+    def __init__(self, client: Any, key_prefix: str = "penguin_rl") -> None:
+        self._r = client
+        self._prefix = key_prefix
+        self._incr_script = self._r.register_script(_INCR_SCRIPT)
+        self._slide_script = self._r.register_script(_SLIDE_SCRIPT)
 
-        Args:
-            url: Redis connection URL (e.g., 'redis://localhost:6379/0')
-        """
-        self.client = redis.from_url(url, decode_responses=True)
-        # Test connection
-        self.client.ping()
+    def _key(self, key: str) -> str:
+        return f"{self._prefix}:{key}"
+
+    # ------------------------------------------------------------------
+    # Fixed-window
+    # ------------------------------------------------------------------
+
+    def increment(self, key: str, window: int) -> int:
+        """Atomically increment and return new count; sets expiry on first call."""
+        result = self._incr_script(keys=[self._key(key)], args=[window])
+        return int(result)
 
     def get(self, key: str) -> int:
-        """Get the current counter value for a key."""
-        value = self.client.get(key)
-        return int(value) if value else 0
+        """Return current count (0 if absent/expired)."""
+        val = self._r.get(self._key(key))
+        return int(val) if val else 0
 
-    def increment(self, key: str, amount: int = 1, ttl_seconds: int = 3600) -> int:
-        """Increment counter and set/update TTL."""
-        pipeline = self.client.pipeline()
-        pipeline.incrby(key, amount)
-        pipeline.expire(key, ttl_seconds)
-        result = pipeline.execute()
-        return int(result[0])
+    # ------------------------------------------------------------------
+    # Sliding-window
+    # ------------------------------------------------------------------
 
-    def reset(self, key: str) -> None:
-        """Reset counter for a key."""
-        self.client.delete(key)
+    def get_timestamps(self, key: str) -> list[float]:
+        """Return all scores (timestamps) from the sorted set."""
+        members = self._r.zrange(self._key(key), 0, -1, withscores=True)
+        return [score for _, score in members]
 
-    def get_with_ttl(self, key: str) -> Tuple[int, int]:
-        """Get counter and remaining TTL.
+    def add_timestamp(self, key: str, ts: float, window: int) -> int:
+        """Append *ts*, prune stale entries, return current count."""
+        cutoff = ts - window
+        result = self._slide_script(
+            keys=[self._key(key)],
+            args=[ts, cutoff, int(window) + 1],
+        )
+        return int(result)
 
-        Returns:
-            Tuple of (counter_value, ttl_seconds) where ttl_seconds is -2 if key doesn't exist
-        """
-        pipeline = self.client.pipeline()
-        pipeline.get(key)
-        pipeline.ttl(key)
-        result = pipeline.execute()
-        counter_value = int(result[0]) if result[0] else 0
-        ttl = int(result[1])
-        return counter_value, ttl
+    # ------------------------------------------------------------------
+    # Token bucket
+    # ------------------------------------------------------------------
+
+    def get_token_state(self, key: str) -> tuple[float, float]:
+        """Return ``(tokens, last_refill)`` from a Redis hash; ``(-1, 0)`` if absent."""
+        k = self._key(f"{key}:tok")
+        data = self._r.hmget(k, "tokens", "ts")
+        if data[0] is None:
+            return -1.0, 0.0
+        return float(data[0]), float(data[1])
+
+    def set_token_state(self, key: str, tokens: float, ts: float, ttl: int) -> None:
+        """Persist token-bucket state."""
+        k = self._key(f"{key}:tok")
+        self._r.hset(k, mapping={"tokens": tokens, "ts": ts})
+        self._r.expire(k, ttl)
+
+    # ------------------------------------------------------------------
+    # Health
+    # ------------------------------------------------------------------
+
+    def ping(self) -> bool:
+        """Return ``True`` if Redis responds to PING."""
+        try:
+            return bool(self._r.ping())
+        except Exception:
+            return False

@@ -1,0 +1,72 @@
+Metadata-Version: 2.4
+Name: penguin-pytest
+Version: 0.1.0
+Summary: Shared pytest fixtures and test helpers for PenguinTech Python packages
+Author-email: Penguin Tech Inc <dev@penguintech.io>
+License: AGPL-3.0
+Project-URL: Homepage, https://www.penguintech.io
+Project-URL: Repository, https://github.com/penguintechinc/penguin-libs
+Keywords: penguintech,pytest,testing,fixtures
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU Affero General Public License v3
+Classifier: Framework :: Pytest
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: pytest>=8.0
+Provides-Extra: dal
+Requires-Dist: penguin-dal; extra == "dal"
+Provides-Extra: flask
+Requires-Dist: flask>=3.0; extra == "flask"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
+Requires-Dist: pytest-cov>=5.0; extra == "dev"
+Requires-Dist: ruff>=0.4; extra == "dev"
+Requires-Dist: mypy>=1.10; extra == "dev"
+Requires-Dist: bandit>=1.7; extra == "dev"
+Requires-Dist: pip-audit>=2.6; extra == "dev"
+Requires-Dist: penguin-dal; extra == "dev"
+Requires-Dist: flask>=3.0; extra == "dev"
+Requires-Dist: sqlalchemy>=2.0; extra == "dev"
+
+# penguin-pytest
+
+Shared pytest fixtures and test helpers for PenguinTech Python packages.
+
+## Installation
+
+```bash
+pip install penguin-pytest           # base (ASGI + gRPC helpers only)
+pip install "penguin-pytest[dal]"    # include DAL fixtures
+pip install "penguin-pytest[flask]"  # include Flask fixtures
+pip install "penguin-pytest[dal,flask]"  # all extras
+```
+
+## Modules
+
+| Module | Exports |
+|--------|---------|
+| `penguin_pytest.asgi` | `asgi_http_scope`, `asgi_send_collector`, `asgi_ok_app` |
+| `penguin_pytest.grpc` | `mock_grpc_module` (fixture), `grpc_handler_call_details` |
+| `penguin_pytest.dal` | `sqlite_engine`, `users_posts_engine`, `dal_db` (fixtures) |
+| `penguin_pytest.flask` | `flask_app`, `flask_client` (fixtures) |
+
+## Quick Start
+
+```python
+# conftest.py
+pytest_plugins = ["penguin_pytest.asgi", "penguin_pytest.flask"]
+
+# test_my_middleware.py
+from penguin_pytest.asgi import asgi_http_scope, asgi_send_collector, asgi_ok_app
+
+async def test_my_middleware():
+    scope = asgi_http_scope(path="/api/v1/resource")
+    messages, send = asgi_send_collector()
+    await my_middleware(asgi_ok_app(), scope, None, send)
+    assert messages[0]["status"] == 200
+```

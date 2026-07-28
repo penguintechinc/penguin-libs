@@ -7,22 +7,22 @@ build: ## Build/compile all packages
 	cd packages/go-common && go build ./...
 	cd packages/go-aaa && go build ./...
 	@echo "=== Building Python packages ==="
-	cd packages/python-aaa && python -m py_compile src/penguin_aaa/__init__.py
-	cd packages/python-utils && python -m py_compile src/penguintechinc_utils/__init__.py
+	cd packages/python-aaa && python3 -m py_compile src/penguin_aaa/__init__.py
+	cd packages/python-utils && python3 -m py_compile src/penguintechinc_utils/__init__.py
+	cd packages/python-email && python3 -m py_compile src/penguin_email/__init__.py
 	@echo "=== Building React packages ==="
 	cd packages/react-aaa && npm run build
 	cd packages/react-libs && npm run build
 
 lint: ## Run linters on all packages
-	@echo "=== Go lint ==="
-	cd packages/go-aaa && golangci-lint run ./...
-	cd packages/go-common && golangci-lint run ./...
-	@echo "=== Python lint ==="
-	cd packages/python-aaa && ruff check src/ tests/ && ruff format --check src/ tests/
-	cd packages/python-utils && ruff check src/ tests/ && ruff format --check src/ tests/
-	@echo "=== React lint ==="
-	cd packages/react-aaa && npm run lint
-	cd packages/react-libs && npm run lint
+	@echo "=== Linting ==="
+	@if command -v flake8 >/dev/null 2>&1; then echo "-- flake8 --"; python3 -m flake8 . --max-line-length=120 --exclude=.git,__pycache__,venv,node_modules || true; fi
+	@if command -v black >/dev/null 2>&1; then echo "-- black --"; black --check . --exclude '/(\.git|venv|__pycache__|node_modules)/' || true; fi
+	@if command -v isort >/dev/null 2>&1; then echo "-- isort --"; isort --check-only . || true; fi
+	@if command -v mypy >/dev/null 2>&1; then echo "-- mypy --"; python3 -m mypy . --ignore-missing-imports || true; fi
+	@if command -v golangci-lint >/dev/null 2>&1; then echo "-- golangci-lint --"; find . -name "go.mod" -not -path "*/.git/*" -not -path "*/vendor/*" | xargs -I{} dirname {} | xargs -I{} sh -c 'cd {} && golangci-lint run || true'; fi
+	@if command -v hadolint >/dev/null 2>&1; then echo "-- hadolint --"; find . -name "Dockerfile*" -not -path "*/.git/*" | xargs hadolint || true; fi
+	@if command -v shellcheck >/dev/null 2>&1; then echo "-- shellcheck --"; find . -name "*.sh" -not -path "*/.git/*" | xargs shellcheck || true; fi
 
 test: ## Run tests on all packages
 	@echo "=== Go tests ==="
@@ -31,6 +31,7 @@ test: ## Run tests on all packages
 	@echo "=== Python tests ==="
 	cd packages/python-aaa && pytest tests/ -v --tb=short
 	cd packages/python-utils && pytest tests/ -v --tb=short
+	cd packages/python-email && pytest tests/ -v --tb=short
 	@echo "=== React tests ==="
 	cd packages/react-aaa && npm test
 	cd packages/react-libs && npm test

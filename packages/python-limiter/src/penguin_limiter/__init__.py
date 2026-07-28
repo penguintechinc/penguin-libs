@@ -1,35 +1,58 @@
-"""Penguin Rate Limiter - Flask rate limiting middleware.
+"""penguin-limiter — pluggable rate limiting for REST, gRPC, and H3.
 
-A production-ready rate limiter for Flask applications with support for
-in-process and Redis-backed storage.
+Quick start::
+
+    from penguin_limiter import RateLimitConfig, FlaskRateLimiter, MemoryStorage
+
+    limiter = FlaskRateLimiter(
+        config=RateLimitConfig.from_string("100/minute"),
+        storage=MemoryStorage(),
+    )
+    limiter.init_app(app)
+
+Private-IP bypass
+-----------------
+By default (``skip_private_ips=True`` on :class:`RateLimitConfig`), requests
+from RFC-1918 addresses, loopback, link-local, and carrier-grade NAT ranges
+are **never counted or blocked**.  Internal cluster traffic is exempt.
+
+To disable the bypass for a specific rule::
+
+    config = RateLimitConfig.from_string("100/minute", skip_private_ips=False)
 """
 
-from __future__ import annotations
-
-__version__ = "0.1.0"
-
-from .config import RateLimitConfig
-from .flask_limiter import FlaskRateLimiter, RateLimitStatus
-from .storage import MemoryStorage, RateLimitStorage
-
-# RedisStorage is optional (requires redis package)
-try:
-    from .storage import RedisStorage
-    _has_redis = True
-except (ImportError, AttributeError):
-    _has_redis = False
+from .algorithms import RateLimitResult
+from .algorithms.fixed_window import FixedWindow
+from .algorithms.sliding_window import SlidingWindow
+from .algorithms.token_bucket import TokenBucket
+from .config import Algorithm, RateLimitConfig, parse_limit, parse_multi_tier
+from .ip import extract_client_ip, is_private_ip, should_rate_limit
+from .middleware.flask import FlaskRateLimiter
+from .middleware.grpc import GrpcRateLimitInterceptor
+from .middleware.h3 import H3RateLimitMiddleware
+from .storage.memory import MemoryStorage
 
 __all__ = [
-    "__version__",
     # Config
+    "Algorithm",
     "RateLimitConfig",
-    # Flask extension
-    "FlaskRateLimiter",
-    "RateLimitStatus",
+    "parse_limit",
+    "parse_multi_tier",
+    # IP utilities
+    "is_private_ip",
+    "extract_client_ip",
+    "should_rate_limit",
+    # Algorithms
+    "RateLimitResult",
+    "FixedWindow",
+    "SlidingWindow",
+    "TokenBucket",
     # Storage
-    "RateLimitStorage",
     "MemoryStorage",
+    # Middleware
+    "FlaskRateLimiter",
+    "GrpcRateLimitInterceptor",
+    "H3RateLimitMiddleware",
 ]
 
-if _has_redis:
-    __all__.append("RedisStorage")
+__version__ = "0.1.0"
