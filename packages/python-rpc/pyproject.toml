@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "penguin-rpc"
+version = "0.1.0"
+description = "pRPC: Connect RPC over HTTP/3/QUIC with zero-trust defaults and MCP/A2A mounting"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Penguin Tech Inc", email = "dev@penguintech.io"}
+]
+keywords = ["penguintech", "rpc", "http3", "quic", "mcp", "a2a"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Networking",
+]
+
+dependencies = []
+
+[project.optional-dependencies]
+h3 = []
+mcp = []
+a2a = []
+ziti = []
+all = ["penguin-rpc[h3,mcp,a2a,ziti]"]
+dev = ["pytest==8.4.1", "pytest-cov==6.2.1", "mypy==1.16.1", "ruff==0.12.3", "bandit==1.8.5"]
+
+[project.urls]
+Homepage = "https://www.penguintech.io"
+Repository = "https://github.com/penguintechinc/penguin-libs"
+Issues = "https://github.com/penguintechinc/penguin-libs/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101", "B105", "B110"]

@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = ["crates/penguin-rpc", "crates/penguin-h3-tower"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.97"
+license = "Apache-2.0"
+repository = "https://github.com/penguintechinc/penguin-libs"
+authors = ["Penguin Tech Inc <dev@penguintech.io>"]
