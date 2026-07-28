@@ -3,9 +3,14 @@
 /// Provides reusable widgets with the Elder dark theme:
 /// - [FormModalBuilder] — Modal form dialogs with tabbed layouts
 /// - [FormBuilder] — Inline and modal forms
-/// - [LoginPageBuilder] — Full login pages with OAuth, MFA, CAPTCHA
+/// - [LoginPageBuilder] — Full login pages with OAuth, MFA, CAPTCHA, and
+///   optional secure token storage via [TokenStorage]
 /// - [SidebarMenu] — Navigation sidebar with role-based filtering
 /// - [ConsoleVersion] — Version logging utilities
+///
+/// Scope note: this package provides UI + auth flows + secure token
+/// storage only. It does NOT include a license entitlement client or an
+/// analytics client — see the package README for details.
 library;
 
 // Theme
@@ -41,6 +46,9 @@ export 'src/login_page_builder/login_page_builder.dart';
 export 'src/login_page_builder/theme/elder_login_theme.dart';
 export 'src/login_page_builder/utils/oauth_utils.dart';
 export 'src/login_page_builder/utils/saml_utils.dart';
+export 'src/login_page_builder/utils/csrf_state.dart';
+export 'src/login_page_builder/utils/altcha_solver.dart';
+export 'src/login_page_builder/utils/token_storage.dart';
 export 'src/login_page_builder/state/captcha_state.dart';
 export 'src/login_page_builder/state/cookie_consent_state.dart';
 export 'src/login_page_builder/widgets/social_icons.dart';

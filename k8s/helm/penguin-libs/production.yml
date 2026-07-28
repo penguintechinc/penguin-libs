@@ -1,0 +1,15 @@
+buildValidator:
+  replicas: 3
+  image:
+    tag: "20-alpine"
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+config:
+  nodeEnv: "production"
+  npmRegistry: "https://registry.npmjs.org"

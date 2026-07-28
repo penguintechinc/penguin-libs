@@ -45,4 +45,4 @@ logger = SanitizedLogger("MyApp", sinks=configure_logging_from_env())
 
 ## License
 
-AGPL-3.0 — See [LICENSE](../../LICENSE) for details.
+MIT — See [LICENSE](../../LICENSE) for details.

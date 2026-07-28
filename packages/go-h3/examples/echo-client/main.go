@@ -15,7 +15,7 @@ import (
 
 func main() {
 	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 
 	serverURL := flag.String("url", "https://localhost:8443", "server URL")
 	msg := flag.String("msg", "hello", "message to echo")
@@ -25,14 +25,16 @@ func main() {
 	cfg := h3client.DefaultClientConfig()
 	cfg.BaseURL = *serverURL
 	if *insecure {
+		// DEV ONLY — never copy into production code
+		// InsecureSkipVerify disables TLS certificate verification and must never be used in production.
 		cfg.TLSConfig = &tls.Config{
-			InsecureSkipVerify: true, //nolint:gosec // CLI flag for testing only
+			InsecureSkipVerify: true, //#nosec G402 -- DEV ONLY, never use in production
 			MinVersion:         tls.VersionTLS13,
 		}
 	}
 
 	c := h3client.New(cfg, logger)
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	url := fmt.Sprintf("%s/echo?msg=%s", cfg.BaseURL, *msg)
 	logger.Info("sending request", zap.String("url", url), zap.String("protocol", c.Protocol()))
@@ -49,8 +51,12 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
-	body, _ := io.ReadAll(resp.Body)
-	fmt.Printf("Protocol: %s\nResponse: %s\n", c.Protocol(), string(body))
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logger.Fatal("failed to read response body", zap.Error(err))
+		os.Exit(1)
+	}
+	_, _ = fmt.Printf("Protocol: %s\nResponse: %s\n", c.Protocol(), string(body))
 }
