@@ -38,7 +38,7 @@
     "test-utils"
   ],
   "author": "Penguin Tech Inc <dev@penguintech.io>",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
   "homepage": "https://www.penguintech.io",
   "repository": {
     "type": "git",

@@ -23,7 +23,7 @@
     "url": "git+https://github.com/penguintechinc/penguin-libs.git"
   },
   "author": "Penguin Tech Inc <dev@penguintech.io>",
-  "license": "AGPL-3.0",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/penguintechinc/penguin-libs/issues"
   },

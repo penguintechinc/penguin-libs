@@ -155,4 +155,4 @@ All components use the Elder dark theme by default, featuring slate and amber co
 
 ## License
 
-AGPL-3.0 — See [LICENSE](LICENSE) for details.
+MIT — See [LICENSE](LICENSE) for details.

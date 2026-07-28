@@ -13,8 +13,8 @@ yanked = "deny"
 ignore = []
 
 [licenses]
-# The crate itself is AGPL-3.0-only. Dependencies must be permissive
-# enough to be linked into an AGPL work; copyleft-with-linking-exception
+# The crate itself is MIT-licensed. Dependencies must be permissive
+# enough to be linked into an MIT work; copyleft-with-linking-exception
 # and permissive licenses only. Anything else needs an explicit exception.
 #
 # No `OpenSSL` entry: the TLS stack is rustls end to end
