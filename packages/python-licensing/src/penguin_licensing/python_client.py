@@ -8,26 +8,29 @@ to validate licenses and check feature entitlements.
 import logging
 import os
 import time
+from datetime import datetime, timedelta, timezone
 from functools import wraps
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 
 import requests
 
+from .exceptions import FeatureNotAvailableError, LicenseValidationError
+from .urls import require_https_url
+
 logger = logging.getLogger(__name__)
 
-
-class FeatureNotAvailableError(Exception):
-    """Raised when a required feature is not available in the current license."""
-
-    def __init__(self, feature: str):
-        self.feature = feature
-        super().__init__(f"Feature '{feature}' requires license upgrade")
-
-
-class LicenseValidationError(Exception):
-    """Raised when license validation fails."""
-
-    pass
+# Re-exported for backwards compatibility; canonical definitions live in
+# penguin_licensing.exceptions so every layer raises the same classes.
+__all__ = [
+    "FeatureNotAvailableError",
+    "LicenseValidationError",
+    "PenguinTechLicenseClient",
+    "check_feature",
+    "get_client",
+    "initialize_licensing",
+    "requires_feature",
+    "send_keepalive",
+]
 
 
 class PenguinTechLicenseClient:
@@ -39,7 +42,7 @@ class PenguinTechLicenseClient:
         product: str,
         base_url: Optional[str] = None,
         timeout: int = 30,
-    ):
+    ) -> None:
         """
         Initialize the license client.
 
@@ -48,10 +51,14 @@ class PenguinTechLicenseClient:
             product: The product identifier
             base_url: License server URL (default: https://license.penguintech.io)
             timeout: Request timeout in seconds
+
+        Raises:
+            ValueError: If base_url is a non-loopback URL that does not use https
         """
         self.license_key = license_key
         self.product = product
-        self.base_url = base_url or "https://license.penguintech.io"
+        # Enforce TLS for license server (https required, except loopback)
+        self.base_url = require_https_url(base_url or "https://license.penguintech.io")
         self.server_id = None
         self.timeout = timeout
 
@@ -62,12 +69,15 @@ class PenguinTechLicenseClient:
                 "Content-Type": "application/json",
             }
         )
-        self.session.timeout = timeout
 
         # Feature cache
-        self._feature_cache = {}
-        self._cache_timestamp = None
+        self._feature_cache: Dict[str, bool] = {}
+        self._cache_timestamp: Optional[float] = None
         self._cache_ttl = 300  # 5 minutes
+
+        # Validation cache (fail-closed)
+        self._cached_validation: Optional[Dict[str, Any]] = None
+        self._validation_cache_expiry: Optional[float] = None
 
     @classmethod
     def from_env(cls, timeout: int = 30) -> Optional["PenguinTechLicenseClient"]:
@@ -88,35 +98,73 @@ class PenguinTechLicenseClient:
         base_url = os.getenv("LICENSE_SERVER_URL")
 
         if not license_key or not product:
-            logger.warning(
-                "LICENSE_KEY and PRODUCT_NAME environment variables required"
-            )
+            logger.warning("LICENSE_KEY and PRODUCT_NAME environment variables required")
             return None
 
         return cls(license_key, product, base_url, timeout)
 
-    def validate(self) -> Dict[str, Any]:
+    def validate(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
         Validate license and get server ID for keepalives.
 
+        Fail-closed policy:
+        - 401/403/404: definitive rejection, drop cache, raise (never serve the
+          previously cached entitlement, so the caller degrades to no features)
+        - 5xx/transport errors: return last cached value if available
+        - Expiry: enforce with 72h grace period if payload includes expires_at
+
+        Args:
+            force_refresh: Skip the validation cache and re-contact the server
+
         Returns:
-            Dict containing validation response
+            Dict containing the validation response, or the last known-good
+            cached response when the server is unreachable
 
         Raises:
-            LicenseValidationError: If validation fails
+            LicenseValidationError: If the license is definitively rejected, or
+                the server is unreachable and there is no cached validation
         """
+        now = time.time()
+        # Check cache first
+        if not force_refresh and self._cached_validation and self._validation_cache_expiry:
+            if now < self._validation_cache_expiry:
+                logger.debug("license_validation_cache_hit")
+                return self._cached_validation
+
         try:
             response = self.session.post(
-                f"{self.base_url}/api/v2/validate", json={"product": self.product}
+                f"{self.base_url}/api/v2/validate",
+                json={"product": self.product},
+                timeout=self.timeout,
             )
+
+            # Definitive rejection: drop cache and raise
+            if response.status_code in (401, 403, 404):
+                logger.warning(f"License server rejected request (HTTP {response.status_code})")
+                self._cached_validation = None
+                self._validation_cache_expiry = None
+                raise LicenseValidationError(
+                    f"License revoked or invalid (HTTP {response.status_code})"
+                )
+
             response.raise_for_status()
 
             data = response.json()
 
             if not data.get("valid"):
-                raise LicenseValidationError(
-                    f"License validation failed: {data.get('message')}"
-                )
+                raise LicenseValidationError(f"License validation failed: {data.get('message')}")
+
+            # Enforce expiry with 72h grace period
+            if "expires_at" in data:
+                expires_at = datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00"))
+                now_dt = datetime.now(expires_at.tzinfo or timezone.utc)
+                grace_period = timedelta(hours=72)
+                if expires_at < now_dt:
+                    if expires_at + grace_period < now_dt:
+                        logger.error("License expired beyond grace period")
+                        raise LicenseValidationError("License expired beyond grace period")
+                    else:
+                        logger.warning("License expired but within grace period")
 
             # Store server ID for keepalives
             if "metadata" in data and "server_id" in data["metadata"]:
@@ -125,10 +173,20 @@ class PenguinTechLicenseClient:
             # Update feature cache
             self._update_feature_cache(data.get("features", []))
 
-            return data
+            # Cache validation result
+            self._cached_validation = data
+            self._validation_cache_expiry = now + 300  # 5 minute TTL
+
+            return cast(Dict[str, Any], data)
 
         except requests.RequestException as e:
-            raise LicenseValidationError(f"License validation request failed: {e}")
+            logger.error(f"License validation request failed: {e}")
+            # Transient errors: return cached value if available
+            if self._cached_validation:
+                logger.warning("Using cached license validation on error")
+                return self._cached_validation
+            # No cache available: raise
+            raise LicenseValidationError(f"License validation request failed: {e}") from e
 
     def check_feature(self, feature: str, use_cache: bool = True) -> bool:
         """
@@ -151,14 +209,15 @@ class PenguinTechLicenseClient:
             response = self.session.post(
                 f"{self.base_url}/api/v2/features",
                 json={"product": self.product, "feature": feature},
+                timeout=self.timeout,
             )
             response.raise_for_status()
 
             data = response.json()
-            features = data.get("features", [])
+            features = cast(List[Dict[str, Any]], data.get("features", []))
 
             if features:
-                entitled = features[0].get("entitled", False)
+                entitled = cast(bool, features[0].get("entitled", False))
                 # Cache the result
                 self._feature_cache[feature] = entitled
                 self._cache_timestamp = time.time()
@@ -196,11 +255,11 @@ class PenguinTechLicenseClient:
 
         try:
             response = self.session.post(
-                f"{self.base_url}/api/v2/keepalive", json=payload
+                f"{self.base_url}/api/v2/keepalive", json=payload, timeout=self.timeout
             )
             response.raise_for_status()
 
-            return response.json()
+            return cast(Dict[str, Any], response.json())
 
         except requests.RequestException as e:
             raise LicenseValidationError(f"Keepalive request failed: {e}")
@@ -225,7 +284,7 @@ class PenguinTechLicenseClient:
         self._feature_cache = {}
         for feature in features:
             name = feature.get("name")
-            entitled = feature.get("entitled", False)
+            entitled = cast(bool, feature.get("entitled", False))
             if name:
                 self._feature_cache[name] = entitled
 
@@ -273,7 +332,7 @@ def get_client() -> Optional[PenguinTechLicenseClient]:
 
 def requires_feature(
     feature_name: str, client: Optional[PenguinTechLicenseClient] = None
-):
+) -> Callable[[Any], Any]:
     """
     Decorator to gate functionality behind license features.
 
@@ -285,9 +344,9 @@ def requires_feature(
         FeatureNotAvailableError: If feature is not available
     """
 
-    def decorator(func):
+    def decorator(func: Any) -> Any:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             license_client = client or get_client()
 
             if not license_client:
@@ -304,7 +363,7 @@ def requires_feature(
 
 
 def initialize_licensing(
-    license_key: str = None, product: str = None
+    license_key: Optional[str] = None, product: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Initialize licensing system and validate license.
@@ -322,18 +381,16 @@ def initialize_licensing(
     global _global_client
 
     # Use provided values or environment variables
-    license_key = license_key or os.getenv("LICENSE_KEY")
-    product = product or os.getenv("PRODUCT_NAME")
+    final_license_key = license_key or os.getenv("LICENSE_KEY")
+    final_product = product or os.getenv("PRODUCT_NAME")
 
-    if not license_key or not product:
+    if not final_license_key or not final_product:
         raise LicenseValidationError("LICENSE_KEY and PRODUCT_NAME are required")
 
-    _global_client = PenguinTechLicenseClient(license_key, product)
+    _global_client = PenguinTechLicenseClient(final_license_key, final_product)
     validation = _global_client.validate()
 
-    logger.info(
-        f"License valid for {validation['customer']} ({validation['tier']} tier)"
-    )
+    logger.info(f"License valid for {validation['customer']} ({validation['tier']} tier)")
 
     # Log available features
     for feature in validation.get("features", []):
@@ -352,7 +409,7 @@ def check_feature(feature: str) -> bool:
     return client.check_feature(feature)
 
 
-def send_keepalive(usage_data: Dict[str, Any] = None) -> bool:
+def send_keepalive(usage_data: Optional[Dict[str, Any]] = None) -> bool:
     """Send keepalive using the global client."""
     client = get_client()
     if not client:

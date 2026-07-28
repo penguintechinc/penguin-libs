@@ -56,7 +56,10 @@ export const CaptchaWidget: React.FC<CaptchaWidgetProps> = ({
   // Load ALTCHA script dynamically
   useEffect(() => {
     const SCRIPT_ID = 'altcha-script';
-    const SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/altcha/dist/altcha.min.js';
+    // Pinned to v3.2.1 with SRI integrity to prevent tampering
+    // URL: curl -s "https://cdn.jsdelivr.net/npm/altcha@3.2.1/dist/main/altcha.min.js" | openssl dgst -sha384 -binary | openssl base64 -A
+    const SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/altcha@3.2.1/dist/main/altcha.min.js';
+    const SCRIPT_INTEGRITY = 'sha384-GNil3oVwqGhMUWHaA39g6kcih3W3Ldkh/oGlF5OC0NWFEkPj2FOvFiVG5w8I90Th';
 
     const loadScript = async () => {
       // Check if script already exists
@@ -72,6 +75,7 @@ export const CaptchaWidget: React.FC<CaptchaWidgetProps> = ({
         const script = document.createElement('script');
         script.id = SCRIPT_ID;
         script.src = SCRIPT_URL;
+        script.integrity = SCRIPT_INTEGRITY;
         script.async = true;
         script.type = 'module';
 
