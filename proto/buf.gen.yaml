@@ -11,3 +11,11 @@ plugins:
   # Python protobuf messages
   - remote: buf.build/protocolbuffers/python
     out: ../packages/python-libs/src/penguin_libs/gen
+  # go-rpc: Go protobuf messages (prpc/* only — scoped via `buf generate --path prpc`)
+  - remote: buf.build/protocolbuffers/go
+    out: ../packages/go-rpc/gen
+    opt: paths=source_relative
+  # go-rpc: ConnectRPC Go handlers + clients (prpc/* only — scoped via `buf generate --path prpc`)
+  - remote: buf.build/connectrpc/go
+    out: ../packages/go-rpc/gen
+    opt: paths=source_relative

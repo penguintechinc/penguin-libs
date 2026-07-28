@@ -4,14 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "penguin-sal"
-version = "0.1.0"
+version = "0.2.1"
 description = "PyDAL-inspired unified secrets management - one API, multiple backends"
 readme = "README.md"
-license = {text = "AGPL-3.0"}
+license = {text = "MIT"}
 requires-python = ">=3.11"
 authors = [{name = "Penguin Tech Inc", email = "dev@penguintech.io"}]
 keywords = ["secrets", "vault", "aws", "gcp", "azure", "kubernetes", "penguintech"]
 classifiers = [
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -54,6 +55,7 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0",
     "bandit>=1.7.0",
+    "hvac>=2.0.0",
 ]
 
 [project.urls]

@@ -1,0 +1,35 @@
+{% extends "base.html.j2" %}
+{% block title %}{{ subject_detail | default('Transaction Summary') }}{% endblock %}
+{% block content %}
+<p>Hi {{ name }},</p>
+<p>Here is a summary of your recent transaction:</p>
+{% if items is defined and items %}
+<table class="table-wrap">
+  <thead>
+    <tr>
+      <th>Description</th>
+      <th>Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.description | default('') }}</td>
+      <td>{{ item.amount | default('') }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  {% if total is defined and total %}
+  <tfoot>
+    <tr>
+      <td><strong>Total</strong></td>
+      <td><strong>{{ total }}</strong></td>
+    </tr>
+  </tfoot>
+  {% endif %}
+</table>
+{% endif %}
+<p style="margin-top:20px;font-size:13px;color:#94a3b8;">
+  If you have questions, please contact our support team.
+</p>
+{% endblock %}
