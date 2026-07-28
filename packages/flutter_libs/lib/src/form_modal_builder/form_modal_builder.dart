@@ -5,6 +5,7 @@ import 'form_field_builder.dart';
 import 'form_tab.dart';
 import 'form_color_config.dart';
 import 'form_validators.dart';
+import 'sanitized_logger.dart';
 
 /// A modal form dialog supporting tabbed layouts, validation, and the Elder theme.
 ///
@@ -115,9 +116,7 @@ class _FormModalBuilderState extends State<FormModalBuilder>
     if (widget.tabs != null && widget.tabs!.isNotEmpty) {
       // Manual tabs
       _tabData = widget.tabs!.map((tab) {
-        final tabFields = visibleFields
-            .where((f) => f.tab == tab.id)
-            .toList();
+        final tabFields = visibleFields.where((f) => f.tab == tab.id).toList();
         return _TabData(id: tab.id, label: tab.label, fields: tabFields);
       }).toList();
 
@@ -163,9 +162,7 @@ class _FormModalBuilderState extends State<FormModalBuilder>
 
   bool _tabHasErrors(int index) {
     if (index >= _tabData.length) return false;
-    return _tabData[index]
-        .fields
-        .any((f) => _errors.containsKey(f.name));
+    return _tabData[index].fields.any((f) => _errors.containsKey(f.name));
   }
 
   void _validateAll() {
@@ -207,9 +204,13 @@ class _FormModalBuilderState extends State<FormModalBuilder>
     try {
       await widget.onSubmit(_values);
     } catch (e) {
+      // Route the real error through the sanitized logger only — the raw
+      // exception may contain backend detail (or, in edge cases, request
+      // data echoed back) that shouldn't be shown verbatim in the UI.
+      sanitizedLog('Form submit failed', data: {'error': e.toString()});
       if (mounted) {
         setState(() {
-          _errors['_form'] = e.toString();
+          _errors['_form'] = 'Something went wrong. Please try again.';
         });
       }
     } finally {
@@ -358,9 +359,8 @@ class _FormModalBuilderState extends State<FormModalBuilder>
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
-              children: tab.fields
-                  .map((f) => _buildFieldWidget(f, colors))
-                  .toList(),
+              children:
+                  tab.fields.map((f) => _buildFieldWidget(f, colors)).toList(),
             ),
           );
         }).toList(),
@@ -371,9 +371,8 @@ class _FormModalBuilderState extends State<FormModalBuilder>
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
-        children: visibleFields
-            .map((f) => _buildFieldWidget(f, colors))
-            .toList(),
+        children:
+            visibleFields.map((f) => _buildFieldWidget(f, colors)).toList(),
       ),
     );
   }

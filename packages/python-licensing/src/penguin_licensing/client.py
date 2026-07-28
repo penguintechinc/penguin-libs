@@ -4,17 +4,20 @@
 
 
 import os
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import requests
 import structlog
 
+from .urls import require_https_url
+
 logger = structlog.get_logger()
 
 
-@dataclass
+@dataclass(slots=True)
 class Feature:
     """License feature with entitlement details."""
 
@@ -22,10 +25,10 @@ class Feature:
     entitled: bool
     units: int  # 0 = unlimited, -1 = not applicable
     description: str
-    metadata: Dict
+    metadata: Dict[str, Any]
 
 
-@dataclass
+@dataclass(slots=True)
 class LicenseInfo:
     """License information from server."""
 
@@ -38,8 +41,8 @@ class LicenseInfo:
     issued_at: datetime
     tier: str  # community, professional, enterprise
     features: List[Feature]
-    limits: Dict
-    metadata: Dict
+    limits: Dict[str, Any]
+    metadata: Dict[str, Any]
     server_id: Optional[str] = None
     message: Optional[str] = None
 
@@ -56,7 +59,7 @@ class LicenseClient:
         self,
         license_key: Optional[str] = None,
         product: str = "elder",
-        base_url: str = "https://license.penguintech.io",
+        base_url: Optional[str] = None,
     ):
         """
         Initialize license client.
@@ -64,13 +67,22 @@ class LicenseClient:
         Args:
             license_key: PenguinTech license key (PENG-XXXX-...)
             product: Product identifier
-            base_url: License server base URL
+            base_url: License server base URL (default: LICENSE_SERVER_URL env var,
+                falling back to https://license.penguintech.io if unset)
         """
         self.license_key = license_key or os.getenv("LICENSE_KEY", "")
         self.product = product
-        self.base_url = base_url or os.getenv(
-            "LICENSE_SERVER_URL", "https://license.penguintech.io"
+        # Explicit arg wins; otherwise honor LICENSE_SERVER_URL; otherwise the
+        # hardcoded default. A truthy parameter default here would make the env
+        # var dead code (base_url would never be falsy), so the default lives
+        # in this fallback chain instead of the parameter signature.
+        self.base_url = (
+            base_url or os.getenv("LICENSE_SERVER_URL") or "https://license.penguintech.io"
         )
+
+        # Enforce TLS for license server (https required, except loopback)
+        self.base_url = require_https_url(self.base_url)
+
         self.server_id: Optional[str] = None
 
         # Cache validation results (5 minute TTL)
@@ -92,6 +104,11 @@ class LicenseClient:
     def validate(self, force_refresh: bool = False) -> LicenseInfo:
         """
         Validate license and get server ID for keepalives.
+
+        Fail-closed policy:
+        - 401/403/404: definitive rejection, drop cache, return community tier
+        - 5xx/transport errors: return last cached value if available
+        - Expiry: enforce with 72h offline grace period if payload includes expires_at
 
         Args:
             force_refresh: Force refresh from server (ignore cache)
@@ -117,6 +134,29 @@ class LicenseClient:
                 timeout=10,
             )
 
+            # Definitive rejection: drop cache and return community tier
+            if response.status_code in (401, 403, 404):
+                logger.warning(
+                    "license_server_rejected",
+                    status_code=response.status_code,
+                )
+                self._cached_validation = None
+                self._cache_expiry = None
+                return LicenseInfo(
+                    valid=False,
+                    customer="",
+                    product=self.product,
+                    license_version="2.0",
+                    license_key=self.license_key,
+                    expires_at=datetime.now(timezone.utc),
+                    issued_at=datetime.now(timezone.utc),
+                    tier="community",
+                    features=[],
+                    limits={},
+                    metadata={},
+                    message=f"License revoked or invalid (HTTP {response.status_code})",
+                )
+
             if response.status_code == 200:
                 data = response.json()
 
@@ -133,12 +173,8 @@ class LicenseClient:
                 ]
 
                 # Parse timestamps
-                expires_at = datetime.fromisoformat(
-                    data["expires_at"].replace("Z", "+00:00")
-                )
-                issued_at = datetime.fromisoformat(
-                    data["issued_at"].replace("Z", "+00:00")
-                )
+                expires_at = datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00"))
+                issued_at = datetime.fromisoformat(data["issued_at"].replace("Z", "+00:00"))
 
                 license_info = LicenseInfo(
                     valid=True,
@@ -154,6 +190,35 @@ class LicenseClient:
                     metadata=data.get("metadata", {}),
                     server_id=data.get("metadata", {}).get("server_id"),
                 )
+
+                # Enforce expiry with 72h grace period
+                now = datetime.now(timezone.utc)
+                grace_period = timedelta(hours=72)
+                if license_info.expires_at < now:
+                    if license_info.expires_at + grace_period < now:
+                        logger.error(
+                            "license_expired_beyond_grace",
+                            expires_at=license_info.expires_at.isoformat(),
+                        )
+                        return LicenseInfo(
+                            valid=False,
+                            customer="",
+                            product=self.product,
+                            license_version="2.0",
+                            license_key=self.license_key,
+                            expires_at=datetime.now(timezone.utc),
+                            issued_at=datetime.now(timezone.utc),
+                            tier="community",
+                            features=[],
+                            limits={},
+                            metadata={},
+                            message="License expired beyond grace period",
+                        )
+                    else:
+                        logger.warning(
+                            "license_expired_within_grace",
+                            expires_at=license_info.expires_at.isoformat(),
+                        )
 
                 # Store server ID for keepalives
                 if license_info.server_id:
@@ -173,29 +238,26 @@ class LicenseClient:
                 return license_info
 
             else:
+                # 5xx or other error: return cached value if available
                 logger.error(
-                    "license_validation_failed",
+                    "license_validation_server_error",
                     status_code=response.status_code,
-                    response=response.text,
                 )
-                return LicenseInfo(
-                    valid=False,
-                    customer="",
-                    product=self.product,
-                    license_version="2.0",
-                    license_key=self.license_key,
-                    expires_at=datetime.now(timezone.utc),
-                    issued_at=datetime.now(timezone.utc),
-                    tier="community",
-                    features=[],
-                    limits={},
-                    metadata={},
-                    message=f"Validation failed: {response.status_code}",
+                if self._cached_validation:
+                    logger.warning("license_validation_using_cached_value")
+                    return self._cached_validation
+                # No cache available: return community tier
+                return self._get_community_tier_info(
+                    message=f"License server error (HTTP {response.status_code}), using community tier"
                 )
 
         except Exception as e:
             logger.error("license_validation_exception", error=str(e), exc_info=True)
-            # Fall back to community tier on error
+            # Transient errors: return cached value if available
+            if self._cached_validation:
+                logger.warning("license_validation_using_cached_value_on_error")
+                return self._cached_validation
+            # No cache: fall back to community tier
             return self._get_community_tier_info(message=f"Validation error: {str(e)}")
 
     def check_feature(self, feature_name: str) -> bool:
@@ -239,7 +301,7 @@ class LicenseClient:
 
         return current_level >= required_level
 
-    def keepalive(self, usage_data: Optional[Dict] = None) -> Dict:
+    def keepalive(self, usage_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Send keepalive with optional usage statistics.
 
@@ -259,7 +321,7 @@ class LicenseClient:
             if not validation.valid or not validation.server_id:
                 return {"success": False, "message": "No server ID available"}
 
-        payload = {
+        payload: Dict[str, Any] = {
             "product": self.product,
             "server_id": self.server_id,
         }
@@ -276,7 +338,7 @@ class LicenseClient:
 
             if response.status_code == 200:
                 logger.info("keepalive_success", server_id=self.server_id)
-                return response.json()
+                return cast(Dict[str, Any], response.json())
             else:
                 logger.error(
                     "keepalive_failed",
@@ -318,26 +380,39 @@ class LicenseClient:
         )
 
 
-# Global license client instance
+# Global license client instance, guarded for threaded WSGI/ASGI servers where
+# concurrent first requests would otherwise each construct their own client.
 _license_client: Optional[LicenseClient] = None
+_license_client_lock = threading.Lock()
 
 
 def get_license_client() -> LicenseClient:
     """
     Get global license client instance.
 
+    Initialization is double-checked under a lock: the warm-cache-survives-outage
+    guarantee only holds if every caller shares one client, and an unguarded
+    check-then-act would let concurrent first requests build rival instances,
+    each with its own empty validation cache and connection pool.
+
     Returns:
         Shared LicenseClient instance
     """
     global _license_client
 
-    if _license_client is None:
-        _license_client = LicenseClient()
+    # Fast path: already initialized, no lock needed.
+    client = _license_client
+    if client is not None:
+        return client
 
-    return _license_client
+    with _license_client_lock:
+        # Re-check: another thread may have initialized while we waited.
+        if _license_client is None:
+            _license_client = LicenseClient()
+        return _license_client
 
 
-def init_license_client(app) -> LicenseClient:
+def init_license_client(app: Any) -> LicenseClient:
     """
     Initialize license client from Flask app config.
 
