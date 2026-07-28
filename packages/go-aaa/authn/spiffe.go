@@ -69,3 +69,25 @@ func (a *SPIFFEAuthenticator) ValidatePeerCertificate(certs []*x509.Certificate)
 
 	return "", fmt.Errorf("spiffe: peer id %q is not in the allowed set", peerIDStr)
 }
+
+// Authenticate validates a SPIFFE ID string against the configured allowed IDs.
+// This is used by middleware that receives the SPIFFE ID as a string (e.g., from TLS extension).
+func (a *SPIFFEAuthenticator) Authenticate(spiffeID string) error {
+	if spiffeID == "" {
+		return fmt.Errorf("spiffe: empty SPIFFE ID")
+	}
+	id, err := spiffeid.FromString(spiffeID)
+	if err != nil {
+		return fmt.Errorf("spiffe: invalid SPIFFE ID %q: %w", spiffeID, err)
+	}
+	for _, allowedID := range a.cfg.AllowedIDs {
+		allowed, err := spiffeid.FromString(allowedID)
+		if err != nil {
+			continue
+		}
+		if id == allowed {
+			return nil
+		}
+	}
+	return fmt.Errorf("spiffe: ID %q not in allowed set", spiffeID)
+}

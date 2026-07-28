@@ -40,10 +40,12 @@ class _AppConsoleVersionState extends State<AppConsoleVersion> {
 
   Future<void> _fetchAndLogVersion() async {
     try {
-      final response = await http.get(
-        Uri.parse(widget.versionUrl),
-        headers: widget.headers,
-      );
+      final response = await http
+          .get(
+            Uri.parse(widget.versionUrl),
+            headers: widget.headers,
+          )
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
         final version = data['version'] as String? ?? '0.0.0';

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -10,6 +11,7 @@ import 'state/captcha_state.dart';
 import 'state/cookie_consent_state.dart';
 import 'utils/oauth_utils.dart';
 import 'utils/saml_utils.dart';
+import 'utils/token_storage.dart';
 import 'widgets/mfa_modal.dart';
 import 'widgets/captcha_widget.dart';
 import 'widgets/social_login_buttons.dart';
@@ -28,6 +30,7 @@ import 'widgets/login_footer.dart';
 /// - GDPR cookie consent gating
 /// - Error display with transformable messages
 /// - Full Elder theme via [LoginColorConfig]
+/// - Optional secure token persistence via [TokenStorage]
 class LoginPageBuilder extends StatefulWidget {
   const LoginPageBuilder({
     super.key,
@@ -46,8 +49,11 @@ class LoginPageBuilder extends StatefulWidget {
     this.signUpCallback,
     this.transformErrorMessage,
     this.onLinkTap,
+    this.onSocialLoginInitiated,
     this.showRememberMe = true,
     this.footer,
+    this.tokenStorage,
+    this.httpClient,
   });
 
   final LoginApiConfig apiConfig;
@@ -65,8 +71,29 @@ class LoginPageBuilder extends StatefulWidget {
   final VoidCallback? signUpCallback;
   final String Function(String error)? transformErrorMessage;
   final void Function(String url)? onLinkTap;
+
+  /// Called right before launching a social/SSO provider's authorization
+  /// URL, with the CSRF `state` (and PKCE `codeVerifier`, when applicable)
+  /// generated for that request. Retain these and validate `state` (via
+  /// `isValidCallbackState`) — and complete the PKCE token exchange with
+  /// `codeVerifier` — in your OAuth/OIDC/SAML callback handler.
+  final void Function(
+    SocialProvider provider,
+    String state,
+    String? codeVerifier,
+  )? onSocialLoginInitiated;
   final bool showRememberMe;
   final Widget? footer;
+
+  /// When provided, the access/refresh tokens from a successful login are
+  /// persisted here automatically. This widget has no logout UI — call
+  /// `tokenStorage.clear()` yourself wherever your app implements logout.
+  final TokenStorage? tokenStorage;
+
+  /// Optional [http.Client] to use for the login request, e.g. an
+  /// injected [http.testing.MockClient] in tests. When omitted, a fresh
+  /// client is created and closed per request.
+  final http.Client? httpClient;
 
   @override
   State<LoginPageBuilder> createState() => _LoginPageBuilderState();
@@ -113,7 +140,10 @@ class _LoginPageBuilderState extends State<LoginPageBuilder> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _handleLogin({String? mfaCode}) async {
+  Future<void> _handleLogin({
+    String? mfaCode,
+    bool rememberDevice = false,
+  }) async {
     if (!_formKey.currentState!.validate()) return;
 
     // Check CAPTCHA if required
@@ -131,6 +161,9 @@ class _LoginPageBuilderState extends State<LoginPageBuilder> {
       _errorMessage = null;
     });
 
+    final ownedClient = widget.httpClient == null ? http.Client() : null;
+    final client = widget.httpClient ?? ownedClient!;
+
     try {
       final payload = LoginPayload(
         email: _emailController.text.trim(),
@@ -138,6 +171,7 @@ class _LoginPageBuilderState extends State<LoginPageBuilder> {
         rememberMe: _rememberMe,
         captchaToken: _captchaNotifier.captchaToken,
         mfaCode: mfaCode,
+        rememberDevice: rememberDevice,
       );
 
       sanitizedLog('Login attempt', data: {
@@ -146,25 +180,36 @@ class _LoginPageBuilderState extends State<LoginPageBuilder> {
       });
 
       final uri = Uri.parse(widget.apiConfig.loginUrl);
-      final response = widget.apiConfig.method == LoginMethod.put
-          ? await http.put(
-              uri,
-              headers: {
-                'Content-Type': 'application/json',
-                ...widget.apiConfig.headers,
-              },
-              body: json.encode(payload.toJson()),
-            )
-          : await http.post(
-              uri,
-              headers: {
-                'Content-Type': 'application/json',
-                ...widget.apiConfig.headers,
-              },
-              body: json.encode(payload.toJson()),
-            );
+      final headers = {
+        'Content-Type': 'application/json',
+        ...widget.apiConfig.headers,
+      };
+      final body = json.encode(payload.toJson());
 
-      final data = json.decode(response.body) as Map<String, dynamic>;
+      final response = await (widget.apiConfig.method == LoginMethod.put
+              ? client.put(uri, headers: headers, body: body)
+              : client.post(uri, headers: headers, body: body))
+          .timeout(const Duration(seconds: 30));
+
+      // Network/server failures are not genuine auth rejections — surface a
+      // distinct error and do not count them toward the CAPTCHA threshold.
+      if (response.statusCode >= 500) {
+        const error = 'Server error. Please try again later.';
+        setState(() => _errorMessage = error);
+        widget.onLoginError?.call('Server error (${response.statusCode})');
+        return;
+      }
+
+      Map<String, dynamic> data;
+      try {
+        data = json.decode(response.body) as Map<String, dynamic>;
+      } on FormatException {
+        const error = 'Unexpected server response. Please try again.';
+        setState(() => _errorMessage = error);
+        widget.onLoginError?.call('Malformed login response body');
+        return;
+      }
+
       final loginResponse = LoginResponse.fromJson(data);
 
       if (loginResponse.mfaRequired && widget.mfaConfig?.enabled == true) {
@@ -178,9 +223,22 @@ class _LoginPageBuilderState extends State<LoginPageBuilder> {
       if (loginResponse.success) {
         _captchaNotifier.reset();
         sanitizedLog('Login successful');
+        final tokenStorage = widget.tokenStorage;
+        if (tokenStorage != null && loginResponse.token != null) {
+          await tokenStorage.saveTokens(
+            accessToken: loginResponse.token!,
+            refreshToken: loginResponse.refreshToken,
+          );
+        }
         widget.onLoginSuccess?.call(loginResponse);
       } else {
-        _captchaNotifier.recordFailure();
+        // Only a genuine 401 credential rejection counts toward the
+        // CAPTCHA threshold — other 4xx statuses (e.g. 400 validation,
+        // 429 rate limit) surface an error without penalizing the user
+        // with a CAPTCHA challenge.
+        if (response.statusCode == 401) {
+          _captchaNotifier.recordFailure();
+        }
         final error = loginResponse.error ?? 'Login failed';
         final displayError = widget.transformErrorMessage != null
             ? widget.transformErrorMessage!(error)
@@ -188,63 +246,109 @@ class _LoginPageBuilderState extends State<LoginPageBuilder> {
         setState(() => _errorMessage = displayError);
         widget.onLoginError?.call(error);
       }
+    } on TimeoutException {
+      const error = 'Request timed out. Please try again.';
+      setState(() => _errorMessage = error);
+      widget.onLoginError?.call('Login request timed out');
     } catch (e) {
-      _captchaNotifier.recordFailure();
       const error = 'Connection error. Please try again.';
       setState(() => _errorMessage = error);
       widget.onLoginError?.call(e.toString());
     } finally {
+      ownedClient?.close();
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
-  void _handleSocialLogin(SocialProvider provider) {
-    String url;
+  /// Launch [url] externally, surfacing a UI error if the platform reports
+  /// it could not be opened (e.g. no handler for the scheme).
+  Future<void> _launch(String url, {LaunchMode? mode}) async {
+    bool launched;
+    try {
+      launched = await launchUrl(
+        Uri.parse(url),
+        mode: mode ?? LaunchMode.platformDefault,
+      );
+    } catch (e) {
+      launched = false;
+    }
+    if (!launched && mounted) {
+      setState(() => _errorMessage = 'Could not open the link.');
+    }
+  }
 
-    if (provider is BuiltInOAuth2Provider) {
-      url = buildOAuth2Url(provider);
-    } else if (provider is CustomOAuth2Provider) {
-      url = buildCustomOAuth2Url(provider);
-    } else if (provider is OIDCProvider) {
-      url = buildOIDCUrl(provider);
-    } else if (provider is SAMLProvider) {
-      url = initiateSAMLLogin(provider);
-    } else {
+  Future<void> _handleSocialLogin(SocialProvider provider) async {
+    String url;
+    String state;
+    String? codeVerifier;
+
+    try {
+      if (provider is BuiltInOAuth2Provider) {
+        final result = buildOAuth2Url(provider);
+        url = result.url;
+        state = result.state;
+        codeVerifier = result.codeVerifier;
+      } else if (provider is CustomOAuth2Provider) {
+        final result = buildCustomOAuth2Url(provider);
+        url = result.url;
+        state = result.state;
+        codeVerifier = result.codeVerifier;
+      } else if (provider is OIDCProvider) {
+        final result = await buildOIDCUrl(provider, client: widget.httpClient);
+        url = result.url;
+        state = result.state;
+        codeVerifier = result.codeVerifier;
+      } else if (provider is SAMLProvider) {
+        final result = initiateSAMLLogin(provider);
+        url = result.url;
+        state = result.relayState;
+        codeVerifier = null;
+      } else {
+        return;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(
+        () => _errorMessage = 'Unable to start social login. Please try again.',
+      );
+      widget.onLoginError?.call(e.toString());
       return;
     }
+
+    widget.onSocialLoginInitiated?.call(provider, state, codeVerifier);
 
     if (widget.onLinkTap != null) {
       widget.onLinkTap!(url);
     } else {
-      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      await _launch(url, mode: LaunchMode.externalApplication);
     }
   }
 
   void _handleMfaVerify(String code, bool rememberDevice) {
     setState(() => _showMfa = false);
-    _handleLogin(mfaCode: code);
+    _handleLogin(mfaCode: code, rememberDevice: rememberDevice);
   }
 
-  void _handleForgotPassword() {
+  Future<void> _handleForgotPassword() async {
     if (widget.forgotPasswordCallback != null) {
       widget.forgotPasswordCallback!();
     } else if (widget.forgotPasswordUrl != null) {
       if (widget.onLinkTap != null) {
         widget.onLinkTap!(widget.forgotPasswordUrl!);
       } else {
-        launchUrl(Uri.parse(widget.forgotPasswordUrl!));
+        await _launch(widget.forgotPasswordUrl!);
       }
     }
   }
 
-  void _handleSignUp() {
+  Future<void> _handleSignUp() async {
     if (widget.signUpCallback != null) {
       widget.signUpCallback!();
     } else if (widget.signUpUrl != null) {
       if (widget.onLinkTap != null) {
         widget.onLinkTap!(widget.signUpUrl!);
       } else {
-        launchUrl(Uri.parse(widget.signUpUrl!));
+        await _launch(widget.signUpUrl!);
       }
     }
   }
@@ -288,13 +392,11 @@ class _LoginPageBuilderState extends State<LoginPageBuilder> {
               bottom: 0,
               child: CookieConsentBanner(
                 onAcceptAll: _cookieConsentNotifier.acceptAll,
-                onAcceptEssential:
-                    _cookieConsentNotifier.acceptEssentialOnly,
+                onAcceptEssential: _cookieConsentNotifier.acceptEssentialOnly,
                 consentText: widget.gdprConfig!.consentText,
                 privacyPolicyUrl: widget.gdprConfig!.privacyPolicyUrl,
                 cookiePolicyUrl: widget.gdprConfig!.cookiePolicyUrl,
-                showPreferences:
-                    widget.gdprConfig!.showPreferences,
+                showPreferences: widget.gdprConfig!.showPreferences,
                 onLinkTap: widget.onLinkTap,
               ),
             ),
@@ -319,7 +421,8 @@ class _LoginPageBuilderState extends State<LoginPageBuilder> {
           if (widget.branding.logo != null)
             Center(
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: widget.branding.logoHeight),
+                constraints:
+                    BoxConstraints(maxHeight: widget.branding.logoHeight),
                 child: widget.branding.logo,
               ),
             ),
