@@ -1,0 +1,15 @@
+{% extends "base.html.j2" %}
+{% block title %}{{ severity | title }} Alert{% endblock %}
+{% block content %}
+<p>Hi {{ name }},</p>
+<div class="alert-{{ severity | default('info') }}">
+  <p style="margin:0;font-weight:600;">{{ severity | title }} Alert</p>
+  <p style="margin:8px 0 0;">{{ message }}</p>
+  {% if timestamp is defined and timestamp %}
+  <p style="margin:8px 0 0;font-size:12px;color:#64748b;">Timestamp: {{ timestamp }}</p>
+  {% endif %}
+</div>
+<p style="margin-top:16px;font-size:13px;color:#94a3b8;">
+  This is an automated alert from your monitoring system.
+</p>
+{% endblock %}
