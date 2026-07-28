@@ -1,15 +1,48 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// HTTP method for login API calls.
 enum LoginMethod { post, put }
 
+/// Whether [url] is an acceptable login endpoint given [isRelease].
+///
+/// Outside of release builds, any URL is allowed (so local HTTP dev servers
+/// work). In release builds, only `https://` is allowed, with an exception
+/// for `http://localhost`/`127.0.0.1`. Defaults [isRelease] to the real
+/// [kReleaseMode]; exposed as a parameter so this can be unit tested without
+/// needing an actual release build.
+bool isSecureLoginUrl(String url, {bool isRelease = kReleaseMode}) {
+  if (!isRelease) return true;
+  final uri = Uri.tryParse(url);
+  if (uri == null) return false;
+  if (uri.scheme == 'https') return true;
+  if (uri.scheme == 'http') {
+    return uri.host == 'localhost' || uri.host == '127.0.0.1';
+  }
+  return false;
+}
+
 /// Configuration for the login API endpoint.
+///
+/// In release builds, [loginUrl] must use `https://` (plain `http://` is
+/// only permitted for `localhost`/`127.0.0.1`) — throws [ArgumentError]
+/// otherwise, since submitting credentials over an unencrypted channel in
+/// production is never acceptable. See [isSecureLoginUrl] for the check.
 class LoginApiConfig {
-  const LoginApiConfig({
+  LoginApiConfig({
     required this.loginUrl,
     this.method = LoginMethod.post,
     this.headers = const {},
-  });
+  }) {
+    if (!isSecureLoginUrl(loginUrl)) {
+      throw ArgumentError.value(
+        loginUrl,
+        'loginUrl',
+        'must use https:// in release builds '
+            '(http:// is only allowed for localhost/127.0.0.1)',
+      );
+    }
+  }
 
   final String loginUrl;
   final LoginMethod method;
@@ -24,6 +57,7 @@ class LoginPayload {
     this.rememberMe = false,
     this.captchaToken,
     this.mfaCode,
+    this.rememberDevice = false,
   });
 
   final String email;
@@ -32,12 +66,17 @@ class LoginPayload {
   final String? captchaToken;
   final String? mfaCode;
 
+  /// Whether the user opted to skip MFA on this device for future logins.
+  /// Only meaningful (and only sent) alongside [mfaCode].
+  final bool rememberDevice;
+
   Map<String, dynamic> toJson() => {
         'email': email,
         'password': password,
         if (rememberMe) 'rememberMe': true,
         if (captchaToken != null) 'captchaToken': captchaToken,
         if (mfaCode != null) 'mfaCode': mfaCode,
+        if (mfaCode != null && rememberDevice) 'rememberDevice': true,
       };
 }
 

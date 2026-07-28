@@ -1,0 +1,29 @@
+// Copyright 2026 Penguin Tech Inc
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+package prpc.conformance.v1;
+
+import "buf/validate/validate.proto";
+
+option go_package = "github.com/penguintechinc/penguin-libs/packages/go-rpc/gen/prpc/conformance/v1;conformancev1";
+
+// ConformanceService exercises all four Connect RPC patterns plus
+// contract-level validation, per pRPC §11.
+service ConformanceService {
+  rpc Unary(EchoRequest) returns (EchoResponse) {}
+  rpc ServerStream(EchoRequest) returns (stream EchoResponse) {}
+  rpc ClientStream(stream EchoRequest) returns (EchoResponse) {}
+  rpc BidiStream(stream EchoRequest) returns (stream EchoResponse) {}
+}
+message EchoRequest {
+  string message = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 4096
+  }];
+  uint32 repeat = 2 [(buf.validate.field).uint32 = {lte: 100}];
+}
+message EchoResponse {
+  string message = 1;
+  string protocol = 2; // "h3" | "h2" — which lane served the request
+}
