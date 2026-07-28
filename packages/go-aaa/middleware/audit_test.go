@@ -14,7 +14,7 @@ import (
 )
 
 func buildAuditEmitter(events *[]audit.AuditEvent) *audit.Emitter {
-	sink := logging.NewCallbackSink(func(m map[string]interface{}) {
+	sink := logging.NewCallbackSink(func(m map[string]interface{}) error {
 		// Reconstruct a minimal AuditEvent from the map for assertions.
 		e := audit.AuditEvent{}
 		if id, ok := m["id"].(string); ok {
@@ -30,6 +30,7 @@ func buildAuditEmitter(events *[]audit.AuditEvent) *audit.Emitter {
 			e.Outcome = audit.Outcome(o)
 		}
 		*events = append(*events, e)
+		return nil
 	})
 	return audit.NewEmitter(sink)
 }

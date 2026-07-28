@@ -1,10 +1,23 @@
 """
-Shared Python libraries for Penguin Tech applications.
+penguin-libs — transition library.
 
-Provides reusable utilities for validation, gRPC, HTTP, Pydantic integration,
-cryptography, and security across Python projects.
+All functionality has moved to focused packages. This package re-exports
+everything for backwards compatibility. Install the focused package directly
+for new projects.
+
+Packages:
+- penguin-crypto: Cryptographic utilities
+- penguin-flask: Flask utilities
+- penguin-grpc: gRPC utilities
+- penguin-h3: HTTP/3 QUIC utilities
+- penguin-http: HTTP utilities
+- penguin-pydantic: Pydantic utilities
+- penguin-security: Security utilities
+- penguin-validation: Validation utilities
 """
 
-__version__ = "0.2.0"
+import penguin_libs._compat  # noqa: F401
+
+__version__ = "0.3.0"
 
 __all__ = ["__version__"]
