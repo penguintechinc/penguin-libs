@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { decodeJwt } from 'jose';
 import { TokenSetSchema } from './types.js';
 import type { TokenSet } from './types.js';
 
@@ -16,6 +17,7 @@ interface OIDCDiscovery {
   authorization_endpoint: string;
   token_endpoint: string;
   end_session_endpoint?: string;
+  revocation_endpoint?: string;
 }
 
 interface PKCEPair {
@@ -99,6 +101,7 @@ export class OIDCClient {
     const state = params.get('state');
     const storedState = sessionStorage.getItem('oidc_state');
     const verifier = sessionStorage.getItem('oidc_pkce_verifier');
+    const storedNonce = sessionStorage.getItem('oidc_nonce');
 
     if (!code) {
       throw new Error('Authorization code missing from callback');
@@ -111,10 +114,6 @@ export class OIDCClient {
     if (!verifier) {
       throw new Error('PKCE verifier missing from session storage');
     }
-
-    sessionStorage.removeItem('oidc_state');
-    sessionStorage.removeItem('oidc_pkce_verifier');
-    sessionStorage.removeItem('oidc_nonce');
 
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
@@ -135,7 +134,118 @@ export class OIDCClient {
     }
 
     const raw = await response.json();
+    const tokenSet = TokenSetSchema.parse(raw);
+
+    // Validate nonce in id_token if present
+    if (tokenSet.id_token && storedNonce) {
+      try {
+        const payload = decodeJwt(tokenSet.id_token);
+        if (payload.nonce !== storedNonce) {
+          throw new Error('Nonce mismatch in id_token — possible attack');
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('Nonce mismatch')) {
+          throw error;
+        }
+        // If id_token decode fails, continue (server validation already occurred)
+      }
+    }
+
+    sessionStorage.removeItem('oidc_state');
+    sessionStorage.removeItem('oidc_pkce_verifier');
+    sessionStorage.removeItem('oidc_nonce');
+
+    return tokenSet;
+  }
+
+  /**
+   * Refresh the access token using a refresh token.
+   * @param refreshToken - Refresh token from the token set
+   * @returns New token set with refreshed access token
+   * @throws Error if token endpoint is unavailable or refresh fails
+   */
+  async refresh(refreshToken: string): Promise<TokenSet> {
+    if (!this.discovery) {
+      await this.discover();
+    }
+
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: this.config.clientId,
+    });
+
+    const response = await fetch(this.discovery!.token_endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Token refresh failed: ${response.status} ${response.statusText}`);
+    }
+
+    const raw = await response.json();
     return TokenSetSchema.parse(raw);
+  }
+
+  /**
+   * Revoke a token (access or refresh token).
+   * Per RFC 7009, the revocation endpoint ignores response status.
+   * @param token - Token to revoke
+   * @param tokenTypeHint - Optional hint about token type ('access_token' or 'refresh_token')
+   */
+  async revoke(token: string, tokenTypeHint?: string): Promise<void> {
+    if (!this.discovery) {
+      await this.discover();
+    }
+
+    const revocationEndpoint = (this.discovery as unknown as Record<string, unknown>)
+      .revocation_endpoint as string | undefined;
+    if (!revocationEndpoint) {
+      return; // Provider doesn't support revocation
+    }
+
+    const body = new URLSearchParams({
+      token,
+      client_id: this.config.clientId,
+    });
+
+    if (tokenTypeHint) {
+      body.set('token_type_hint', tokenTypeHint);
+    }
+
+    try {
+      await fetch(revocationEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      });
+    } catch {
+      // Silently ignore revocation errors per RFC 7009
+    }
+  }
+
+  /**
+   * Build the end-session (logout) URL for the provider.
+   * @param idTokenHint - Optional id_token hint for logout
+   * @param postLogoutRedirectUri - Optional URI to redirect to after logout
+   * @returns End-session URL, or null if provider doesn't support it
+   */
+  buildEndSessionUrl(idTokenHint?: string, postLogoutRedirectUri?: string): string | null {
+    if (!this.discovery?.end_session_endpoint) {
+      return null;
+    }
+
+    const params = new URLSearchParams();
+    if (idTokenHint) {
+      params.set('id_token_hint', idTokenHint);
+    }
+    if (postLogoutRedirectUri) {
+      params.set('post_logout_redirect_uri', postLogoutRedirectUri);
+    }
+
+    return `${this.discovery.end_session_endpoint}?${params.toString()}`;
   }
 
   getDiscovery(): OIDCDiscovery | null {

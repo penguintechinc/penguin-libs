@@ -164,7 +164,7 @@ class CloudWatchSink:
         batch_size: int = 100,
     ) -> None:
         try:
-            import boto3  # type: ignore[import]
+            import boto3  # type: ignore[import-untyped]
         except ImportError as exc:
             raise ImportError(
                 "CloudWatchSink requires boto3. Install with: pip install penguin-utils[cloudwatch]"
@@ -173,28 +173,32 @@ class CloudWatchSink:
         self._log_group = log_group
         self._log_stream = log_stream
         self._batch_size = batch_size
-        self._buffer: list[dict] = []
+        self._buffer: list[dict[str, Any]] = []
         self._sequence_token: str | None = None
 
-    def __call__(self, logger: Any, method: str, event_dict: dict) -> dict:
-        """Buffer log event and flush when batch_size is reached."""
+    def emit(self, event: dict[str, Any]) -> None:
+        """Emit a log event to CloudWatch."""
         import time
 
         self._buffer.append(
             {
                 "timestamp": int(time.time() * 1000),
-                "message": str(event_dict),
+                "message": json.dumps(event),
             }
         )
         if len(self._buffer) >= self._batch_size:
             self.flush()
+
+    def __call__(self, logger: Any, method: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+        """Buffer log event and flush when batch_size is reached (structlog processor)."""
+        self.emit(event_dict)
         return event_dict
 
     def flush(self) -> None:
         """Send buffered events to CloudWatch."""
         if not self._buffer:
             return
-        kwargs: dict = {
+        kwargs: dict[str, Any] = {
             "logGroupName": self._log_group,
             "logStreamName": self._log_stream,
             "logEvents": self._buffer,
@@ -206,6 +210,10 @@ class CloudWatchSink:
             self._sequence_token = response.get("nextSequenceToken")
         finally:
             self._buffer = []
+
+    def close(self) -> None:
+        """Close the CloudWatch sink."""
+        self.flush()
 
 
 class GCPCloudLoggingSink:
@@ -220,7 +228,7 @@ class GCPCloudLoggingSink:
 
     def __init__(self, project_id: str, log_name: str) -> None:
         try:
-            from google.cloud import logging as gcp_logging  # type: ignore[import]
+            from google.cloud import logging as gcp_logging  # type: ignore[import-untyped]
         except ImportError as exc:
             raise ImportError(
                 "GCPCloudLoggingSink requires google-cloud-logging. "
@@ -229,11 +237,23 @@ class GCPCloudLoggingSink:
         client = gcp_logging.Client(project=project_id)
         self._logger = client.logger(log_name)
 
-    def __call__(self, logger: Any, method: str, event_dict: dict) -> dict:
-        """Send log event as structured JSON payload to GCP."""
+    def emit(self, event: dict[str, Any]) -> None:
+        """Emit a log event to GCP Cloud Logging."""
+        self._logger.log_struct(event)
+
+    def __call__(self, logger: Any, method: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+        """Send log event as structured JSON payload to GCP (structlog processor)."""
         severity = method.upper()
         self._logger.log_struct(event_dict, severity=severity)
         return event_dict
+
+    def flush(self) -> None:
+        """Flush GCP Cloud Logging (no-op)."""
+        pass
+
+    def close(self) -> None:
+        """Close the GCP sink."""
+        pass
 
 
 class KafkaSink:
@@ -248,7 +268,7 @@ class KafkaSink:
 
     def __init__(self, bootstrap_servers: str, topic: str) -> None:
         try:
-            from kafka import KafkaProducer  # type: ignore[import]
+            from kafka import KafkaProducer  # type: ignore[import-not-found]
         except ImportError as exc:
             raise ImportError(
                 "KafkaSink requires kafka-python. Install with: pip install penguin-utils[kafka]"
@@ -261,11 +281,19 @@ class KafkaSink:
             value_serializer=lambda v: _json.dumps(v).encode("utf-8"),
         )
 
-    def __call__(self, logger: Any, method: str, event_dict: dict) -> dict:
-        """Send log event as JSON to Kafka topic."""
-        self._producer.send(self._topic, value=event_dict)
+    def emit(self, event: dict[str, Any]) -> None:
+        """Emit a log event to Kafka."""
+        self._producer.send(self._topic, value=event)
+
+    def __call__(self, logger: Any, method: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+        """Send log event as JSON to Kafka topic (structlog processor)."""
+        self.emit(event_dict)
         return event_dict
 
     def flush(self) -> None:
         """Flush pending Kafka messages."""
         self._producer.flush()
+
+    def close(self) -> None:
+        """Close the Kafka sink."""
+        self._producer.close()

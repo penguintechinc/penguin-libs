@@ -473,3 +473,365 @@ class TestGetLicenseClient:
 
         # Reset after test
         penguin_licensing.client._license_client = None
+
+
+class TestLicenseClientFailClosed:
+    """Tests for fail-closed license validation."""
+
+    @patch('penguin_licensing.client.requests.Session.post')
+    def test_definitive_rejection_drops_cache(self, mock_post):
+        """401/403/404 drops cache and returns community tier."""
+        # First call succeeds and caches enterprise tier
+        valid_response = MagicMock()
+        valid_response.status_code = 200
+        valid_response.json.return_value = {
+            "valid": True,
+            "customer": "Test Co",
+            "product": "elder",
+            "license_version": "2.0",
+            "license_key": "PENG-TEST-1234",
+            "expires_at": "2030-01-01T00:00:00Z",
+            "issued_at": "2024-01-01T00:00:00Z",
+            "tier": "enterprise",
+            "features": [{"name": "saml", "entitled": True, "units": -1, "description": "", "metadata": {}}],
+            "limits": {},
+            "metadata": {},
+        }
+
+        # Second call gets 403 (revocation)
+        rejection_response = MagicMock()
+        rejection_response.status_code = 403
+
+        mock_post.side_effect = [valid_response, rejection_response]
+
+        client = LicenseClient(license_key="PENG-TEST-1234")
+
+        # First validate succeeds
+        result1 = client.validate()
+        assert result1.tier == "enterprise"
+        assert result1.valid is True
+
+        # Second validate (forced refresh) gets rejected
+        result2 = client.validate(force_refresh=True)
+        assert result2.tier == "community"
+        assert result2.valid is False
+        assert "revoked" in result2.message.lower()
+
+    @patch('penguin_licensing.client.requests.Session.post')
+    def test_server_error_returns_cached_value(self, mock_post):
+        """5xx error returns last cached value."""
+        # First call succeeds and caches professional tier
+        valid_response = MagicMock()
+        valid_response.status_code = 200
+        valid_response.json.return_value = {
+            "valid": True,
+            "customer": "Test Co",
+            "product": "elder",
+            "license_version": "2.0",
+            "license_key": "PENG-TEST-1234",
+            "expires_at": "2030-01-01T00:00:00Z",
+            "issued_at": "2024-01-01T00:00:00Z",
+            "tier": "professional",
+            "features": [{"name": "sso_google", "entitled": True, "units": -1, "description": "", "metadata": {}}],
+            "limits": {},
+            "metadata": {},
+        }
+
+        # Second call gets 503 (service unavailable)
+        error_response = MagicMock()
+        error_response.status_code = 503
+
+        mock_post.side_effect = [valid_response, error_response]
+
+        client = LicenseClient(license_key="PENG-TEST-1234")
+
+        # First validate succeeds
+        result1 = client.validate()
+        assert result1.tier == "professional"
+
+        # Second validate (forced refresh) gets 503 but uses cache
+        result2 = client.validate(force_refresh=True)
+        assert result2.tier == "professional"
+        assert result2.valid is True
+
+    @patch('penguin_licensing.client.requests.Session.post')
+    def test_expiry_grace_period(self, mock_post):
+        """License expiry enforced with 72h grace period."""
+        from datetime import timedelta
+
+        # License expired but within grace period
+        expired_at = datetime.now(timezone.utc) - timedelta(hours=24)
+        expiry_response = MagicMock()
+        expiry_response.status_code = 200
+        expiry_response.json.return_value = {
+            "valid": True,
+            "customer": "Test Co",
+            "product": "elder",
+            "license_version": "2.0",
+            "license_key": "PENG-TEST-1234",
+            "expires_at": expired_at.isoformat().replace('+00:00', 'Z'),
+            "issued_at": "2024-01-01T00:00:00Z",
+            "tier": "enterprise",
+            "features": [],
+            "limits": {},
+            "metadata": {},
+        }
+
+        mock_post.return_value = expiry_response
+
+        client = LicenseClient(license_key="PENG-TEST-1234")
+        result = client.validate()
+
+        # Should still be valid because within 72h grace
+        assert result.valid is True
+        assert result.tier == "enterprise"
+
+    @patch('penguin_licensing.client.requests.Session.post')
+    def test_expiry_beyond_grace_period(self, mock_post):
+        """License beyond 72h grace period rejected."""
+        from datetime import timedelta
+
+        # License expired beyond grace period (75 hours ago)
+        expired_at = datetime.now(timezone.utc) - timedelta(hours=75)
+        expiry_response = MagicMock()
+        expiry_response.status_code = 200
+        expiry_response.json.return_value = {
+            "valid": True,
+            "customer": "Test Co",
+            "product": "elder",
+            "license_version": "2.0",
+            "license_key": "PENG-TEST-1234",
+            "expires_at": expired_at.isoformat().replace('+00:00', 'Z'),
+            "issued_at": "2024-01-01T00:00:00Z",
+            "tier": "enterprise",
+            "features": [],
+            "limits": {},
+            "metadata": {},
+        }
+
+        mock_post.return_value = expiry_response
+
+        client = LicenseClient(license_key="PENG-TEST-1234")
+        result = client.validate()
+
+        # Should be invalid because beyond grace period
+        assert result.valid is False
+        assert result.tier == "community"
+        assert "grace" in result.message.lower()
+
+
+class TestTLSEnforcement:
+    """Tests for TLS scheme enforcement."""
+
+    def test_https_required_for_license_server(self):
+        """HTTPS required for license server (except localhost)."""
+        import pytest
+        from penguin_licensing.client import LicenseClient
+
+        # HTTP for non-localhost should raise ValueError
+        with pytest.raises(ValueError, match="HTTPS"):
+            LicenseClient(base_url="http://example.com/api")
+
+    def test_http_allowed_for_localhost(self):
+        """HTTP allowed for localhost (development)."""
+        from penguin_licensing.client import LicenseClient
+
+        # Should not raise
+        client = LicenseClient(base_url="http://localhost:8080/api")
+        assert client.base_url == "http://localhost:8080/api"
+
+    def test_http_allowed_for_127_0_0_1(self):
+        """HTTP allowed for 127.0.0.1 (development)."""
+        from penguin_licensing.client import LicenseClient
+
+        # Should not raise
+        client = LicenseClient(base_url="http://127.0.0.1:8080/api")
+        assert client.base_url == "http://127.0.0.1:8080/api"
+
+    def test_https_accepted(self):
+        """HTTPS always accepted."""
+        from penguin_licensing.client import LicenseClient
+
+        # Should not raise
+        client = LicenseClient(base_url="https://license.example.com/api")
+        assert client.base_url == "https://license.example.com/api"
+
+
+class TestLicenseServerUrlEnvVar:
+    """LICENSE_SERVER_URL must actually take effect when base_url is not passed.
+
+    Regression: LicenseClient's base_url parameter used to default to the
+    truthy literal "https://license.penguintech.io", so `base_url or
+    os.getenv("LICENSE_SERVER_URL", ...)` never reached the env var lookup —
+    the default short-circuited the `or` every time.
+    """
+
+    @patch.dict("os.environ", {"LICENSE_SERVER_URL": "https://env.example.io"})
+    def test_env_var_honored_when_base_url_omitted(self):
+        """Constructing LicenseClient() with no base_url picks up the env var."""
+        from penguin_licensing.client import LicenseClient
+
+        client = LicenseClient(license_key="PENG-TEST-1234")
+        assert client.base_url == "https://env.example.io"
+
+    def test_hardcoded_default_used_when_no_env_and_no_arg(self):
+        """With no env var and no explicit base_url, the hardcoded default wins."""
+        from penguin_licensing.client import LicenseClient
+
+        with patch.dict("os.environ", {}, clear=True):
+            client = LicenseClient(license_key="PENG-TEST-1234")
+        assert client.base_url == "https://license.penguintech.io"
+
+    @patch.dict("os.environ", {"LICENSE_SERVER_URL": "https://explicit-wins.example.io"})
+    def test_explicit_base_url_overrides_env_var(self):
+        """An explicitly passed base_url still takes precedence over the env var."""
+        from penguin_licensing.client import LicenseClient
+
+        client = LicenseClient(
+            license_key="PENG-TEST-1234", base_url="https://arg.example.io"
+        )
+        assert client.base_url == "https://arg.example.io"
+
+    @patch.dict("os.environ", {"LICENSE_SERVER_URL": "http://insecure.example.io"})
+    def test_env_var_still_subject_to_https_enforcement(self):
+        """HTTPS enforcement applies to whichever value wins, including the env var."""
+        from penguin_licensing.client import LicenseClient
+
+        with pytest.raises(ValueError, match="HTTPS"):
+            LicenseClient(license_key="PENG-TEST-1234")
+
+
+class TestLicenseClientTransportFallback:
+    """Transport-level failures must serve the last known-good validation."""
+
+    @staticmethod
+    def _ok_response(tier="enterprise"):
+        """Build a mock 200 /api/v2/validate response for the given tier."""
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = {
+            "valid": True,
+            "customer": "Test Co",
+            "product": "elder",
+            "license_version": "2.0",
+            "license_key": "PENG-TEST-1234",
+            "expires_at": "2030-01-01T00:00:00Z",
+            "issued_at": "2024-01-01T00:00:00Z",
+            "tier": tier,
+            "features": [],
+            "limits": {},
+            "metadata": {},
+        }
+        return response
+
+    @patch("penguin_licensing.client.requests.Session.post")
+    def test_transport_error_returns_cached(self, mock_post):
+        """A connection failure on a forced refresh serves the cached tier."""
+        import requests
+
+        mock_post.side_effect = [
+            self._ok_response("enterprise"),
+            requests.ConnectionError("unreachable"),
+        ]
+
+        client = LicenseClient(license_key="PENG-TEST-1234")
+        assert client.validate().tier == "enterprise"
+        assert mock_post.call_count == 1
+
+        result = client.validate(force_refresh=True)
+        assert mock_post.call_count == 2
+        assert result.tier == "enterprise"
+        assert result is client._cached_validation
+
+    @patch("penguin_licensing.client.requests.Session.post")
+    def test_transport_error_without_cache_falls_back_to_community(self, mock_post):
+        """With no cached value a connection failure degrades to community."""
+        import requests
+
+        mock_post.side_effect = requests.ConnectionError("unreachable")
+
+        client = LicenseClient(license_key="PENG-TEST-1234")
+        result = client.validate()
+
+        assert result.tier == "community"
+        assert mock_post.call_count == 1
+
+
+class TestGetLicenseClientThreadSafety:
+    """The shared client must be constructed exactly once under concurrency."""
+
+    def test_concurrent_cold_start_constructs_one_instance(self):
+        """16 threads racing a cold module state get one shared client.
+
+        A second instance would carry its own empty validation cache and
+        connection pool, silently voiding the warm-cache-survives-outage
+        guarantee the decorators depend on.
+        """
+        import threading
+        import time
+
+        import penguin_licensing.client as client_module
+
+        thread_count = 16
+        constructed = []
+        constructed_lock = threading.Lock()
+        real_init = LicenseClient.__init__
+
+        def slow_init(self, *args, **kwargs):
+            # Widen the check-then-act window so an unguarded singleton loses.
+            time.sleep(0.02)
+            real_init(self, *args, **kwargs)
+            with constructed_lock:
+                constructed.append(self)
+
+        barrier = threading.Barrier(thread_count)
+        results = []
+        results_lock = threading.Lock()
+        errors = []
+
+        def worker():
+            try:
+                barrier.wait()
+                client = get_license_client()
+                with results_lock:
+                    results.append(client)
+            except Exception as exc:  # pragma: no cover - surfaced via assert below
+                errors.append(exc)
+
+        client_module._license_client = None
+        try:
+            with patch.object(LicenseClient, "__init__", slow_init):
+                threads = [
+                    threading.Thread(target=worker, name=f"lic-{i}")
+                    for i in range(thread_count)
+                ]
+                for thread in threads:
+                    thread.start()
+                for thread in threads:
+                    thread.join(timeout=10)
+                assert not any(thread.is_alive() for thread in threads)
+
+            assert errors == []
+            assert len(constructed) == 1, (
+                f"expected exactly 1 LicenseClient construction, got {len(constructed)}"
+            )
+            assert len(results) == thread_count
+            assert all(client is results[0] for client in results)
+            assert results[0] is client_module._license_client
+        finally:
+            client_module._license_client = None
+
+    def test_reset_hook_still_rebuilds_client(self):
+        """Clearing the module global still yields a fresh client."""
+        import penguin_licensing.client as client_module
+
+        client_module._license_client = None
+        try:
+            first = get_license_client()
+            assert get_license_client() is first
+
+            client_module._license_client = None
+            second = get_license_client()
+            assert second is not first
+        finally:
+            client_module._license_client = None

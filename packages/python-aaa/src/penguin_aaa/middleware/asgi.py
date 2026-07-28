@@ -40,10 +40,18 @@ class OIDCAuthMiddleware:
     payload. On failure, a 401 JSON response is returned immediately without
     invoking the wrapped application.
 
+    Optionally supports API-key verification as a fallback when a Bearer token
+    verification fails or when an API key is provided directly.
+
     Args:
         app: The wrapped ASGI application.
         rp: An OIDCRelyingParty instance used to verify tokens.
         public_paths: Paths that bypass authentication entirely.
+        api_key_verifier: Optional async callable that takes a raw credential
+            string and returns a claims/context object on success or raises
+            on failure. If None, only Bearer JWT authentication is supported.
+        api_key_header: Request header name for API keys (default: "x-api-key").
+            Only used if api_key_verifier is set.
     """
 
     def __init__(
@@ -51,10 +59,14 @@ class OIDCAuthMiddleware:
         app: ASGIApp,
         rp: Any,
         public_paths: set[str] | None = None,
+        api_key_verifier: Callable[[str], Awaitable[Any]] | None = None,
+        api_key_header: str = "x-api-key",
     ) -> None:
         self._app = app
         self._rp = rp
         self._public_paths = public_paths or set()
+        self._api_key_verifier = api_key_verifier
+        self._api_key_header = api_key_header
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ("http", "websocket"):
@@ -68,20 +80,50 @@ class OIDCAuthMiddleware:
 
         headers = dict(scope.get("headers", []))
         auth = headers.get(b"authorization", b"").decode()
+        api_key = headers.get(self._api_key_header.encode(), b"").decode()
 
-        if not auth.startswith("Bearer "):
-            await _send_json_error(send, 401, "Missing or invalid Bearer token")
-            return
+        # Bearer path: try JWT verification, then fallback to verifier if set
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+            try:
+                claims = await self._rp.verify_token(token)
+                scope.setdefault("state", {})["claims"] = claims
+                await self._app(scope, receive, send)
+                return
+            except Exception:
+                # Bearer JWT verification failed
+                if self._api_key_verifier:
+                    # Try treating the token as an API key
+                    try:
+                        result = await self._api_key_verifier(token)
+                        scope.setdefault("state", {})["claims"] = result
+                        await self._app(scope, receive, send)
+                        return
+                    except Exception:
+                        await _send_json_error(send, 401, "API key verification failed")
+                        return
+                else:
+                    # No verifier, so Bearer JWT failure is final
+                    await _send_json_error(send, 401, "Token verification failed")
+                    return
 
-        token = auth[7:]
-        try:
-            claims = await self._rp.verify_token(token)
-        except Exception:
-            await _send_json_error(send, 401, "Token verification failed")
-            return
+        # Raw-key / header path: only if verifier is set
+        if self._api_key_verifier:
+            # Pick candidate from api_key_header or raw auth (non-Bearer)
+            candidate = api_key or (auth if auth and not auth.startswith("Bearer ") else "")
+            if candidate:
+                try:
+                    result = await self._api_key_verifier(candidate)
+                    scope.setdefault("state", {})["claims"] = result
+                    await self._app(scope, receive, send)
+                    return
+                except Exception:
+                    await _send_json_error(send, 401, "API key verification failed")
+                    return
 
-        scope.setdefault("state", {})["claims"] = claims
-        await self._app(scope, receive, send)
+        # Nothing matched
+        await _send_json_error(send, 401, "Missing or invalid Bearer token")
+        return
 
 
 class SPIFFEAuthMiddleware:

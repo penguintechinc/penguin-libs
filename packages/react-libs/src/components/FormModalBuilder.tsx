@@ -144,7 +144,7 @@ function buildFieldSchema(field: FormField): ZodType {
       break;
 
     case 'number': {
-      let numSchema = z.coerce.number(`${field.label} must be a number`);
+      let numSchema = z.coerce.number({ invalid_type_error: `${field.label} must be a number` });
       if (field.min !== undefined) {
         numSchema = numSchema.min(field.min, `${field.label} must be at least ${field.min}`);
       }
@@ -201,7 +201,7 @@ function buildFieldSchema(field: FormField): ZodType {
     case 'radio':
       if (field.options && field.options.length > 0) {
         const values = field.options.map((o) => String(o.value)) as [string, ...string[]];
-        schema = z.enum(values, `${field.label} must be one of the available options`);
+        schema = z.enum(values, { invalid_type_error: `${field.label} must be one of the available options` });
       } else {
         schema = z.string();
       }
@@ -254,7 +254,7 @@ function buildFieldSchema(field: FormField): ZodType {
   if (field.required) {
     if (field.type === 'checkbox') {
       // For required checkboxes, must be true
-      return z.literal(true, `${field.label} must be checked`);
+      return z.literal(true, { invalid_type_error: `${field.label} must be checked` });
     }
     if (field.type === 'checkbox_multi') {
       // For required multi-select, must have at least one selection
