@@ -848,7 +848,12 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    environment: pypi-limiter
+    # The actually-configured GitHub environment is "py-limiter" (created
+    # 2026-03-29, no other "pypi-limiter" environment exists) — likely what
+    # PyPI's trusted-publisher config for this not-yet-published project
+    # already references. "pypi-limiter" here was a copy-paste mismatch
+    # from the sibling pypi-aaa/pypi-dal/etc. jobs, never corrected.
+    environment: py-limiter
     if: |
       github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.package == 'python-limiter' || github.event.inputs.package == 'all') ||
