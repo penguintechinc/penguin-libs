@@ -1,7 +1,7 @@
 """Penguin-DAL: SQLAlchemy runtime wrapper with PyDAL ergonomics."""
 
 from penguin_dal.db import DB, AsyncDB, DatabaseManager
-from penguin_dal.exceptions import DALError, TableNotFoundError, ValidationError
+from penguin_dal.exceptions import DALError, DALSecurityWarning, TableNotFoundError, ValidationError
 from penguin_dal.factory import create_dal
 from penguin_dal.field import Field
 from penguin_dal.field_proxy import FieldProxy
@@ -123,6 +123,7 @@ __all__ = [
     "Page",
     # Exceptions
     "DALError",
+    "DALSecurityWarning",
     "TableNotFoundError",
     "ValidationError",
     # Protocols & options
