@@ -433,13 +433,14 @@ class DB:
         state, since each call opens its own connection).
         """
         conn = self._engine.connect()
-        trans = conn.begin()
         try:
-            yield Tx(conn)
-            trans.commit()
-        except Exception:
-            trans.rollback()
-            raise
+            trans = conn.begin()
+            try:
+                yield Tx(conn)
+                trans.commit()
+            except Exception:
+                trans.rollback()
+                raise
         finally:
             conn.close()
 
