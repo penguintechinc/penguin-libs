@@ -48,7 +48,8 @@ class TestOIDCProviderConfig:
             audiences=["api.example.com"],
         )
         assert config.algorithm == "RS256"
-        assert config.token_ttl == timedelta(hours=1)
+        assert config.token_ttl == timedelta(minutes=15)
+        assert config.max_token_ttl == timedelta(hours=1)
         assert config.refresh_ttl == timedelta(hours=24)
 
     def test_http_issuer_rejected_for_non_localhost(self):
