@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import Any, cast
 
 from sqlalchemy import MetaData, Table, create_engine
 from sqlalchemy.orm import sessionmaker
@@ -11,6 +13,80 @@ from penguin_dal.backends import ensure_async_uri, get_engine_kwargs, normalize_
 from penguin_dal.exceptions import TableNotFoundError
 from penguin_dal.query import AsyncQuerySet, Query, QuerySet, Rows
 from penguin_dal.table_proxy import TableProxy
+
+
+def _shape_result(
+    result: Any,
+    as_dict: bool = False,
+    as_ordered_dict: bool = False,
+    fields: list[Any] | tuple[Any, ...] | None = None,
+    colnames: list[str] | tuple[str, ...] | None = None,
+    return_rowcount: bool = False,
+) -> list[tuple[Any, ...]] | list[dict[str, Any]] | list[Any] | Rows | int | None:
+    """Shape a SQLAlchemy CursorResult into penguin_dal's executesql return types.
+
+    Shared by DB.executesql and Tx.executesql so both raw-SQL entry points
+    (single-statement autocommit and pinned-connection transaction) apply
+    identical row-shaping rules.
+    """
+    from collections import OrderedDict
+
+    from penguin_dal.query import Row, Rows
+
+    if not result.returns_rows:
+        if return_rowcount:
+            return result.rowcount if result.rowcount is not None else -1
+        return None
+
+    rows = result.fetchall()
+    col_names = list(result.keys())
+    field_list = fields or colnames
+
+    if as_ordered_dict:
+        return [OrderedDict(zip(col_names, row)) for row in rows]
+    if as_dict:
+        return [dict(zip(col_names, row)) for row in rows]
+    if field_list:
+        col_names_custom = [getattr(f, "name", None) or str(f) for f in field_list]
+        row_objs = [Row(dict(zip(col_names_custom, row))) for row in rows]
+        return Rows(row_objs)
+    return [tuple(row) for row in rows]
+
+
+class Tx:
+    """Raw-SQL executor bound to one open connection inside a transaction.
+
+    Yielded by DB.transaction(); every executesql() call on this instance
+    runs on the same pinned connection so multi-statement raw-SQL units
+    (advisory locks, hash-chain writes) share session state.
+    """
+
+    def __init__(self, conn: Any) -> None:
+        self._conn = conn
+
+    def executesql(
+        self,
+        query: str,
+        placeholders: list[Any] | tuple[Any, ...] | dict[str, Any] | None = None,
+        as_dict: bool = False,
+        return_rowcount: bool = False,
+    ) -> list[tuple[Any, ...]] | list[dict[str, Any]] | int | None:
+        """Execute raw SQL on the transaction's pinned connection.
+
+        Same driver-native paramstyle as DB.executesql (? sqlite, %s/%(name)s
+        psycopg2). Does not commit — the enclosing DB.transaction() context
+        commits on clean exit or rolls back on exception.
+        """
+        if placeholders is not None:
+            result = self._conn.exec_driver_sql(query, placeholders)
+        else:
+            result = self._conn.exec_driver_sql(query)
+        # Tx.executesql never passes fields/colnames/as_ordered_dict, so
+        # _shape_result's broader union collapses to this narrower type.
+        return cast(
+            "list[tuple[Any, ...]] | list[dict[str, Any]] | int | None",
+            _shape_result(result, as_dict=as_dict, return_rowcount=return_rowcount),
+        )
 
 
 class DB:
@@ -289,11 +365,9 @@ class DB:
                     fields=["id", "name"]
                 )
         """
-        from collections import OrderedDict
         import warnings
 
         from penguin_dal.exceptions import DALSecurityWarning
-        from penguin_dal.query import Row, Rows
 
         # Validate parameter combinations
         if as_dict and (fields or colnames):
@@ -312,9 +386,6 @@ class DB:
                     stacklevel=2,
                 )
 
-        # Use the provided fields or colnames
-        field_list = fields or colnames
-
         # Execute query using driver-native paramstyle
         # Use begin() for writes to ensure auto-commit; connect() for reads
         with self._engine.begin() as conn:
@@ -323,31 +394,14 @@ class DB:
             else:
                 result = conn.exec_driver_sql(query)
 
-            # No result set (INSERT/UPDATE/DELETE/DDL)
-            if not result.returns_rows:
-                if return_rowcount:
-                    return result.rowcount if result.rowcount is not None else -1
-                return None
-
-            # Fetch all rows
-            rows = result.fetchall()
-            col_names = list(result.keys())
-
-            # Apply return format
-            if as_ordered_dict:
-                return [OrderedDict(zip(col_names, row)) for row in rows]
-            elif as_dict:
-                return [dict(zip(col_names, row)) for row in rows]
-            elif field_list:
-                # Build Rows with custom field names
-                # Accept plain column names or PyDAL-style Field objects; Field
-                # instances carry the column name on .name, strings are used as-is.
-                col_names_custom = [getattr(f, "name", None) or str(f) for f in field_list]
-                row_objs = [Row(dict(zip(col_names_custom, row))) for row in rows]
-                return Rows(row_objs)
-            else:
-                # Default: return raw tuples (convert from SQLAlchemy Row)
-                return [tuple(row) for row in rows]
+            return _shape_result(
+                result,
+                as_dict=as_dict,
+                as_ordered_dict=as_ordered_dict,
+                fields=fields,
+                colnames=colnames,
+                return_rowcount=return_rowcount,
+            )
 
     def _check_potential_injection(self, query: str) -> bool:
         """Heuristic check for quoted string literals in sensitive clauses.
@@ -368,6 +422,27 @@ class DB:
         # Pattern: case-insensitive WHERE/VALUES/IN followed by quoted content
         pattern = r"(?i)\b(WHERE|VALUES|IN)\s+[^;]+'[^']*'"
         return bool(re.search(pattern, query))
+
+    @contextmanager
+    def transaction(self) -> Iterator[Tx]:
+        """Pin one connection for a multi-statement raw-SQL unit.
+
+        Commits on clean exit, rolls back on exception. Use for advisory
+        locks, hash-chain writes, and any raw unit whose statements must
+        share session state (a naive per-call executesql would drop that
+        state, since each call opens its own connection).
+        """
+        conn = self._engine.connect()
+        try:
+            trans = conn.begin()
+            try:
+                yield Tx(conn)
+                trans.commit()
+            except Exception:
+                trans.rollback()
+                raise
+        finally:
+            conn.close()
 
     def __repr__(self) -> str:
         table_count = len(self._metadata.tables)
