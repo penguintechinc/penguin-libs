@@ -18,15 +18,20 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - run: npm ci
       - name: Security
         run: npm audit --omit=dev
-      - run: npm run build -w @penguintechinc/react-libs
+      # react-libs imports its sibling workspace packages (react-console-version,
+      # react-form-builder, react-hooks, react-login, react-sidebar) via their
+      # published entry points, so those must be built before typecheck/test can
+      # resolve them -- otherwise vite fails with "Failed to resolve entry for
+      # package". Building every workspace avoids maintaining a dependency list here.
+      - run: npm run build --workspaces --if-present
       - run: npm run typecheck -w @penguintechinc/react-libs
       - run: npm run test -w @penguintechinc/react-libs
 
@@ -38,11 +43,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: 20
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -131,6 +136,7 @@ jobs:
       - name: Lint - go-common
         uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
         with:
+          version: v2.12.2
           working-directory: packages/go-common
       - name: Security - govulncheck
         run: |
@@ -162,6 +168,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
         with:
+          version: v2.12.2
           working-directory: packages/go-aaa
       - name: Security - govulncheck
         run: |
@@ -180,11 +187,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build (typecheck)
@@ -264,6 +271,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
         with:
+          version: v2.12.2
           working-directory: packages/go-rpc
       - name: Security - govulncheck
         run: |
@@ -334,11 +342,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -358,11 +366,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -382,11 +390,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -406,11 +414,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -430,11 +438,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build

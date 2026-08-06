@@ -276,7 +276,7 @@ class FormFieldBuilder extends StatelessWidget {
 
   Widget _buildDropdown() {
     return DropdownButtonFormField<dynamic>(
-      value: value ?? field.defaultValue,
+      initialValue: value ?? field.defaultValue,
       decoration: _inputDecoration,
       dropdownColor: ElderColors.slate800,
       style: TextStyle(color: colorConfig.fieldText),
@@ -350,27 +350,32 @@ class FormFieldBuilder extends StatelessWidget {
     );
   }
 
+  /// Builds the radio options for [FormFieldType.radio].
+  ///
+  /// A [RadioGroup] ancestor owns the selected value and the change callback;
+  /// each [RadioListTile] declares only its own [RadioListTile.value].
   Widget _buildRadioGroup() {
-    return Column(
-      children: field.options?.map((opt) {
-        return RadioListTile<dynamic>(
-          title: Text(
-            opt.label,
-            style: TextStyle(
-              color: colorConfig.labelText,
-              fontSize: 14,
+    return RadioGroup<dynamic>(
+      groupValue: value,
+      onChanged: (v) => onChanged(v),
+      child: Column(
+        children: field.options?.map((opt) {
+          return RadioListTile<dynamic>(
+            title: Text(
+              opt.label,
+              style: TextStyle(
+                color: colorConfig.labelText,
+                fontSize: 14,
+              ),
             ),
-          ),
-          value: opt.value,
-          groupValue: value,
-          activeColor: colorConfig.radioActive,
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          onChanged: field.disabled
-              ? null
-              : (v) => onChanged(v),
-        );
-      }).toList() ?? [],
+            value: opt.value,
+            activeColor: colorConfig.radioActive,
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            enabled: !field.disabled,
+          );
+        }).toList() ?? [],
+      ),
     );
   }
 

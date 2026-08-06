@@ -62,7 +62,7 @@ func TestLaneRouter_FailsOverAndRewindsBody(t *testing.T) {
 
 	r := newLaneRouter([]Lane{LaneH3, LaneH2}, map[Lane]http.RoundTripper{LaneH3: h3RT, LaneH2: h2RT}, false, zap.NewNop())
 
-	req, err := http.NewRequest(http.MethodPost, "https://example.test/rpc", strings.NewReader("payload"))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://example.test/rpc", strings.NewReader("payload"))
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
@@ -74,6 +74,7 @@ func TestLaneRouter_FailsOverAndRewindsBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RoundTrip: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("StatusCode = %d, want 200", resp.StatusCode)
 	}
@@ -101,13 +102,16 @@ func TestLaneRouter_NoGetBody_DoesNotSilentlyRetry(t *testing.T) {
 
 	r := newLaneRouter([]Lane{LaneH3, LaneH2}, map[Lane]http.RoundTripper{LaneH3: h3RT, LaneH2: h2RT}, false, zap.NewNop())
 
-	req, err := http.NewRequest(http.MethodPost, "https://example.test/rpc", strings.NewReader("payload"))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://example.test/rpc", strings.NewReader("payload"))
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
 	req.GetBody = nil // simulate a body the router cannot safely rewind
 
-	_, err = r.RoundTrip(req)
+	resp, err := r.RoundTrip(req)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
 	if err == nil {
 		t.Fatal("expected an error when the body has no GetBody, got nil")
 	}
@@ -242,12 +246,16 @@ func TestLaneRouter_AltSvc_CrossHostAdvertisement_Ignored(t *testing.T) {
 
 	r := newLaneRouter([]Lane{LaneH2}, map[Lane]http.RoundTripper{LaneH2: h2RT, LaneH3: h3RT}, true, zap.NewNop())
 
-	req, err := http.NewRequest(http.MethodGet, "https://original-host.example.com/rpc", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://original-host.example.com/rpc", nil)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
-	if _, err := r.RoundTrip(req); err != nil {
+	resp, err := r.RoundTrip(req)
+	if err != nil {
 		t.Fatalf("RoundTrip: %v", err)
+	}
+	if resp != nil {
+		_ = resp.Body.Close()
 	}
 
 	r.mu.RLock()
@@ -265,12 +273,16 @@ func TestLaneRouter_AltSvc_CrossHostAdvertisement_Ignored(t *testing.T) {
 	// A second request must still target the original host; if the
 	// (buggy) router promoted LaneH3, this call would dial h3RT and fail
 	// the test via t.Fatal above.
-	req2, err := http.NewRequest(http.MethodGet, "https://original-host.example.com/rpc", nil)
+	req2, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://original-host.example.com/rpc", nil)
 	if err != nil {
 		t.Fatalf("NewRequest (2nd): %v", err)
 	}
-	if _, err := r.RoundTrip(req2); err != nil {
+	resp2, err := r.RoundTrip(req2)
+	if err != nil {
 		t.Fatalf("RoundTrip (2nd): %v", err)
+	}
+	if resp2 != nil {
+		_ = resp2.Body.Close()
 	}
 }
 
@@ -292,24 +304,29 @@ func TestLaneRouter_AltSvc_SameHostBarePort_Promotes(t *testing.T) {
 
 	r := newLaneRouter([]Lane{LaneH2}, map[Lane]http.RoundTripper{LaneH2: h2RT, LaneH3: h3RT}, true, zap.NewNop())
 
-	req, err := http.NewRequest(http.MethodGet, "https://original-host.example.com/rpc", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://original-host.example.com/rpc", nil)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
-	if _, err := r.RoundTrip(req); err != nil {
+	resp, err := r.RoundTrip(req)
+	if err != nil {
 		t.Fatalf("RoundTrip: %v", err)
 	}
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
 
-	req2, err := http.NewRequest(http.MethodGet, "https://original-host.example.com/rpc", nil)
+	req2, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://original-host.example.com/rpc", nil)
 	if err != nil {
 		t.Fatalf("NewRequest (2nd): %v", err)
 	}
-	resp, err := r.RoundTrip(req2)
+	resp2, err := r.RoundTrip(req2)
 	if err != nil {
 		t.Fatalf("RoundTrip (2nd): %v", err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("StatusCode = %d, want 200", resp.StatusCode)
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		t.Errorf("StatusCode = %d, want 200", resp2.StatusCode)
 	}
 }
 
@@ -332,23 +349,28 @@ func TestLaneRouter_AltSvc_SameHostExplicitAuthority_Promotes(t *testing.T) {
 
 	r := newLaneRouter([]Lane{LaneH2}, map[Lane]http.RoundTripper{LaneH2: h2RT, LaneH3: h3RT}, true, zap.NewNop())
 
-	req, err := http.NewRequest(http.MethodGet, "https://original-host.example.com/rpc", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://original-host.example.com/rpc", nil)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
-	if _, err := r.RoundTrip(req); err != nil {
+	resp, err := r.RoundTrip(req)
+	if err != nil {
 		t.Fatalf("RoundTrip: %v", err)
 	}
+	if resp != nil {
+		resp.Body.Close()
+	}
 
-	req2, err := http.NewRequest(http.MethodGet, "https://original-host.example.com/rpc", nil)
+	req2, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://original-host.example.com/rpc", nil)
 	if err != nil {
 		t.Fatalf("NewRequest (2nd): %v", err)
 	}
-	resp, err := r.RoundTrip(req2)
+	resp2, err := r.RoundTrip(req2)
 	if err != nil {
 		t.Fatalf("RoundTrip (2nd): %v", err)
 	}
-	if resp.StatusCode != http.StatusOK {
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
 		t.Errorf("StatusCode = %d, want 200", resp.StatusCode)
 	}
 }
@@ -369,20 +391,28 @@ func TestLaneRouter_AltSvcUpgrade_Disabled_NoPromotion(t *testing.T) {
 
 	r := newLaneRouter([]Lane{LaneH2}, map[Lane]http.RoundTripper{LaneH2: h2RT, LaneH3: h3RT}, false, zap.NewNop())
 
-	req, err := http.NewRequest(http.MethodGet, "https://original-host.example.com/rpc", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://original-host.example.com/rpc", nil)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
-	if _, err := r.RoundTrip(req); err != nil {
+	resp, err := r.RoundTrip(req)
+	if err != nil {
 		t.Fatalf("RoundTrip: %v", err)
 	}
+	if resp != nil {
+		resp.Body.Close()
+	}
 
-	req2, err := http.NewRequest(http.MethodGet, "https://original-host.example.com/rpc", nil)
+	req2, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://original-host.example.com/rpc", nil)
 	if err != nil {
 		t.Fatalf("NewRequest (2nd): %v", err)
 	}
-	if _, err := r.RoundTrip(req2); err != nil {
+	resp2, err := r.RoundTrip(req2)
+	if err != nil {
 		t.Fatalf("RoundTrip (2nd): %v", err)
+	}
+	if resp2 != nil {
+		_ = resp2.Body.Close()
 	}
 }
 
@@ -414,7 +444,10 @@ func TestLaneRouter_ContextCanceled_NoFailoverNoCooldown(t *testing.T) {
 		t.Fatalf("NewRequest: %v", err)
 	}
 
-	_, err = r.RoundTrip(req)
+	resp, err := r.RoundTrip(req)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, want context.Canceled", err)
 	}
@@ -463,7 +496,7 @@ func TestLaneRouter_DialTimeout_ShapedError_StillFailsOver(t *testing.T) {
 
 	// A plain request with no cancellation/deadline: req.Context().Err()
 	// must be nil throughout this RoundTrip.
-	req, err := http.NewRequest(http.MethodGet, "https://example.test/rpc", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.test/rpc", nil)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
@@ -472,6 +505,7 @@ func TestLaneRouter_DialTimeout_ShapedError_StillFailsOver(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RoundTrip: %v, want success via failover to LaneH2", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("StatusCode = %d, want 200", resp.StatusCode)
 	}
@@ -501,11 +535,14 @@ func TestLaneRouter_RoundTrip_NeverReturnsNilNil(t *testing.T) {
 	// branch and lastErr is never set.
 	r := newLaneRouter([]Lane{"h4"}, map[Lane]http.RoundTripper{LaneH2: noop}, false, zap.NewNop())
 
-	req, err := http.NewRequest(http.MethodGet, "https://example.test/rpc", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.test/rpc", nil)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
 	resp, err := r.RoundTrip(req)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
 	if err == nil {
 		t.Fatal("expected a non-nil error when no configured lane has a matching transport")
 	}

@@ -5,8 +5,11 @@ repository: https://github.com/penguintechinc/penguin-libs
 publish_to: none
 
 environment:
-  sdk: '>=3.2.0 <4.0.0'
-  flutter: '>=3.16.0'
+  # RadioGroup requires Flutter >=3.32 and DropdownButtonFormField.initialValue
+  # requires >=3.33; both are used in form_builder_field.dart and
+  # form_field_builder.dart, so the floor cannot go below 3.33.
+  sdk: '>=3.9.0 <4.0.0'
+  flutter: '>=3.33.0'
 
 dependencies:
   flutter:

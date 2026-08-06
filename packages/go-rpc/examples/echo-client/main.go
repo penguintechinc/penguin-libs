@@ -84,7 +84,7 @@ func run() error {
 	req := connect.NewRequest(&conformancev1.EchoRequest{Message: *message})
 	resp, err := conformanceClient.Unary(ctx, req)
 	if err != nil {
-		return fmt.Errorf("Unary: %w", err)
+		return fmt.Errorf("unary: %w", err)
 	}
 
 	fmt.Printf("echo: %s\n", resp.Msg.GetMessage())

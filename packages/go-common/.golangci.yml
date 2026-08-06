@@ -15,3 +15,10 @@ linters:
       default-signifies-exhaustive: true
 run:
   timeout: 5m
+
+issues:
+  # Report every occurrence. Defaults (max-same-issues: 3,
+  # max-issues-per-linter: 50) truncate the list, which turns fixing lint
+  # into repeated rounds where each pass reveals another three.
+  max-issues-per-linter: 0
+  max-same-issues: 0
