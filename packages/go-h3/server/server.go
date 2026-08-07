@@ -90,7 +90,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	errc := make(chan error, 2)
-	if err := s.listen(errc); err != nil {
+	if err := s.listen(ctx, errc); err != nil {
 		return err
 	}
 
@@ -109,7 +109,7 @@ func (s *Server) Start(ctx context.Context) error {
 // serve errors on errc. Serving begins only after all binds have succeeded,
 // and any listener already bound is released if a later step fails, so an
 // error return never leaves a port bound.
-func (s *Server) listen(errc chan<- error) (err error) {
+func (s *Server) listen(ctx context.Context, errc chan<- error) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -120,7 +120,7 @@ func (s *Server) listen(errc chan<- error) (err error) {
 	}()
 
 	if s.cfg.H2Enabled {
-		ln, lerr := net.Listen("tcp", s.cfg.H2Addr)
+		ln, lerr := (&net.ListenConfig{}).Listen(ctx, "tcp", s.cfg.H2Addr)
 		if lerr != nil {
 			return fmt.Errorf("h2 listen: %w", lerr)
 		}

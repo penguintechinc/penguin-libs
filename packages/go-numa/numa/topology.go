@@ -89,6 +89,7 @@ func discover() (*Topology, error) {
 
 func parseCPUList(path string) ([]int, error) {
 	//nolint:gosec // G304: path is always /sys/devices/system/node/nodeN/cpulist, derived from os.ReadDir of /sys/devices/system/node with "node" prefix validation
+	// #nosec G304
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err

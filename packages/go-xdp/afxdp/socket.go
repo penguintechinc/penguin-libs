@@ -84,6 +84,7 @@ func NewUMEM(opts UMEMOptions) (*UMEM, error) {
 	// Register UMEM with kernel
 	reg := unix.XDPUmemReg{
 		//nolint:gosec // G103: unsafe pointer to mem[0] is safe; mem is a valid allocated byte slice and we need the physical address for AF_XDP kernel registration
+		// #nosec G103
 		Addr:      uint64(uintptr(unsafe.Pointer(&mem[0]))),
 		Len:       opts.Size,
 		Size:      opts.FrameSize,
@@ -95,6 +96,7 @@ func NewUMEM(opts UMEMOptions) (*UMEM, error) {
 		uintptr(unix.SOL_XDP),
 		uintptr(unix.XDP_UMEM_REG),
 		//nolint:gosec // G103: unsafe pointer to reg struct is safe; reg is stack-allocated and must be passed by address to syscall
+		// #nosec G103
 		uintptr(unsafe.Pointer(&reg)),
 		unsafe.Sizeof(reg),
 		0,

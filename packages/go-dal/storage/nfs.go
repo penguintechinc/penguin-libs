@@ -92,6 +92,7 @@ func (n *NFSStore) Get(ctx context.Context, key string) ([]byte, error) {
 	fullPath := filepath.Join(n.cfg.MountPath, key)
 
 	//nolint:gosec // G304: validatePath() guards against directory traversal and escape sequences
+	// #nosec G304
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {

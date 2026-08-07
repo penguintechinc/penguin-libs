@@ -147,6 +147,19 @@ jobs:
         working-directory: packages/go-h3
       - run: go test -race ./...
         working-directory: packages/go-h3
+      - name: Lint - go-h3
+        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
+        with:
+          version: v2.12.2
+          working-directory: packages/go-h3
+      - name: Security - govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          cd packages/go-h3 && govulncheck ./...
+      - name: Security - gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+          cd packages/go-h3 && gosec -quiet ./...
       - name: Lint - go-common
         uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
         with:
@@ -158,7 +171,7 @@ jobs:
           cd packages/go-common && govulncheck ./...
       - name: Security - gosec
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.0
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
           cd packages/go-common && gosec -quiet ./...
 
   build-go-aaa:
@@ -190,7 +203,7 @@ jobs:
           cd packages/go-aaa && govulncheck ./...
       - name: Security - gosec
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.0
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
           cd packages/go-aaa && gosec -quiet ./...
 
   build-react-testutils:
@@ -294,7 +307,7 @@ jobs:
       - name: Security - gosec
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
-          cd packages/go-rpc && gosec -quiet ./...
+          cd packages/go-rpc && gosec -quiet -exclude-dir=gen -exclude-dir=examples ./...
 
   build-go-dal:
     name: Build & Test Go DAL
@@ -325,8 +338,8 @@ jobs:
           cd packages/go-dal && govulncheck ./...
       - name: Security - gosec
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.0
-          cd packages/go-dal && gosec -quiet ./...
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+          cd packages/go-dal && gosec -quiet -exclude-dir=gen ./...
 
   build-go-logging:
     name: Build & Test Go Logging
@@ -357,7 +370,7 @@ jobs:
           cd packages/go-logging && govulncheck ./...
       - name: Security - gosec
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.0
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
           cd packages/go-logging && gosec -quiet ./...
 
   build-go-numa:
@@ -389,8 +402,8 @@ jobs:
           cd packages/go-numa && govulncheck ./...
       - name: Security - gosec
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.0
-          cd packages/go-numa && gosec -quiet ./...
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+          cd packages/go-numa && gosec -quiet -exclude-dir=gen ./...
 
   build-go-xdp:
     name: Build & Test Go XDP
@@ -421,8 +434,8 @@ jobs:
           cd packages/go-xdp && govulncheck ./...
       - name: Security - gosec
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.0
-          cd packages/go-xdp && gosec -quiet ./...
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+          cd packages/go-xdp && gosec -quiet -exclude-dir=gen ./...
 
   build-python-rpc:
     name: Build & Test Python RPC
