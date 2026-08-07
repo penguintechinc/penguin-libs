@@ -26,12 +26,26 @@ jobs:
       - run: npm ci
       - name: Security
         run: npm audit --omit=dev
-      # react-libs imports its sibling workspace packages (react-console-version,
-      # react-form-builder, react-hooks, react-login, react-sidebar) via their
-      # published entry points, so those must be built before typecheck/test can
-      # resolve them -- otherwise vite fails with "Failed to resolve entry for
-      # package". Building every workspace avoids maintaining a dependency list here.
-      - run: npm run build --workspaces --if-present
+      # react-libs imports its sibling workspace packages via their published
+      # entry points, so those must be built FIRST -- otherwise tsc reports
+      # TS2307 "Cannot find module" and vite reports "Failed to resolve entry
+      # for package".
+      #
+      # These are listed in dependency order deliberately. `npm run build
+      # --workspaces` does NOT topologically sort, so it can build react-libs
+      # before its own dependencies; whether it happens to work depends on the
+      # npm version's ordering, which is why this passed locally on npm 11 and
+      # failed on the npm 10 that ships with Node 20.
+      # react-hooks depends on react-form-builder, so it must come after it.
+      - name: Build workspace dependencies, then react-libs
+        run: |
+          npm run build \
+            -w @penguintechinc/react-console-version \
+            -w @penguintechinc/react-form-builder \
+            -w @penguintechinc/react-login \
+            -w @penguintechinc/react-sidebar \
+            -w @penguintechinc/react-hooks \
+            -w @penguintechinc/react-libs
       - run: npm run typecheck -w @penguintechinc/react-libs
       - run: npm run test -w @penguintechinc/react-libs
 
@@ -140,7 +154,7 @@ jobs:
           working-directory: packages/go-common
       - name: Security - govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.3
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           cd packages/go-common && govulncheck ./...
       - name: Security - gosec
         run: |
@@ -172,7 +186,7 @@ jobs:
           working-directory: packages/go-aaa
       - name: Security - govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.3
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           cd packages/go-aaa && govulncheck ./...
       - name: Security - gosec
         run: |
@@ -307,7 +321,7 @@ jobs:
           working-directory: packages/go-dal
       - name: Security - govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.3
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           cd packages/go-dal && govulncheck ./...
       - name: Security - gosec
         run: |
@@ -339,7 +353,7 @@ jobs:
           working-directory: packages/go-logging
       - name: Security - govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.3
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           cd packages/go-logging && govulncheck ./...
       - name: Security - gosec
         run: |
@@ -371,7 +385,7 @@ jobs:
           working-directory: packages/go-numa
       - name: Security - govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.3
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           cd packages/go-numa && govulncheck ./...
       - name: Security - gosec
         run: |
@@ -403,7 +417,7 @@ jobs:
           working-directory: packages/go-xdp
       - name: Security - govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.3
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           cd packages/go-xdp && govulncheck ./...
       - name: Security - gosec
         run: |
@@ -573,8 +587,11 @@ jobs:
           node-version: '20'
       - name: Install
         run: npm ci
+      # react-hooks' tests import @penguintechinc/react-form-builder (a
+      # devDependency), so it must be built first or vite fails to resolve its
+      # entry point.
       - name: Build
-        run: npm run build -w @penguintechinc/react-hooks
+        run: npm run build -w @penguintechinc/react-form-builder -w @penguintechinc/react-hooks
       - name: Typecheck
         run: npm run typecheck -w @penguintechinc/react-hooks
       - name: Test
