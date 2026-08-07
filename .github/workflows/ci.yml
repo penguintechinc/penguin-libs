@@ -148,7 +148,7 @@ jobs:
       - run: go test -race ./...
         working-directory: packages/go-h3
       - name: Lint - go-h3
-        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           working-directory: packages/go-h3
@@ -161,7 +161,7 @@ jobs:
           go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
           cd packages/go-h3 && gosec -quiet ./...
       - name: Lint - go-common
-        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           working-directory: packages/go-common
@@ -193,7 +193,7 @@ jobs:
       - name: Test
         run: cd packages/go-aaa && go test -race -v ./...
       - name: Lint
-        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           working-directory: packages/go-aaa
@@ -296,7 +296,7 @@ jobs:
           echo "Total coverage: ${COVERAGE}%"
           awk -v cov="$COVERAGE" 'BEGIN { if (cov+0 < 90.0) { exit 1 } }' || { echo "FAIL: coverage ${COVERAGE}% is below the 90% threshold"; exit 1; }
       - name: Lint
-        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           working-directory: packages/go-rpc
@@ -328,7 +328,7 @@ jobs:
       - name: Test
         run: cd packages/go-dal && go test -race -v ./...
       - name: Lint
-        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           working-directory: packages/go-dal
@@ -360,7 +360,7 @@ jobs:
       - name: Test
         run: cd packages/go-logging && go test -race -v ./...
       - name: Lint
-        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           working-directory: packages/go-logging
@@ -392,7 +392,7 @@ jobs:
       - name: Test
         run: cd packages/go-numa && go test -race -v ./...
       - name: Lint
-        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           working-directory: packages/go-numa
@@ -424,7 +424,7 @@ jobs:
       - name: Test
         run: cd packages/go-xdp && go test -race -v ./...
       - name: Lint
-        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           working-directory: packages/go-xdp
