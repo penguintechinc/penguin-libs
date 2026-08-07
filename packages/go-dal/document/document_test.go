@@ -2,6 +2,7 @@ package document
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -98,7 +99,7 @@ func (m *MockDocumentStore) InsertOne(ctx context.Context, collection string, do
 
 	doc := document.(map[string]interface{})
 	doc["_id"] = m.idCounter
-	id := string(rune(m.idCounter))
+	id := fmt.Sprintf("%d", m.idCounter)
 	m.idCounter++
 
 	m.collections[collection] = append(m.collections[collection], doc)
@@ -222,7 +223,7 @@ func TestMockDocumentStoreUpdateOne(t *testing.T) {
 
 	// Insert a document
 	doc := map[string]interface{}{"name": "John", "age": 30}
-	mds.InsertOne(ctx, "users", doc)
+	_, _ = mds.InsertOne(ctx, "users", doc) // Ignore error in test setup
 
 	// UpdateOne
 	updated, err := mds.UpdateOne(ctx, "users", nil, map[string]interface{}{"age": 31})
@@ -257,7 +258,7 @@ func TestMockDocumentStoreMultipleDocs(t *testing.T) {
 	}
 
 	for _, doc := range docs {
-		mds.InsertOne(ctx, "users", doc)
+		_, _ = mds.InsertOne(ctx, "users", doc) // Ignore error in test setup
 	}
 
 	// Count
@@ -273,7 +274,7 @@ func TestMockDocumentStoreMultipleDocs(t *testing.T) {
 	}
 
 	// Delete one
-	mds.DeleteOne(ctx, "users", nil)
+	_, _ = mds.DeleteOne(ctx, "users", nil) // Ignore error in test cleanup
 
 	// Verify count decreased
 	count, _ = mds.Count(ctx, "users", nil)
@@ -376,7 +377,7 @@ func TestMockDocumentStoreFindWithOptions(t *testing.T) {
 
 	// Insert documents
 	for i := 0; i < 5; i++ {
-		mds.InsertOne(ctx, "users", map[string]interface{}{"id": i})
+		_, _ = mds.InsertOne(ctx, "users", map[string]interface{}{"id": i}) // Ignore error in test setup
 	}
 
 	opts := []dal.FindOption{

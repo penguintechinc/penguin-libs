@@ -51,9 +51,6 @@ type mockMongoCollection struct {
 	// CountDocuments
 	failCount   bool
 	countResult int64
-
-	// Indexes
-	indexCreateErr error
 }
 
 func (m *mockMongoCollection) InsertOne(ctx context.Context, document interface{}, opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error) {
@@ -337,9 +334,7 @@ func TestMongoDBCreateIndexPanicsWithMock(t *testing.T) {
 	// We use recover to verify the function reaches the CreateOne call (exercises setup code).
 	m := newTestMongoDB(&mockMongoCollection{})
 	defer func() {
-		if r := recover(); r == nil {
-			// If it doesn't panic, that's also acceptable (future driver may handle gracefully).
-		}
+		_ = recover() // If it doesn't panic, that's also acceptable (future driver may handle gracefully).
 	}()
 	_ = m.CreateIndex(context.Background(), "col", []dal.IndexKey{{Field: "x", Direction: 1}}, true)
 }

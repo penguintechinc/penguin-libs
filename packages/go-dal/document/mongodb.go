@@ -90,7 +90,7 @@ func NewMongoDB(ctx context.Context, cfg MongoConfig) (*MongoDB, error) {
 
 	// Verify connection
 	if err := client.Ping(ctx, nil); err != nil {
-		client.Disconnect(ctx)
+		_ = client.Disconnect(ctx) // Ignore cleanup error in error path; primary error takes precedence
 		return nil, fmt.Errorf("go-dal: mongodb: ping: %w", err)
 	}
 
@@ -180,7 +180,9 @@ func (m *MongoDB) Find(ctx context.Context, collection string, filter interface{
 	if err != nil {
 		return nil, fmt.Errorf("go-dal: mongodb: find: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		_ = cursor.Close(ctx) // Ignore close error in cleanup
+	}()
 
 	var results []map[string]interface{}
 	if err := cursor.All(ctx, &results); err != nil {

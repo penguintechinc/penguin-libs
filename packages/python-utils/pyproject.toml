@@ -43,7 +43,6 @@ dev = [
 ]
 flask = [
     "flask>=3.0",
-    "flask-security-too>=5.0",
 ]
 cloudwatch = ["boto3>=1.26"]
 gcp = ["google-cloud-logging>=3.0"]

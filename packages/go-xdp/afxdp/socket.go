@@ -5,6 +5,7 @@ package afxdp
 import (
 	"errors"
 	"fmt"
+	"math"
 	"unsafe"
 
 	gl "github.com/penguintechinc/penguin-libs/packages/go-logging/logging"
@@ -50,6 +51,10 @@ func NewUMEM(opts UMEMOptions) (*UMEM, error) {
 	if opts.Size%uint64(opts.FrameSize) != 0 {
 		return nil, ErrUMEMAlignment
 	}
+	// Ensure Size fits in int (required by unix.Mmap)
+	if opts.Size > math.MaxInt {
+		return nil, fmt.Errorf("UMEM size %d exceeds max int %d", opts.Size, math.MaxInt)
+	}
 
 	// Create AF_XDP socket
 	fd, err := unix.Socket(unix.AF_XDP, unix.SOCK_RAW, 0)
@@ -71,13 +76,14 @@ func NewUMEM(opts UMEMOptions) (*UMEM, error) {
 			unix.MAP_PRIVATE|unix.MAP_ANONYMOUS,
 		)
 		if err != nil {
-			unix.Close(fd)
+			_ = unix.Close(fd) // Ignore cleanup error in error path; primary error takes precedence
 			return nil, fmt.Errorf("mmap UMEM region: %w", err)
 		}
 	}
 
 	// Register UMEM with kernel
 	reg := unix.XDPUmemReg{
+		//nolint:gosec // G103: unsafe pointer to mem[0] is safe; mem is a valid allocated byte slice and we need the physical address for AF_XDP kernel registration
 		Addr:      uint64(uintptr(unsafe.Pointer(&mem[0]))),
 		Len:       opts.Size,
 		Size:      opts.FrameSize,
@@ -88,13 +94,14 @@ func NewUMEM(opts UMEMOptions) (*UMEM, error) {
 		uintptr(fd),
 		uintptr(unix.SOL_XDP),
 		uintptr(unix.XDP_UMEM_REG),
+		//nolint:gosec // G103: unsafe pointer to reg struct is safe; reg is stack-allocated and must be passed by address to syscall
 		uintptr(unsafe.Pointer(&reg)),
 		unsafe.Sizeof(reg),
 		0,
 	)
 	if errno != 0 {
-		unix.Munmap(mem)
-		unix.Close(fd)
+		_ = unix.Munmap(mem)   // Ignore cleanup error in error path; primary error takes precedence
+		_ = unix.Close(fd)     // Ignore cleanup error in error path; primary error takes precedence
 		return nil, fmt.Errorf("register UMEM: %w", errno)
 	}
 

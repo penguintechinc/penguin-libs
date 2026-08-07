@@ -330,8 +330,8 @@ func TestMockCacheFlush(t *testing.T) {
 	ctx := context.Background()
 
 	// Add some data
-	mc.Set(ctx, "key1", []byte("value1"), 0)
-	mc.Set(ctx, "key2", []byte("value2"), 0)
+	_ = mc.Set(ctx, "key1", []byte("value1"), 0) // Ignore error in test setup
+	_ = mc.Set(ctx, "key2", []byte("value2"), 0) // Ignore error in test setup
 
 	// Flush
 	err := mc.Flush(ctx, "")
@@ -382,7 +382,7 @@ func TestMockCacheGetMissingKeys(t *testing.T) {
 	mc := NewMockCache()
 	ctx := context.Background()
 
-	mc.Set(ctx, "exists", []byte("value"), 0)
+	_ = mc.Set(ctx, "exists", []byte("value"), 0) // Ignore error in test setup
 
 	// GetMany with mix of existing and missing keys
 	keys := []string{"exists", "missing1", "missing2"}

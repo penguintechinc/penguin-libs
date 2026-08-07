@@ -31,7 +31,7 @@ func newTestValkeyCache(prefix string) *ValkeyCache {
 func TestValkeyGet(t *testing.T) {
 	t.Parallel()
 	vc := newTestValkeyCache("")
-	defer vc.Close()
+	defer func() { _ = vc.Close() }() // Ignore error in test cleanup
 	ctx := context.Background()
 	_, err := vc.Get(ctx, "k")
 	if !errors.Is(err, dal.ErrUnsupportedOperation) {
@@ -42,7 +42,7 @@ func TestValkeyGet(t *testing.T) {
 func TestValkeySet(t *testing.T) {
 	t.Parallel()
 	vc := newTestValkeyCache("")
-	defer vc.Close()
+	defer func() { _ = vc.Close() }() // Ignore error in test cleanup
 	ctx := context.Background()
 	err := vc.Set(ctx, "k", []byte("v"), 0)
 	if !errors.Is(err, dal.ErrUnsupportedOperation) {
@@ -53,7 +53,7 @@ func TestValkeySet(t *testing.T) {
 func TestValkeyDelete(t *testing.T) {
 	t.Parallel()
 	vc := newTestValkeyCache("")
-	defer vc.Close()
+	defer func() { _ = vc.Close() }() // Ignore error in test cleanup
 	ctx := context.Background()
 	err := vc.Delete(ctx, "k")
 	if !errors.Is(err, dal.ErrUnsupportedOperation) {
@@ -64,7 +64,7 @@ func TestValkeyDelete(t *testing.T) {
 func TestValkeyExists(t *testing.T) {
 	t.Parallel()
 	vc := newTestValkeyCache("")
-	defer vc.Close()
+	defer func() { _ = vc.Close() }() // Ignore error in test cleanup
 	ctx := context.Background()
 	_, err := vc.Exists(ctx, "k")
 	if !errors.Is(err, dal.ErrUnsupportedOperation) {
@@ -75,7 +75,7 @@ func TestValkeyExists(t *testing.T) {
 func TestValkeyIncrement(t *testing.T) {
 	t.Parallel()
 	vc := newTestValkeyCache("")
-	defer vc.Close()
+	defer func() { _ = vc.Close() }() // Ignore error in test cleanup
 	ctx := context.Background()
 	_, err := vc.Increment(ctx, "k", 1)
 	if !errors.Is(err, dal.ErrUnsupportedOperation) {
@@ -86,7 +86,7 @@ func TestValkeyIncrement(t *testing.T) {
 func TestValkeyGetMany(t *testing.T) {
 	t.Parallel()
 	vc := newTestValkeyCache("")
-	defer vc.Close()
+	defer func() { _ = vc.Close() }() // Ignore error in test cleanup
 	ctx := context.Background()
 	_, err := vc.GetMany(ctx, []string{"k"})
 	if !errors.Is(err, dal.ErrUnsupportedOperation) {
@@ -97,7 +97,7 @@ func TestValkeyGetMany(t *testing.T) {
 func TestValkeySetMany(t *testing.T) {
 	t.Parallel()
 	vc := newTestValkeyCache("")
-	defer vc.Close()
+	defer func() { _ = vc.Close() }() // Ignore error in test cleanup
 	ctx := context.Background()
 	err := vc.SetMany(ctx, map[string][]byte{"k": []byte("v")}, 0)
 	if !errors.Is(err, dal.ErrUnsupportedOperation) {
@@ -108,7 +108,7 @@ func TestValkeySetMany(t *testing.T) {
 func TestValkeyFlush(t *testing.T) {
 	t.Parallel()
 	vc := newTestValkeyCache("")
-	defer vc.Close()
+	defer func() { _ = vc.Close() }() // Ignore error in test cleanup
 	ctx := context.Background()
 	err := vc.Flush(ctx, "")
 	if !errors.Is(err, dal.ErrUnsupportedOperation) {
@@ -151,7 +151,7 @@ func TestNewValkeyCacheEmptyAddr(t *testing.T) {
 func TestValkeyAllStubsReturnUnsupported(t *testing.T) {
 	t.Parallel()
 	vc := newTestValkeyCache("pfx")
-	defer vc.Close()
+	defer func() { _ = vc.Close() }() // Ignore error in test cleanup
 	ctx := context.Background()
 
 	tests := []struct {

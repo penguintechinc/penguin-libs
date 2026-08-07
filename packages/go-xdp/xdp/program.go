@@ -96,7 +96,9 @@ func (p *Program) Close() error {
 	if err := p.link.Close(); err != nil {
 		return fmt.Errorf("detach XDP: %w", err)
 	}
-	p.prog.Close()
+	if err := p.prog.Close(); err != nil {
+		return fmt.Errorf("unload XDP program: %w", err)
+	}
 	p.logger.Info("xdp_program_unloaded", zap.String("interface", p.iface.Name))
 	return p.logger.Sync()
 }

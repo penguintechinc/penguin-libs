@@ -189,7 +189,9 @@ func (s *S3Store) Get(ctx context.Context, key string) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("go-dal: s3: get: %w", err)
 	}
-	defer output.Body.Close()
+	defer func() {
+		_ = output.Body.Close() // Ignore close error in cleanup
+	}()
 
 	data, err := io.ReadAll(output.Body)
 	if err != nil {
