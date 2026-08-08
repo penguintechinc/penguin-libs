@@ -146,6 +146,21 @@ class TestTableProxyAsync:
         count = await db(db.items.id > 0).count()
         assert count == 4
 
+    async def test_async_bulk_insert_parity_with_sync_bulk_insert(self, async_db_for_proxy):
+        """async_bulk_insert() and sync bulk_insert() must behave the same way:
+
+        both return None and both insert every row from the list in one
+        call, for the same input shape.
+        """
+        db = async_db_for_proxy
+        rows = [{"name": "parity1"}, {"name": "parity2"}, {"name": "parity3"}]
+
+        result = await db.items.async_bulk_insert(rows)
+
+        assert result is None  # same as sync bulk_insert's return value
+        count = await db(db.items.id > 0).count()
+        assert count == 2 + len(rows)
+
 
 class TestTableProxyInsertOnAsyncTable:
     """gh-67 (2): insert() called on an is_async=True table.
