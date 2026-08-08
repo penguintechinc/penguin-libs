@@ -55,7 +55,21 @@ class TableProxy:
             pk: Primary key value.
 
         Returns:
-            Row if found, None otherwise.
+            Sync table, or async table (is_async=True) called from
+            *outside* a running event loop: Row if found, None otherwise
+            — resolved immediately via
+            ``asyncio.get_event_loop().run_until_complete()``, unchanged
+            from prior behavior.
+
+            Async table called from *inside* a running event loop: a
+            coroutine resolving to Row | None, e.g. ``await
+            db.users[42]``. Previously this path unconditionally called
+            ``run_until_complete()`` and always raised
+            ``RuntimeError("This event loop is already running")`` — there
+            was no working synchronous form of PK lookup from inside a
+            running loop, so returning an awaitable here is purely
+            additive; it does not change behavior for any caller that
+            worked before.
         """
         from penguin_dal.query import Row
 
@@ -80,7 +94,15 @@ class TableProxy:
                     row = result.first()
                     return Row(dict(row._mapping)) if row else None
 
-            return asyncio.get_event_loop().run_until_complete(_async_get())
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                # No running loop in this thread: preserve the original
+                # synchronous resolve-immediately behavior byte-for-byte.
+                return asyncio.get_event_loop().run_until_complete(_async_get())
+            # Running loop: can't block on it, so hand back the coroutine
+            # for the caller to await instead of crashing.
+            return _async_get()
         else:
             with self._session_factory() as session:
                 result = session.execute(stmt)
@@ -127,12 +149,33 @@ class TableProxy:
 
         Runs validators if registered. Returns the inserted PK value.
 
+        On a table bound to AsyncDB (is_async=True), this delegates to
+        async_insert() and returns a coroutine instead of a PK value —
+        e.g. ``pk = await db.users.insert(...)``. Previously calling
+        insert() on an async table raised TypeError immediately
+        ("'AsyncSession' object does not support the context manager
+        protocol") because the sync ``with self._session_factory()``
+        can't open an AsyncSession; there was no working synchronous
+        path on an async table to preserve, so returning an awaitable
+        here is purely additive. async_insert() remains the stable,
+        explicitly-named async entry point and is unchanged.
+
+        WARNING: on an async table, forgetting ``await`` no longer
+        crashes loudly — it silently returns a never-awaited coroutine
+        and performs no write (you'll only see a GC-time
+        RuntimeWarning, if that). Always ``await db.users.insert(...)``
+        on an AsyncDB table.
+
         Args:
             **kwargs: Column=value pairs.
 
         Returns:
-            Primary key of the inserted row.
+            Primary key of the inserted row (sync table), or a coroutine
+            resolving to the primary key (async table).
         """
+        if self._is_async:
+            return self.async_insert(**kwargs)
+
         if self._validators:
             self._run_validators(kwargs)
 
