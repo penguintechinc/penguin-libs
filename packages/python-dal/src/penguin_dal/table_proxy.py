@@ -55,7 +55,21 @@ class TableProxy:
             pk: Primary key value.
 
         Returns:
-            Row if found, None otherwise.
+            Sync table, or async table (is_async=True) called from
+            *outside* a running event loop: Row if found, None otherwise
+            — resolved immediately via
+            ``asyncio.get_event_loop().run_until_complete()``, unchanged
+            from prior behavior.
+
+            Async table called from *inside* a running event loop: a
+            coroutine resolving to Row | None, e.g. ``await
+            db.users[42]``. Previously this path unconditionally called
+            ``run_until_complete()`` and always raised
+            ``RuntimeError("This event loop is already running")`` — there
+            was no working synchronous form of PK lookup from inside a
+            running loop, so returning an awaitable here is purely
+            additive; it does not change behavior for any caller that
+            worked before.
         """
         from penguin_dal.query import Row
 
@@ -80,7 +94,15 @@ class TableProxy:
                     row = result.first()
                     return Row(dict(row._mapping)) if row else None
 
-            return asyncio.get_event_loop().run_until_complete(_async_get())
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                # No running loop in this thread: preserve the original
+                # synchronous resolve-immediately behavior byte-for-byte.
+                return asyncio.get_event_loop().run_until_complete(_async_get())
+            # Running loop: can't block on it, so hand back the coroutine
+            # for the caller to await instead of crashing.
+            return _async_get()
         else:
             with self._session_factory() as session:
                 result = session.execute(stmt)

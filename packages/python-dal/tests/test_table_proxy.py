@@ -1,5 +1,8 @@
 """Tests for TableProxy."""
 
+import asyncio
+from asyncio import iscoroutine as asyncio_iscoroutine
+
 import pytest
 from sqlalchemy import Column, Integer, MetaData, String, Table, text
 
@@ -142,3 +145,47 @@ class TestTableProxyAsync:
         await db.items.async_bulk_insert([{"name": "v1"}, {"name": "v2"}])
         count = await db(db.items.id > 0).count()
         assert count == 4
+
+
+class TestTableProxyGetItemAsyncDualMode:
+    """gh-67 (1): TableProxy.__getitem__ on an is_async=True table.
+
+    Outside a running event loop, behavior is unchanged from before this
+    fix (asyncio.get_event_loop().run_until_complete(), resolved
+    immediately). Inside a running event loop, this used to
+    unconditionally raise RuntimeError("This event loop is already
+    running"); it now returns a coroutine for the caller to await
+    instead, since nothing could ever succeed on that path before.
+    """
+
+    def test_getitem_outside_running_loop_unchanged(self, async_db_for_proxy):
+        """Regression pin: sync access from outside a running loop must
+        keep resolving immediately to Row | None, not a coroutine."""
+        db = async_db_for_proxy
+        with pytest.raises(RuntimeError):
+            # Confirm the precondition this test relies on: no running
+            # loop in this (synchronous) test function.
+            asyncio.get_running_loop()
+
+        row = db.items[1]
+        assert not asyncio_iscoroutine(row)
+        assert row is not None
+        assert row.name == "item1"
+
+        missing = db.items[999]
+        assert missing is None
+
+    async def test_getitem_inside_running_loop_returns_awaitable(self, async_db_for_proxy):
+        """Previously this path always raised RuntimeError('This event
+        loop is already running'). Now it returns an awaitable."""
+        db = async_db_for_proxy
+        pending = db.items[1]
+        assert asyncio_iscoroutine(pending)
+        row = await pending
+        assert row is not None
+        assert row.name == "item1"
+
+    async def test_getitem_inside_running_loop_missing_pk_returns_none(self, async_db_for_proxy):
+        db = async_db_for_proxy
+        row = await db.items[999]
+        assert row is None
