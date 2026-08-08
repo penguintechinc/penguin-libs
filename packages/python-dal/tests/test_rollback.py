@@ -8,8 +8,11 @@ a TableNotFoundError for a nonexistent "rollback" table.
 """
 
 import pytest
+from sqlalchemy import Column, Integer, MetaData, String, Table, create_engine
+from sqlalchemy.orm import sessionmaker
 
-from penguin_dal.exceptions import TableNotFoundError
+from penguin_dal.db import DB
+from penguin_dal.table_proxy import TableProxy
 
 
 class TestDBRollback:
@@ -43,17 +46,46 @@ class TestDBRollback:
                 db.rollback()
                 raise
 
-    def test_table_named_rollback_no_longer_reachable_via_getattr(self, db):
+    def test_table_named_rollback_shadowed_by_method(self):
         """Compat note: a real method shadows __getattr__ table routing.
 
-        A table literally named "rollback" would no longer be reachable
-        as db.rollback (it resolves to the method). It remains reachable
-        via db.tables / db._get_table. This is the documented, accepted
-        compat tradeoff from gh-68.
+        Build a DB against a schema that genuinely has a table named
+        "rollback" (the `db` fixture doesn't have one, so this needs its
+        own engine). db.rollback must resolve to the bound no-op method
+        — not a TableProxy for that table — while the table itself
+        remains fully reachable via db.tables / db._get_table. This is
+        the documented, accepted compat tradeoff from gh-68.
         """
-        assert db.rollback() is None
-        with pytest.raises(TableNotFoundError):
-            db._get_table("rollback")
+        eng = create_engine("sqlite://", echo=False)
+        metadata = MetaData()
+        Table(
+            "rollback",
+            metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("note", String(255)),
+        )
+        metadata.create_all(eng)
+
+        d = DB.__new__(DB)
+        d._uri = "sqlite://"
+        d._engine = eng
+        d._session_factory = sessionmaker(bind=eng)
+        d._metadata = MetaData()
+        d._metadata.reflect(bind=eng)
+        d._validators = {}
+        d._models = {}
+
+        # db.rollback resolves to the bound no-op method, not a
+        # TableProxy wrapping the "rollback" table.
+        assert not isinstance(d.rollback, TableProxy)
+        assert callable(d.rollback)
+        assert d.rollback() is None
+
+        # The table itself is still fully reachable, just not via
+        # attribute access (__getattr__ never fires — rollback is now a
+        # real bound method).
+        assert "rollback" in d.tables
+        assert d._get_table("rollback").name == "rollback"
 
 
 class TestAsyncDBRollback:

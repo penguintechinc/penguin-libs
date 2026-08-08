@@ -160,6 +160,12 @@ class TableProxy:
         here is purely additive. async_insert() remains the stable,
         explicitly-named async entry point and is unchanged.
 
+        WARNING: on an async table, forgetting ``await`` no longer
+        crashes loudly — it silently returns a never-awaited coroutine
+        and performs no write (you'll only see a GC-time
+        RuntimeWarning, if that). Always ``await db.users.insert(...)``
+        on an AsyncDB table.
+
         Args:
             **kwargs: Column=value pairs.
 

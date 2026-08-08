@@ -495,7 +495,9 @@ class AsyncDB:
           delegates to ``async_insert()``) rather than the PK directly —
           you still need ``await db.users.insert(...)``. The
           ``async_``-prefixed names are the stable, explicit spelling;
-          prefer them for clarity.
+          prefer them for clarity. WARNING: forgetting that ``await`` no
+          longer crashes loudly — it silently returns a never-awaited
+          coroutine and performs no write.
         * **``db.<table>[pk]`` has two modes.** Outside a running event
           loop it resolves synchronously and returns ``Row | None``
           directly (same as sync ``DB``). From inside a running loop it

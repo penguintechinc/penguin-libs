@@ -146,20 +146,38 @@ class TestTableProxyAsync:
         count = await db(db.items.id > 0).count()
         assert count == 4
 
-    async def test_async_bulk_insert_parity_with_sync_bulk_insert(self, async_db_for_proxy):
+    async def test_async_bulk_insert_parity_with_sync_bulk_insert(self, db, async_db_for_proxy):
         """async_bulk_insert() and sync bulk_insert() must behave the same way:
 
-        both return None and both insert every row from the list in one
-        call, for the same input shape.
+        both return None, and both insert exactly every row from the
+        list in one call. Actually invokes both (sync bulk_insert() on
+        the sync `db` fixture's users table, async_bulk_insert() on the
+        async `items` table) rather than asserting one and assuming the
+        other — a prior version of this test only called
+        async_bulk_insert() and never touched sync bulk_insert() at all.
         """
-        db = async_db_for_proxy
-        rows = [{"name": "parity1"}, {"name": "parity2"}, {"name": "parity3"}]
+        async_db = async_db_for_proxy
+        sync_rows = [
+            {"email": "parity-sync-1@example.com", "name": "ParitySync1", "active": True},
+            {"email": "parity-sync-2@example.com", "name": "ParitySync2", "active": True},
+        ]
+        async_rows = [{"name": "parity-async-1"}, {"name": "parity-async-2"}]
 
-        result = await db.items.async_bulk_insert(rows)
+        sync_before = db(db.users.id > 0).count()
+        sync_result = db.users.bulk_insert(sync_rows)
+        sync_after = db(db.users.id > 0).count()
 
-        assert result is None  # same as sync bulk_insert's return value
-        count = await db(db.items.id > 0).count()
-        assert count == 2 + len(rows)
+        async_before = await async_db(async_db.items.id > 0).count()
+        async_result = await async_db.items.async_bulk_insert(async_rows)
+        async_after = await async_db(async_db.items.id > 0).count()
+
+        # Same return-value contract: both are None.
+        assert sync_result is None
+        assert async_result is None
+
+        # Same row-count-effect contract: exactly len(rows) new rows each.
+        assert sync_after - sync_before == len(sync_rows)
+        assert async_after - async_before == len(async_rows)
 
 
 class TestTableProxyInsertOnAsyncTable:
