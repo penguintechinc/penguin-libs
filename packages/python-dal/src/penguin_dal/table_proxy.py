@@ -149,12 +149,27 @@ class TableProxy:
 
         Runs validators if registered. Returns the inserted PK value.
 
+        On a table bound to AsyncDB (is_async=True), this delegates to
+        async_insert() and returns a coroutine instead of a PK value —
+        e.g. ``pk = await db.users.insert(...)``. Previously calling
+        insert() on an async table raised TypeError immediately
+        ("'AsyncSession' object does not support the context manager
+        protocol") because the sync ``with self._session_factory()``
+        can't open an AsyncSession; there was no working synchronous
+        path on an async table to preserve, so returning an awaitable
+        here is purely additive. async_insert() remains the stable,
+        explicitly-named async entry point and is unchanged.
+
         Args:
             **kwargs: Column=value pairs.
 
         Returns:
-            Primary key of the inserted row.
+            Primary key of the inserted row (sync table), or a coroutine
+            resolving to the primary key (async table).
         """
+        if self._is_async:
+            return self.async_insert(**kwargs)
+
         if self._validators:
             self._run_validators(kwargs)
 

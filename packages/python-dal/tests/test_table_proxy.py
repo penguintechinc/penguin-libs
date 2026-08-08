@@ -147,6 +147,39 @@ class TestTableProxyAsync:
         assert count == 4
 
 
+class TestTableProxyInsertOnAsyncTable:
+    """gh-67 (2): insert() called on an is_async=True table.
+
+    Investigation finding: insert() was genuinely broken on async tables
+    before this fix — calling it raised TypeError immediately because
+    `with self._session_factory() as session` can't open a sync context
+    manager on an AsyncSession ("'AsyncSession' object does not support
+    the context manager protocol"). No prior test exercised this path
+    and nothing depended on that crash, so fixing it (delegate to
+    async_insert(), return an awaitable) is compat-safe.
+    """
+
+    async def test_insert_on_async_table_returns_awaitable(self, async_db_for_proxy):
+        db = async_db_for_proxy
+        pending = db.items.insert(name="via-insert")
+        # insert() on an async table returns a coroutine, not a PK, since
+        # it can't block on the loop it's presumably being called from.
+        assert asyncio_iscoroutine(pending)
+        pk = await pending
+        assert pk is not None
+        count = await db(db.items.id > 0).count()
+        assert count == 3
+
+    async def test_insert_on_async_table_matches_async_insert_result_shape(
+        self, async_db_for_proxy
+    ):
+        db = async_db_for_proxy
+        pk_via_insert = await db.items.insert(name="via-insert-2")
+        pk_via_async_insert = await db.items.async_insert(name="via-async-insert")
+        assert isinstance(pk_via_insert, int)
+        assert isinstance(pk_via_async_insert, int)
+
+
 class TestTableProxyGetItemAsyncDualMode:
     """gh-67 (1): TableProxy.__getitem__ on an is_async=True table.
 
