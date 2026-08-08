@@ -481,6 +481,28 @@ class AsyncDB:
         uri: Database URI (will be converted to async driver if needed).
         pool_size: Connection pool size (default 10).
         echo: If True, echo SQL statements (default False).
+
+    Migration gotchas (sync DB -> AsyncDB):
+        * **Explicit reflect required.** Sync ``DB`` reflects tables in
+          ``__init__``. ``AsyncDB`` cannot — ``__init__`` can't run
+          coroutines — so you must ``await db.reflect()`` before
+          accessing any ``db.<table>`` attribute, or it raises
+          ``TableNotFoundError``.
+        * **Async method naming.** Most write operations that need a
+          coroutine are separately named: ``async_insert()``,
+          ``async_bulk_insert()``. Plain ``insert()`` on a table bound
+          to ``AsyncDB`` also now works, but returns a coroutine (it
+          delegates to ``async_insert()``) rather than the PK directly —
+          you still need ``await db.users.insert(...)``. The
+          ``async_``-prefixed names are the stable, explicit spelling;
+          prefer them for clarity.
+        * **``db.<table>[pk]`` has two modes.** Outside a running event
+          loop it resolves synchronously and returns ``Row | None``
+          directly (same as sync ``DB``). From inside a running loop it
+          instead returns a coroutine — ``await db.users[42]`` — since a
+          blocking ``run_until_complete()`` can't execute inside an
+          already-running loop. Check with ``asyncio.get_running_loop()``
+          if your code needs to handle both callers.
     """
 
     def __init__(
