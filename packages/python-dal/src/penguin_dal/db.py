@@ -198,6 +198,27 @@ class DB:
         """
         pass
 
+    def rollback(self) -> None:
+        """Rollback is a documented no-op, mirroring commit().
+
+        QuerySet methods (insert/update/delete/select) auto-commit per
+        statement, so there is never a pending write for rollback() to
+        undo. This method exists for API compatibility with PyDAL's
+        common ``try: ... except: db.rollback(); raise`` idiom: without
+        it, ``db.rollback()`` fell through to ``__getattr__`` and raised
+        ``TableNotFoundError`` (no table named "rollback"), masking
+        whatever exception the caller was trying to handle.
+
+        For an atomic multi-statement unit that genuinely rolls back on
+        exception, use ``transaction()`` instead — it pins one
+        connection and rolls back internally on error.
+
+        Compat note: because this is now a real method, it shadows
+        ``__getattr__`` — a table literally named "rollback" is no
+        longer reachable as ``db.rollback`` (use ``db.tables["rollback"]``).
+        """
+        pass
+
     def close(self) -> None:
         """Dispose of the engine and connection pool."""
         self._engine.dispose()
@@ -541,6 +562,28 @@ class AsyncDB:
 
     async def commit(self) -> None:
         """Commit is a no-op since AsyncQuerySet methods auto-commit."""
+        pass
+
+    async def rollback(self) -> None:
+        """Rollback is a documented no-op, mirroring commit().
+
+        AsyncQuerySet methods (insert/update/delete/select) auto-commit
+        per statement, so there is never a pending write for rollback()
+        to undo. Provided for API compatibility with PyDAL's ``try: ...
+        except: await db.rollback(); raise`` idiom: without it,
+        ``db.rollback()`` fell through to ``__getattr__`` and raised
+        ``TableNotFoundError`` (no table named "rollback"), masking
+        whatever exception the caller was trying to handle.
+
+        AsyncDB has no ``transaction()`` equivalent yet (only sync
+        ``DB.transaction()`` pins a connection for an atomic
+        multi-statement unit) — this rollback() cannot provide that
+        atomicity, it is a no-op like commit().
+
+        Compat note: because this is now a real method, it shadows
+        ``__getattr__`` — a table literally named "rollback" is no
+        longer reachable as ``db.rollback`` (use ``db.tables["rollback"]``).
+        """
         pass
 
     async def close(self) -> None:
