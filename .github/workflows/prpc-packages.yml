@@ -102,7 +102,11 @@ jobs:
         if: matrix.language == 'go'
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
-          gosec -quiet ./...
+          # Exclusions must match ci.yml's go-rpc gosec step. gen/ is generated
+          # protobuf -- annotations there are lost on regeneration -- and
+          # examples/ is demo code; both are already excluded from the coverage
+          # step for the same reason.
+          gosec -quiet -exclude-dir=gen -exclude-dir=examples ./...
 
       # --- Python (mirrors ci.yml build-python-rpc) ---
       - name: Setup Python
