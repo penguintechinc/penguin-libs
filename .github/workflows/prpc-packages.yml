@@ -33,6 +33,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
+        with:
+          version: 1.57.2
       - name: Lint
         run: buf lint
       - name: Format check
@@ -49,6 +51,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
+        with:
+          version: 1.57.2
       - name: Breaking change check
         run: buf breaking --against 'https://github.com/penguintechinc/penguin-libs.git#branch=main,subdir=proto'
 
@@ -86,7 +90,7 @@ jobs:
         run: go test -race -v ./...
       - name: Go Lint
         if: matrix.language == 'go'
-        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           working-directory: packages/go-rpc
       - name: Go Security - govulncheck
@@ -181,5 +185,7 @@ jobs:
           go-version: '1.25'
           cache: false
       - uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
+        with:
+          version: 1.57.2
       - name: Codegen drift check
         run: make prpc-generate-check
