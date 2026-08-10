@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "penguin-aaa"
-version = "0.2.0"
+version = "0.2.1"
 description = "PenguinTech Authentication, Authorization, and Accounting library"
 readme = "README.md"
 license = {text = "MIT"}
