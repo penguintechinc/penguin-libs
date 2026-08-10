@@ -4,8 +4,16 @@ Penguin Tech Python Utilities
 Shared utilities for Penguin Tech Python applications.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
+from .decorators import (
+    DecoratorContext,
+    DecoratorRegistry,
+    DynamicDecorator,
+    add_decorator,
+    create_decorator,
+    decorator_factory,
+)
 from .killkrill import KillKrillConfig, KillKrillSink
 from .logging import (
     SanitizedLogger,
@@ -27,6 +35,13 @@ from .sinks import (
 
 __all__ = [
     "__version__",
+    # decorators
+    "add_decorator",
+    "create_decorator",
+    "decorator_factory",
+    "DecoratorContext",
+    "DynamicDecorator",
+    "DecoratorRegistry",
     # logging
     "configure_logging",
     "configure_logging_from_env",
@@ -46,3 +61,4 @@ __all__ = [
     "KillKrillConfig",
     "KillKrillSink",
 ]
+

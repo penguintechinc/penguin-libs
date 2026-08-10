@@ -37,6 +37,25 @@ from penguintechinc_utils import SanitizedLogger
 logger = SanitizedLogger("MyApp", sinks=configure_logging_from_env())
 ```
 
+## Dynamic Decorator Builder
+
+Eliminates traditional 3-tier function boilerplate for Python decorators.
+
+```python
+from penguintechinc_utils import add_decorator
+
+@add_decorator(name="my-cool-decorator")
+def my_cool_decorator(ctx):
+    print(f"Calling {ctx.func.__name__} with decorator args: {ctx.dec_kwargs}")
+    ctx.execution_time = 0
+    return ctx.proceed()
+
+# Use with or without parameters on sync or async functions:
+@my_cool_decorator(tag="v1")
+def process_data(item):
+    return item.upper()
+```
+
 📚 **Full documentation**: [docs/penguin-utils/](../../docs/penguin-utils/)
 - [README](../../docs/penguin-utils/README.md) — complete feature overview and all sinks
 - [API Reference](../../docs/penguin-utils/API.md) — all classes and methods
