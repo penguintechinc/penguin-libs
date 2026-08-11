@@ -82,9 +82,9 @@ def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
         elif isinstance(value, dict):
             sanitized[key] = cast(Any, sanitize_log_data(value))
         elif isinstance(value, list):
-            sanitized[key] = cast(Any, [
-                sanitize_log_data(item) if isinstance(item, dict) else item for item in value
-            ])
+            sanitized[key] = cast(
+                Any, [sanitize_log_data(item) if isinstance(item, dict) else item for item in value]
+            )
         else:
             sanitized[key] = value
 
@@ -220,7 +220,7 @@ def configure_logging_from_env() -> list["Sink"]:
 
     from penguintechinc_utils.sinks import CloudWatchSink, GCPCloudLoggingSink, KafkaSink
 
-    sinks: list["Sink"] = []
+    sinks: list[Sink] = []
 
     cw_group = os.environ.get("LOG_CLOUDWATCH_GROUP")
     cw_stream = os.environ.get("LOG_CLOUDWATCH_STREAM")
