@@ -158,9 +158,13 @@ class StaticKeyVerifier:
             return self.validate_token(raw_token)
         except (jwt.InvalidTokenError, jwt.DecodeError, jwt.InvalidAlgorithmError) as exc:
             # Crypto/signature verification failures
-            logger.warning("Static-key JWT validation failed (%s)", type(exc).__name__, exc_info=True)
+            logger.warning(
+                "Static-key JWT validation failed (%s)", type(exc).__name__, exc_info=True
+            )
             return None
         except Exception as exc:
             # Network, transient, or other unexpected errors
-            logger.warning("Static-key JWT verification error (%s)", type(exc).__name__, exc_info=True)
+            logger.warning(
+                "Static-key JWT verification error (%s)", type(exc).__name__, exc_info=True
+            )
             return None
