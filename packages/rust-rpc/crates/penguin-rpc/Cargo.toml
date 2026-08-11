@@ -1,0 +1,11 @@
+[package]
+name = "penguin-rpc"
+description = "pRPC: Connect RPC over HTTP/3/QUIC with zero-trust defaults (Rust implementation)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]

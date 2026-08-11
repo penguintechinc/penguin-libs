@@ -20,3 +20,27 @@ class ValidationError(DALError):
         self.errors = errors
         messages = "; ".join(f"{e['field']}: {e['message']}" for e in errors)
         super().__init__(f"Validation failed: {messages}")
+
+
+class UnsupportedOperationError(DALError):
+    """Raised when a backend does not support the requested operation."""
+
+    def __init__(self, backend: str, operation: str) -> None:
+        super().__init__(f"Backend '{backend}' does not support operation '{operation}'")
+
+
+class BackendConnectionError(DALError):
+    """Raised when a backend connection fails."""
+
+    def __init__(self, backend: str, reason: str) -> None:
+        super().__init__(f"Failed to connect to backend '{backend}': {reason}")
+
+
+class DALSecurityWarning(Warning):
+    """Warning for potential SQL injection in executesql.
+
+    Emitted when a raw SQL query contains quoted string literals in
+    a WHERE/VALUES/IN clause but no parameterized placeholders are provided.
+    This is a heuristic check that cannot be sound and will false-positive
+    on legitimate static SQL. Disable per-call with check_injection=False.
+    """

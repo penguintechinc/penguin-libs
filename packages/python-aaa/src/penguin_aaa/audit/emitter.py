@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Protocol, runtime_checkable
+
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -69,7 +72,7 @@ class Emitter:
             try:
                 sink.flush()
             except Exception:
-                pass
+                logger.warning("audit_sink_flush_failed (%s)", type(sink).__name__, exc_info=True)
 
     def close(self) -> None:
         """Close all sinks, collecting but not raising per-sink errors."""
@@ -77,4 +80,4 @@ class Emitter:
             try:
                 sink.close()
             except Exception:
-                pass
+                logger.warning("audit_sink_close_failed (%s)", type(sink).__name__, exc_info=True)
