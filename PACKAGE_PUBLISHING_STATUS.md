@@ -5,7 +5,7 @@
 
 ## Summary
 
-All 32 published artifacts in the penguin-libs monorepo are configured for automated publishing via GitHub Actions.
+All 31 published artifacts in the penguin-libs monorepo are configured for automated publishing via GitHub Actions.
 
 ## Package Publishing Configuration
 
@@ -25,23 +25,22 @@ All 32 published artifacts in the penguin-libs monorepo are configured for autom
 | 12 | python-utils | PyPI | penguin-utils | `penguin-utils-v*` | `publish-python-utils` | ✅ Configured |
 | 13 | python-aaa | PyPI | penguin-aaa | `penguin-aaa-v*` | `publish-python-aaa` | ✅ Configured |
 | 14 | python-dal | PyPI | penguin-dal | `penguin-dal-v*` | `publish-python-dal` | ✅ Configured |
-| 15 | python-pytest | PyPI | penguin-pytest | `penguin-pytest-v*` | `publish-penguin-pytest` | ✅ Configured |
-| 16 | python-email | PyPI | penguin-email | `penguin-email-v*` | `publish-python-email` | ✅ Configured |
-| 17 | python-limiter | PyPI | penguin-limiter | `penguin-limiter-v*` | `publish-python-limiter` | ✅ Configured |
-| 18 | python-crypto | PyPI | penguin-crypto | `penguin-crypto-v*` | `publish-python-crypto.yml` | 🔜 Pending first publish |
-| 19 | python-security | PyPI | penguin-security | `penguin-security-v*` | `publish-python-security.yml` | 🔜 Pending first publish |
-| 20 | python-rpc | PyPI | penguin-rpc | `penguin-rpc-v*` | `publish-python-rpc` | 🔜 Pending first publish |
-| 22 | go-common | GitHub (go get) | github.com/.../go-common | `v*` | `validate-go-common` | ✅ Configured |
-| 23 | go-h3 | GitHub (go get) | github.com/.../go-h3 | `v*` | `validate-go-common` | ✅ Configured |
-| 24 | go-aaa | GitHub (go get) | github.com/.../go-aaa | `go-aaa-v*` | `validate-go-aaa` | ✅ Configured |
-| 25 | go-rpc | GitHub (go get) | github.com/.../go-rpc | `go-rpc-v*` | `validate-go-rpc` | 🔜 Pending first publish |
-| 26 | go-logging | GitHub (go get) | github.com/.../go-logging | `go-logging-v*` | `validate-go-split` | 🔜 Pending first publish |
-| 27 | go-numa | GitHub (go get) | github.com/.../go-numa | `go-numa-v*` | `validate-go-split` | 🔜 Pending first publish |
-| 28 | go-xdp | GitHub (go get) | github.com/.../go-xdp | `go-xdp-v*` | `validate-go-split` | 🔜 Pending first publish |
-| 29 | go-dal | GitHub (go get) | github.com/.../go-dal | `go-dal-v*` | `validate-go-split` | 🔜 Pending first publish |
-| 30 | flutter_libs | pub.dev | flutter_libs | `flutter-libs-v*` | `publish-flutter-libs` | ✅ Configured (dry-run) |
-| 31 | rust-rpc (penguin-rpc) | crates.io | penguin-rpc | `rust-rpc-v*` | `publish-rust-rpc` | 🔜 Pending first publish |
-| 32 | rust-rpc (penguin-h3-tower) | crates.io | penguin-h3-tower | `rust-rpc-v*` | `publish-rust-rpc` | 🔜 Pending first publish |
+| 15 | python-email | PyPI | penguin-email | `penguin-email-v*` | `publish-python-email` | ✅ Configured |
+| 16 | python-limiter | PyPI | penguin-limiter | `penguin-limiter-v*` | `publish-python-limiter` | ✅ Configured |
+| 17 | python-crypto | PyPI | penguin-crypto | `penguin-crypto-v*` | `publish-python-crypto.yml` | 🔜 Pending first publish |
+| 18 | python-security | PyPI | penguin-security | `penguin-security-v*` | `publish-python-security.yml` | 🔜 Pending first publish |
+| 19 | python-rpc | PyPI | penguin-rpc | `penguin-rpc-v*` | `publish-python-rpc` | 🔜 Pending first publish |
+| 21 | go-common | GitHub (go get) | github.com/.../go-common | `v*` | `validate-go-common` | ✅ Configured |
+| 22 | go-h3 | GitHub (go get) | github.com/.../go-h3 | `v*` | `validate-go-common` | ✅ Configured |
+| 23 | go-aaa | GitHub (go get) | github.com/.../go-aaa | `go-aaa-v*` | `validate-go-aaa` | ✅ Configured |
+| 24 | go-rpc | GitHub (go get) | github.com/.../go-rpc | `go-rpc-v*` | `validate-go-rpc` | 🔜 Pending first publish |
+| 25 | go-logging | GitHub (go get) | github.com/.../go-logging | `go-logging-v*` | `validate-go-split` | 🔜 Pending first publish |
+| 26 | go-numa | GitHub (go get) | github.com/.../go-numa | `go-numa-v*` | `validate-go-split` | 🔜 Pending first publish |
+| 27 | go-xdp | GitHub (go get) | github.com/.../go-xdp | `go-xdp-v*` | `validate-go-split` | 🔜 Pending first publish |
+| 28 | go-dal | GitHub (go get) | github.com/.../go-dal | `go-dal-v*` | `validate-go-split` | 🔜 Pending first publish |
+| 29 | flutter_libs | pub.dev | flutter_libs | `flutter-libs-v*` | `publish-flutter-libs` | ✅ Configured (dry-run) |
+| 30 | rust-rpc (penguin-rpc) | crates.io | penguin-rpc | `rust-rpc-v*` | `publish-rust-rpc` | 🔜 Pending first publish |
+| 31 | rust-rpc (penguin-h3-tower) | crates.io | penguin-h3-tower | `rust-rpc-v*` | `publish-rust-rpc` | 🔜 Pending first publish |
 
 **Licensing:** every package in this table ships under **MIT** except the pRPC packages
 (`python-rpc`, `go-rpc`, `rust-rpc`), which are **Apache-2.0**. The root `LICENSE` (MIT) is
@@ -150,7 +149,6 @@ GitHub UI: **Actions → Publish Packages → Run workflow → Select package**
 - `penguin-dal` (python-dal)
 - `penguin-email` (python-email)
 - `penguin-limiter` (python-limiter)
-- `penguin-pytest` (python-pytest)
 - `penguin-crypto` (python-crypto) ← **NEW**
 - `penguin-security` (python-security) ← **NEW**
 - `penguin-rpc` (python-rpc, Apache-2.0)
@@ -258,6 +256,8 @@ gh workflow run publish.yml -f package=python-utils
 ## Sunset Packages
 
 **penguin-http** (removed Aug 2026): Never published to PyPI. Deprecated for duplication and Flask-first design. Compatibility shim in `penguin-libs._compat` removed.
+
+**penguin-pytest** (removed Aug 2026): Never published to PyPI; zero consumers. Shared semantic test fixtures now live per-repo.
 
 ---
 
