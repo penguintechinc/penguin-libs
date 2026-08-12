@@ -7,10 +7,6 @@ for new projects.
 
 Packages:
 - penguin-crypto: Cryptographic utilities
-- penguin-flask: Flask utilities
-- penguin-grpc: gRPC utilities
-- penguin-h3: HTTP/3 QUIC utilities
-- penguin-http: HTTP utilities
 - penguin-pydantic: Pydantic utilities
 - penguin-security: Security utilities
 - penguin-validation: Validation utilities

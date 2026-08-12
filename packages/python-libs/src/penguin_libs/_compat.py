@@ -8,7 +8,6 @@ _PACKAGES = {}
 _package_specs = [
     ("penguin_crypto", "penguin_libs.crypto"),
     ("penguin_security", "penguin_libs.security"),
-    ("penguin_http", "penguin_libs.http"),
 ]
 
 for pkg_name, legacy_name in _package_specs:
@@ -34,15 +33,9 @@ __all__ = list(_PACKAGES.keys())
 _sub_aliases = [
     ("penguin_security.validation", "penguin_libs.validation"),
     ("penguin_security.pydantic", "penguin_libs.pydantic"),
-    ("penguin_http.flask", "penguin_libs.flask"),
-    ("penguin_http.grpc", "penguin_libs.grpc"),
-    ("penguin_http.h3", "penguin_libs.h3"),
     # Also alias old package names for backwards compatibility
     ("penguin_security.validation", "penguin_validation"),
     ("penguin_security.pydantic", "penguin_pydantic"),
-    ("penguin_http.flask", "penguin_flask"),
-    ("penguin_http.grpc", "penguin_grpc"),
-    ("penguin_http.h3", "penguin_h3"),
 ]
 for new_name, alias in _sub_aliases:
     if new_name in sys.modules and alias not in sys.modules:

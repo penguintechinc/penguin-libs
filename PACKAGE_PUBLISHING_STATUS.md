@@ -30,8 +30,7 @@ All 32 published artifacts in the penguin-libs monorepo are configured for autom
 | 17 | python-limiter | PyPI | penguin-limiter | `penguin-limiter-v*` | `publish-python-limiter` | ✅ Configured |
 | 18 | python-crypto | PyPI | penguin-crypto | `penguin-crypto-v*` | `publish-python-crypto.yml` | 🔜 Pending first publish |
 | 19 | python-security | PyPI | penguin-security | `penguin-security-v*` | `publish-python-security.yml` | 🔜 Pending first publish |
-| 20 | python-http | PyPI | penguin-http | `penguin-http-v*` | `publish-python-http.yml` | 🔜 Pending first publish |
-| 21 | python-rpc | PyPI | penguin-rpc | `penguin-rpc-v*` | `publish-python-rpc` | 🔜 Pending first publish |
+| 20 | python-rpc | PyPI | penguin-rpc | `penguin-rpc-v*` | `publish-python-rpc` | 🔜 Pending first publish |
 | 22 | go-common | GitHub (go get) | github.com/.../go-common | `v*` | `validate-go-common` | ✅ Configured |
 | 23 | go-h3 | GitHub (go get) | github.com/.../go-h3 | `v*` | `validate-go-common` | ✅ Configured |
 | 24 | go-aaa | GitHub (go get) | github.com/.../go-aaa | `go-aaa-v*` | `validate-go-aaa` | ✅ Configured |
@@ -154,7 +153,6 @@ GitHub UI: **Actions → Publish Packages → Run workflow → Select package**
 - `penguin-pytest` (python-pytest)
 - `penguin-crypto` (python-crypto) ← **NEW**
 - `penguin-security` (python-security) ← **NEW**
-- `penguin-http` (python-http) ← **NEW**
 - `penguin-rpc` (python-rpc, Apache-2.0)
 
 ### npm (public registry)
@@ -257,8 +255,12 @@ gh workflow run publish.yml -f package=python-utils
 - **README**: [README.md](./README.md)
 - **Workflow**: [.github/workflows/publish.yml](./.github/workflows/publish.yml)
 
+## Sunset Packages
+
+**penguin-http** (removed Aug 2026): Never published to PyPI. Deprecated for duplication and Flask-first design. Compatibility shim in `penguin-libs._compat` removed.
+
 ---
 
 **Status**: ✅ All packages ready for publishing
-**Last Updated**: 2026-02-07
+**Last Updated**: 2026-08-11
 **Updated By**: Claude Code

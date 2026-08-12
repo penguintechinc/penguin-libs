@@ -15,7 +15,6 @@ Shared libraries for Penguin Tech applications across all languages.
 | [penguin-crypto](./packages/python-crypto) | 0.1.0 | — | Cryptographic primitives and key handling |
 | [penguin-dal](./packages/python-dal) | 0.3.0 | 98% | Database access layer — PyDAL-style API over SQLAlchemy, plus storage/cache/stream/document backends |
 | [penguin-email](./packages/python-email) | 0.1.0 | — | SMTP delivery helpers |
-| [penguin-http](./packages/python-http) | 0.1.0 | — | HTTP client utilities |
 | [penguin-libs](./packages/python-libs) | 0.3.0 | 98% | Transition meta-package — re-exports the split packages |
 | [penguin-licensing](./packages/python-licensing) | 0.1.0 | 100% | PenguinTech License Server integration |
 | [penguin-limiter](./packages/python-limiter) | 0.1.0 | — | Rate limiting middleware (HTTP + gRPC) |
@@ -257,6 +256,10 @@ penguin-libs/
 ├── package.json             # Workspace root
 └── README.md
 ```
+
+## Sunset Packages
+
+**penguin-http** (removed Aug 2026): Never published to PyPI; replaced by domain-specific HTTP packages. Compatibility shim in `penguin-libs._compat` removed.
 
 ## Contributing
 
