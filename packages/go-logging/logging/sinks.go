@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -149,7 +150,8 @@ type SyslogSink struct {
 
 // NewSyslogSink dials the given host:port over UDP and returns a SyslogSink.
 func NewSyslogSink(hostPort string) (*SyslogSink, error) {
-	conn, err := net.Dial("udp", hostPort)
+	dialer := &net.Dialer{}
+	conn, err := dialer.DialContext(context.Background(), "udp", hostPort)
 	if err != nil {
 		return nil, fmt.Errorf("dial syslog %s: %w", hostPort, err)
 	}

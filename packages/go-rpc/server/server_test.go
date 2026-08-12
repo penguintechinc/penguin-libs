@@ -81,7 +81,9 @@ func TestServer_Mux(t *testing.T) {
 	if srv.Mux() == nil {
 		t.Fatal("expected non-nil mux")
 	}
-	if srv.Mux() != srv.Mux() {
+	mux1 := srv.Mux()
+	mux2 := srv.Mux()
+	if mux1 != mux2 {
 		t.Error("expected Mux() to return the same instance across calls")
 	}
 }
@@ -194,8 +196,9 @@ func TestServer_ForcesTLS13_RejectsTLS12Client(t *testing.T) {
 	addr := waitForAddr(t, srv, "h2")
 	pool := certPoolFromTLSConfig(t, tlsCfg)
 
-	clientCfg := &tls.Config{RootCAs: pool, MaxVersion: tls.VersionTLS12}
-	conn, dialErr := tls.Dial("tcp", addr, clientCfg)
+	clientCfg := &tls.Config{RootCAs: pool, MaxVersion: tls.VersionTLS12} //nolint:gosec // TEST ONLY: intentionally using TLS1.2 to verify server rejects it
+	dialer := &tls.Dialer{Config: clientCfg}
+	conn, dialErr := dialer.DialContext(context.Background(), "tcp", addr)
 	if dialErr == nil {
 		_ = conn.Close()
 		t.Fatal("expected TLS handshake to fail for a TLS1.2-only client against a TLS1.3-only server, got success")
@@ -454,7 +457,8 @@ func TestStart_H3TLSMissing_ClosesH2Listener(t *testing.T) {
 
 	// The H2 listener must have been released — rebinding the same address
 	// should succeed immediately.
-	ln, err := net.Listen("tcp", h2Addr)
+	lc := &net.ListenConfig{}
+	ln, err := lc.Listen(context.Background(), "tcp", h2Addr)
 	if err != nil {
 		t.Fatalf("H2 listener leaked, could not rebind %s: %v", h2Addr, err)
 	}
@@ -464,7 +468,8 @@ func TestStart_H3TLSMissing_ClosesH2Listener(t *testing.T) {
 // TestStart_H2ListenError exercises the H2 net.Listen failure path: binding
 // to an address already in use must return an error without hanging.
 func TestStart_H2ListenError(t *testing.T) {
-	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	lc := &net.ListenConfig{}
+	occupied, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("occupying a port: %v", err)
 	}
@@ -498,7 +503,8 @@ func TestStart_H2ListenError(t *testing.T) {
 // binding to a UDP address already in use must return an error without
 // hanging.
 func TestStart_H3ListenError(t *testing.T) {
-	occupied, err := net.ListenPacket("udp", "127.0.0.1:0")
+	lc := &net.ListenConfig{}
+	occupied, err := lc.ListenPacket(context.Background(), "udp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("occupying a UDP port: %v", err)
 	}

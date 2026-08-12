@@ -410,6 +410,9 @@ func TestMockStorageStore(t *testing.T) {
 
 	// Test Exists
 	exists, err := ms.Exists(ctx, "key1")
+	if err != nil {
+		t.Errorf("Exists() error = %v", err)
+	}
 	if !exists {
 		t.Errorf("Exists() = false, want true")
 	}
@@ -427,7 +430,7 @@ func TestMockStorageStore(t *testing.T) {
 	}
 
 	// Test GetURL
-	ms.Put(ctx, "key2", []byte("value2"))
+	_ = ms.Put(ctx, "key2", []byte("value2")) // Ignore error in test setup
 	url, err := ms.GetURL(ctx, "key2", 1*time.Hour)
 	if err != nil || url == "" {
 		t.Errorf("GetURL() error = %v", err)
@@ -502,9 +505,9 @@ func TestMockStorageStoreList(t *testing.T) {
 	ms := newMockStorageStore()
 	ctx := context.Background()
 
-	ms.Put(ctx, "file1.txt", []byte("data1"))
-	ms.Put(ctx, "file2.txt", []byte("data2"))
-	ms.Put(ctx, "file3.txt", []byte("data3"))
+	_ = ms.Put(ctx, "file1.txt", []byte("data1")) // Ignore error in test setup
+	_ = ms.Put(ctx, "file2.txt", []byte("data2")) // Ignore error in test setup
+	_ = ms.Put(ctx, "file3.txt", []byte("data3")) // Ignore error in test setup
 
 	list, err := ms.List(ctx, "")
 	if err != nil || len(list) != 3 {
@@ -519,7 +522,7 @@ func TestNFSStoreWithFile(t *testing.T) {
 
 	// Create a file instead of dir
 	testFile := filepath.Join(tmpDir, "notadir.txt")
-	if err := os.WriteFile(testFile, []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte("content"), 0600); err != nil {
 		t.Fatalf("Setup error: %v", err)
 	}
 

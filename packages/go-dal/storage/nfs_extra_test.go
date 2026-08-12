@@ -16,7 +16,7 @@ func TestNFSStorePutMkdirAllError(t *testing.T) {
 	// Create a file named "blockdir" — attempting MkdirAll("blockdir/sub")
 	// will fail because blockdir is a file, not a directory.
 	blockFile := filepath.Join(tmpDir, "blockdir")
-	if err := os.WriteFile(blockFile, []byte("block"), 0644); err != nil {
+	if err := os.WriteFile(blockFile, []byte("block"), 0600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
 
@@ -51,8 +51,10 @@ func TestNFSStoreGetReadError(t *testing.T) {
 		t.Fatalf("Put() error = %v", err)
 	}
 	full := filepath.Join(tmpDir, "noperm.txt")
-	os.Chmod(full, 0000) //nolint:errcheck
-	defer os.Chmod(full, 0644)
+	if err := os.Chmod(full, 0000); err != nil {
+		t.Fatalf("setup chmod: %v", err)
+	}
+	defer os.Chmod(full, 0600) //nolint:errcheck // cleanup: best-effort restore permissions
 
 	if os.Getuid() == 0 {
 		t.Skip("running as root; permission tests skipped")
@@ -82,15 +84,21 @@ func TestNFSStoreDeleteError(t *testing.T) {
 
 	// Create a directory that cannot be deleted directly (non-empty).
 	subDir := filepath.Join(tmpDir, "subdir")
-	if err := os.MkdirAll(subDir, 0755); err != nil {
+	if err := os.MkdirAll(subDir, 0700); err != nil {
 		t.Fatalf("setup mkdir: %v", err)
 	}
 	// Create a file inside so the dir is not empty.
-	os.WriteFile(filepath.Join(subDir, "f.txt"), []byte("x"), 0644) //nolint:errcheck
+	if err := os.WriteFile(filepath.Join(subDir, "f.txt"), []byte("x"), 0600); err != nil {
+		t.Fatalf("setup write: %v", err)
+	}
 
 	// Make the parent tmpDir read-only so os.Remove fails with EACCES.
-	os.Chmod(tmpDir, 0500) //nolint:errcheck
-	defer os.Chmod(tmpDir, 0755)
+	//nolint:gosec // G302: intentionally restricting directory permissions to 0500 (read-only) for testing permission errors
+	if err := os.Chmod(tmpDir, 0500); err != nil {
+		t.Fatalf("setup chmod: %v", err)
+	}
+	//nolint:gosec // G302: restoring directory permissions to 0700 (owner rwx); directories need execute bit
+	defer os.Chmod(tmpDir, 0700) //nolint:errcheck // cleanup: best-effort restore permissions
 
 	// Attempt to delete a path inside the read-only directory.
 	err = store.Delete(ctx, "subdir")
@@ -117,10 +125,17 @@ func TestNFSStoreExistsStatError(t *testing.T) {
 
 	// Create a file, then make the parent directory unreadable.
 	subDir := filepath.Join(tmpDir, "restricted")
-	os.MkdirAll(subDir, 0755) //nolint:errcheck
-	os.WriteFile(filepath.Join(subDir, "f.txt"), []byte("x"), 0644) //nolint:errcheck
-	os.Chmod(subDir, 0000) //nolint:errcheck
-	defer os.Chmod(subDir, 0755)
+	if err := os.MkdirAll(subDir, 0700); err != nil {
+		t.Fatalf("setup mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(subDir, "f.txt"), []byte("x"), 0600); err != nil {
+		t.Fatalf("setup write: %v", err)
+	}
+	if err := os.Chmod(subDir, 0000); err != nil {
+		t.Fatalf("setup chmod: %v", err)
+	}
+	//nolint:gosec // G302: restoring directory permissions to 0700 (owner rwx); directories need execute bit
+	defer os.Chmod(subDir, 0700) //nolint:errcheck // cleanup: best-effort restore permissions
 
 	// Stat a file inside the unreadable dir — should get EACCES.
 	exists, err := store.Exists(ctx, "restricted/f.txt")
@@ -147,10 +162,17 @@ func TestNFSStoreListWalkError(t *testing.T) {
 
 	// Create a subdir with a file, then make subdir unreadable.
 	subDir := filepath.Join(tmpDir, "locked")
-	os.MkdirAll(subDir, 0755) //nolint:errcheck
-	os.WriteFile(filepath.Join(subDir, "f.txt"), []byte("x"), 0644) //nolint:errcheck
-	os.Chmod(subDir, 0000) //nolint:errcheck
-	defer os.Chmod(subDir, 0755)
+	if err := os.MkdirAll(subDir, 0700); err != nil {
+		t.Fatalf("setup mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(subDir, "f.txt"), []byte("x"), 0600); err != nil {
+		t.Fatalf("setup write: %v", err)
+	}
+	if err := os.Chmod(subDir, 0000); err != nil {
+		t.Fatalf("setup chmod: %v", err)
+	}
+	//nolint:gosec // G302: restoring directory permissions to 0700 (owner rwx); directories need execute bit
+	defer os.Chmod(subDir, 0700) //nolint:errcheck // cleanup: best-effort restore permissions
 
 	// Walk over the locked dir — should get EACCES during walk.
 	_, err = store.List(ctx, "locked")

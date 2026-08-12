@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net"
@@ -62,7 +63,7 @@ func TestFileSink_WritesJSONToFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileSink: %v", err)
 	}
-	defer sink.Close()
+	defer func() { _ = sink.Close() }() // Ignore error in test cleanup
 
 	event := map[string]interface{}{"level": "info", "msg": "file test"}
 	if err := sink.Write(event); err != nil {
@@ -72,6 +73,7 @@ func TestFileSink_WritesJSONToFile(t *testing.T) {
 		t.Fatalf("FileSink.Flush: %v", err)
 	}
 
+	//nolint:gosec // G304: path is from t.TempDir(), safe test-only operation
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("reading log file: %v", err)
@@ -96,7 +98,7 @@ func TestFileSink_RotatesWhenMaxSizeExceeded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileSink: %v", err)
 	}
-	defer sink.Close()
+	defer func() { _ = sink.Close() }() // Ignore error in test cleanup
 
 	// Each event is roughly 60 bytes; 20,000 events ≈ 1.2 MiB, exceeding the limit.
 	payload := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" // 40 bytes
@@ -131,6 +133,7 @@ func TestFileSink_CloseFlushesAndClosesFile(t *testing.T) {
 	}
 
 	// File must be readable after Close.
+	//nolint:gosec // G304: path is from t.TempDir(), safe test-only operation
 	if _, err := os.ReadFile(path); err != nil {
 		t.Errorf("ReadFile after Close: %v", err)
 	}
@@ -140,11 +143,12 @@ func TestFileSink_CloseFlushesAndClosesFile(t *testing.T) {
 
 func TestSyslogSink_WriteAndClose(t *testing.T) {
 	// Listen on a UDP port so the dial and send succeed.
-	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	lc := &net.ListenConfig{}
+	pc, err := lc.ListenPacket(context.Background(), "udp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("create UDP listener: %v", err)
 	}
-	defer pc.Close()
+	defer func() { _ = pc.Close() }() // Ignore error in test cleanup
 
 	sink, err := NewSyslogSink(pc.LocalAddr().String())
 	if err != nil {

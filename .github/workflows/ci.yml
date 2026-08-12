@@ -18,15 +18,34 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - run: npm ci
       - name: Security
         run: npm audit --omit=dev
-      - run: npm run build -w @penguintechinc/react-libs
+      # react-libs imports its sibling workspace packages via their published
+      # entry points, so those must be built FIRST -- otherwise tsc reports
+      # TS2307 "Cannot find module" and vite reports "Failed to resolve entry
+      # for package".
+      #
+      # These are listed in dependency order deliberately. `npm run build
+      # --workspaces` does NOT topologically sort, so it can build react-libs
+      # before its own dependencies; whether it happens to work depends on the
+      # npm version's ordering, which is why this passed locally on npm 11 and
+      # failed on the npm 10 that ships with Node 20.
+      # react-hooks depends on react-form-builder, so it must come after it.
+      - name: Build workspace dependencies, then react-libs
+        run: |
+          npm run build \
+            -w @penguintechinc/react-console-version \
+            -w @penguintechinc/react-form-builder \
+            -w @penguintechinc/react-login \
+            -w @penguintechinc/react-sidebar \
+            -w @penguintechinc/react-hooks \
+            -w @penguintechinc/react-libs
       - run: npm run typecheck -w @penguintechinc/react-libs
       - run: npm run test -w @penguintechinc/react-libs
 
@@ -38,11 +57,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: 20
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -128,17 +147,31 @@ jobs:
         working-directory: packages/go-h3
       - run: go test -race ./...
         working-directory: packages/go-h3
-      - name: Lint - go-common
-        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
+      - name: Lint - go-h3
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
+          version: v2.12.2
+          working-directory: packages/go-h3
+      - name: Security - govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          cd packages/go-h3 && govulncheck ./...
+      - name: Security - gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+          cd packages/go-h3 && gosec -quiet ./...
+      - name: Lint - go-common
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
           working-directory: packages/go-common
       - name: Security - govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.3
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           cd packages/go-common && govulncheck ./...
       - name: Security - gosec
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.0
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
           cd packages/go-common && gosec -quiet ./...
 
   build-go-aaa:
@@ -160,16 +193,17 @@ jobs:
       - name: Test
         run: cd packages/go-aaa && go test -race -v ./...
       - name: Lint
-        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
+          version: v2.12.2
           working-directory: packages/go-aaa
       - name: Security - govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.3
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           cd packages/go-aaa && govulncheck ./...
       - name: Security - gosec
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.0
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
           cd packages/go-aaa && gosec -quiet ./...
 
   build-react-testutils:
@@ -180,11 +214,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build (typecheck)
@@ -262,8 +296,9 @@ jobs:
           echo "Total coverage: ${COVERAGE}%"
           awk -v cov="$COVERAGE" 'BEGIN { if (cov+0 < 90.0) { exit 1 } }' || { echo "FAIL: coverage ${COVERAGE}% is below the 90% threshold"; exit 1; }
       - name: Lint
-        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
+          version: v2.12.2
           working-directory: packages/go-rpc
       - name: Security - govulncheck
         run: |
@@ -272,7 +307,135 @@ jobs:
       - name: Security - gosec
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
-          cd packages/go-rpc && gosec -quiet ./...
+          cd packages/go-rpc && gosec -quiet -exclude-dir=gen -exclude-dir=examples ./...
+
+  build-go-dal:
+    name: Build & Test Go DAL
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/go-dal/') }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version: '1.25'
+          cache: false
+      - name: Build
+        run: cd packages/go-dal && go build ./...
+      - name: Vet
+        run: cd packages/go-dal && go vet ./...
+      - name: Test
+        run: cd packages/go-dal && go test -race -v ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+          working-directory: packages/go-dal
+      - name: Security - govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          cd packages/go-dal && govulncheck ./...
+      - name: Security - gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+          cd packages/go-dal && gosec -quiet -exclude-dir=gen ./...
+
+  build-go-logging:
+    name: Build & Test Go Logging
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/go-logging/') }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version: '1.25'
+          cache: false
+      - name: Build
+        run: cd packages/go-logging && go build ./...
+      - name: Vet
+        run: cd packages/go-logging && go vet ./...
+      - name: Test
+        run: cd packages/go-logging && go test -race -v ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+          working-directory: packages/go-logging
+      - name: Security - govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          cd packages/go-logging && govulncheck ./...
+      - name: Security - gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+          cd packages/go-logging && gosec -quiet ./...
+
+  build-go-numa:
+    name: Build & Test Go NUMA
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/go-numa/') }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version: '1.25'
+          cache: false
+      - name: Build
+        run: cd packages/go-numa && go build ./...
+      - name: Vet
+        run: cd packages/go-numa && go vet ./...
+      - name: Test
+        run: cd packages/go-numa && go test -race -v ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+          working-directory: packages/go-numa
+      - name: Security - govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          cd packages/go-numa && govulncheck ./...
+      - name: Security - gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+          cd packages/go-numa && gosec -quiet -exclude-dir=gen ./...
+
+  build-go-xdp:
+    name: Build & Test Go XDP
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/go-xdp/') }}
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version: '1.25'
+          cache: false
+      - name: Build
+        run: cd packages/go-xdp && go build ./...
+      - name: Vet
+        run: cd packages/go-xdp && go vet ./...
+      - name: Test
+        run: cd packages/go-xdp && go test -race -v ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+          working-directory: packages/go-xdp
+      - name: Security - govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          cd packages/go-xdp && govulncheck ./...
+      - name: Security - gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+          cd packages/go-xdp && gosec -quiet -exclude-dir=gen ./...
 
   build-python-rpc:
     name: Build & Test Python RPC
@@ -334,11 +497,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -358,11 +521,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -382,11 +545,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -406,11 +569,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -430,15 +593,18 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set, and it is deliberately left unset here; the package-manager-cache input zizmor keys on only exists in v5+.
+      # Do not add `cache: false` -- action inputs are coerced to strings, so setup-node reads it as the package-manager name "false" and fails with `Caching for 'false' is not supported`.
       - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
+      # react-hooks' tests import @penguintechinc/react-form-builder (a
+      # devDependency), so it must be built first or vite fails to resolve its
+      # entry point.
       - name: Build
-        run: npm run build -w @penguintechinc/react-hooks
+        run: npm run build -w @penguintechinc/react-form-builder -w @penguintechinc/react-hooks
       - name: Typecheck
         run: npm run typecheck -w @penguintechinc/react-hooks
       - name: Test

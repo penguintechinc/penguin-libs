@@ -166,7 +166,11 @@ func (r *RedisCache) GetMany(ctx context.Context, keys []string) (map[string][]b
 
 	result := make(map[string][]byte)
 	for i, val := range vals {
+		if i >= len(keys) {
+			break // Defensive: Redis returned more values than requested keys
+		}
 		if val != nil {
+			//nolint:gosec // G602: bounds check at line 169 guards against slice index out of range
 			result[keys[i]] = []byte(val.(string))
 		}
 	}

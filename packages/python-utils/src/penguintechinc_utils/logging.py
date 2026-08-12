@@ -220,7 +220,7 @@ def configure_logging_from_env() -> list["Sink"]:
 
     from penguintechinc_utils.sinks import CloudWatchSink, GCPCloudLoggingSink, KafkaSink
 
-    sinks: list["Sink"] = []
+    sinks: list[Sink] = []
 
     cw_group = os.environ.get("LOG_CLOUDWATCH_GROUP")
     cw_stream = os.environ.get("LOG_CLOUDWATCH_STREAM")

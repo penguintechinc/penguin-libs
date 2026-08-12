@@ -1,17 +1,35 @@
+version: "2"
 linters:
   enable:
-    - govet
-    - staticcheck
-    - errcheck
-    - gosimple
-    - ineffassign
-    - unused
-    - gosec
     - bodyclose
-    - noctx
     - exhaustive
-linters-settings:
-  exhaustive:
-    default-signifies-exhaustive: true
-run:
-  timeout: 5m
+    - gosec
+    - noctx
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
+issues:
+  # Report every occurrence. Defaults (max-same-issues: 3,
+  # max-issues-per-linter: 50) truncate the list, which turns fixing lint
+  # into repeated rounds where each pass reveals another three.
+  max-issues-per-linter: 0
+  max-same-issues: 0

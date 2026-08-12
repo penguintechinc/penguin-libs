@@ -124,7 +124,7 @@ class FormBuilderField extends StatelessWidget {
 
   Widget _buildDropdown() {
     return DropdownButtonFormField<String>(
-      value: value?.toString(),
+      initialValue: value?.toString(),
       decoration: _inputDecoration,
       dropdownColor: ElderColors.slate800,
       style: const TextStyle(color: ElderColors.white),
@@ -162,27 +162,32 @@ class FormBuilderField extends StatelessWidget {
     );
   }
 
+  /// Builds the radio options for [FieldType.radio].
+  ///
+  /// A [RadioGroup] ancestor owns the selected value and the change callback;
+  /// each [RadioListTile] declares only its own [RadioListTile.value].
   Widget _buildRadioGroup() {
-    return Column(
-      children: config.options?.map((opt) {
-        return RadioListTile<String>(
-          title: Text(
-            opt.label,
-            style: const TextStyle(
-              color: ElderColors.slate300,
-              fontSize: 14,
+    return RadioGroup<String>(
+      groupValue: value?.toString(),
+      onChanged: (v) => onChanged(v),
+      child: Column(
+        children: config.options?.map((opt) {
+          return RadioListTile<String>(
+            title: Text(
+              opt.label,
+              style: const TextStyle(
+                color: ElderColors.slate300,
+                fontSize: 14,
+              ),
             ),
-          ),
-          value: opt.value,
-          groupValue: value?.toString(),
-          activeColor: ElderColors.amber500,
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          onChanged: config.disabled
-              ? null
-              : (v) => onChanged(v),
-        );
-      }).toList() ?? [],
+            value: opt.value,
+            activeColor: ElderColors.amber500,
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            enabled: !config.disabled,
+          );
+        }).toList() ?? [],
+      ),
     );
   }
 

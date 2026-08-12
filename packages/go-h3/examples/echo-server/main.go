@@ -44,7 +44,7 @@ func main() {
 			msg = "hello"
 		}
 		w.Header().Set("Content-Type", "text/plain")
-		_, _ = fmt.Fprintf(w, "echo: %s (protocol: %s)\n", html.EscapeString(msg), r.Proto)
+		_, _ = fmt.Fprintf(w, "echo: %s (protocol: %s)\n", html.EscapeString(msg), r.Proto) // #nosec G705 - input already escaped via html.EscapeString
 	})
 
 	// Health check.

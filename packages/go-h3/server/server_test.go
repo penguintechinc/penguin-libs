@@ -19,7 +19,9 @@ func waitForServerReady(getAddr func() string, deadline time.Time) bool {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		conn, err := net.DialTimeout("tcp", addr, 50*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+		cancel()
 		if err == nil {
 			_ = conn.Close()
 			return true
@@ -119,7 +121,9 @@ func TestServer_ListenAddr_AfterStart(t *testing.T) {
 	}
 
 	// Verify the address is actually listening by connecting to it
-	conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+	dialCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	conn, err := (&net.Dialer{}).DialContext(dialCtx, "tcp", addr)
+	cancel()
 	if err != nil {
 		t.Errorf("could not connect to %s: %v", addr, err)
 	} else {
@@ -254,7 +258,9 @@ func TestServer_H3Enabled_RequiresTLS(t *testing.T) {
 // listener would occupy.
 func freePort(t *testing.T) string {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	cancel()
 	if err != nil {
 		t.Fatalf("reserving probe port: %v", err)
 	}
@@ -302,7 +308,9 @@ func TestServer_Start_H3WithoutTLS_LeavesNoBoundH2Port(t *testing.T) {
 	}
 
 	// Re-binding the port proves no listener survived the error path.
-	ln, err := net.Listen("tcp", addr)
+	rebindCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ln, err := (&net.ListenConfig{}).Listen(rebindCtx, "tcp", addr)
+	cancel()
 	if err != nil {
 		t.Fatalf("port %s still bound after failed Start (listener leak): %v", addr, err)
 	}
@@ -313,7 +321,9 @@ func TestServer_Start_H3WithoutTLS_LeavesNoBoundH2Port(t *testing.T) {
 
 // A failed bind must surface as an error and leave no server state behind.
 func TestServer_Start_H2BindFailure_ReturnsErrorAndCleansUp(t *testing.T) {
-	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	occupyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	occupied, err := (&net.ListenConfig{}).Listen(occupyCtx, "tcp", "127.0.0.1:0")
+	cancel()
 	if err != nil {
 		t.Fatalf("creating occupying listener: %v", err)
 	}

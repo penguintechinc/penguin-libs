@@ -336,7 +336,6 @@ func TestMockStreamProducerClose(t *testing.T) {
 type MockStreamConsumer struct {
 	messages []dal.StreamMessage
 	index    int
-	groupID  string
 }
 
 func NewMockStreamConsumer() *MockStreamConsumer {
@@ -529,7 +528,7 @@ func TestMockStreamConsumerIteration(t *testing.T) {
 	mc := NewMockStreamConsumer()
 	ctx := context.Background()
 
-	mc.Subscribe([]string{"events"})
+	_ = mc.Subscribe([]string{"events"}) // Ignore error in test setup
 
 	// Add 5 messages
 	for i := 0; i < 5; i++ {

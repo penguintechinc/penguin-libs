@@ -122,7 +122,8 @@ func (s *Server) Start(ctx context.Context) error {
 			s.h2.TLSConfig = s.cfg.TLSConfig.Clone()
 		}
 
-		ln, err := net.Listen("tcp", s.cfg.H2Addr)
+		lc := &net.ListenConfig{}
+		ln, err := lc.Listen(ctx, "tcp", s.cfg.H2Addr)
 		if err != nil {
 			s.mu.Unlock()
 			return fmt.Errorf("h2 listen: %w", err)
@@ -160,7 +161,8 @@ func (s *Server) Start(ctx context.Context) error {
 			QUICConfig: newQUICConfig(),
 		}
 
-		pconn, err := net.ListenPacket("udp", s.cfg.H3Addr)
+		lc := &net.ListenConfig{}
+		pconn, err := lc.ListenPacket(ctx, "udp", s.cfg.H3Addr)
 		if err != nil {
 			s.mu.Unlock()
 			return s.abortStartup(&wg, fmt.Errorf("h3 listen: %w", err))

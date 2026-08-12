@@ -34,7 +34,7 @@ func TestAlignedLargeBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Aligned(%d): %v", size, err)
 	}
-	defer buffer.Free(buf)
+	defer func() { _ = buffer.Free(buf) }() // Ignore error in test cleanup
 	// Write to verify it's usable
 	buf[0] = 0xAB
 	buf[size-1] = 0xCD
