@@ -18,7 +18,6 @@ Shared libraries for Penguin Tech applications across all languages.
 | [penguin-libs](./packages/python-libs) | 0.3.0 | 98% | Transition meta-package — re-exports the split packages |
 | [penguin-licensing](./packages/python-licensing) | 0.1.0 | 100% | PenguinTech License Server integration |
 | [penguin-limiter](./packages/python-limiter) | 0.1.0 | — | Rate limiting middleware (HTTP + gRPC) |
-| [penguin-pytest](./packages/python-pytest) | 0.1.0 | — | Shared pytest fixtures and helpers |
 | [penguin-sal](./packages/python-secrets) | 0.2.1 | 100% | Secrets and authentication library |
 | [penguin-security](./packages/python-security) | 0.1.0 | — | Security primitives and hardening helpers |
 | [penguin-utils](./packages/python-utils) | 0.2.0 | 99% | Sanitized logging and Flask utilities |
@@ -260,6 +259,8 @@ penguin-libs/
 ## Sunset Packages
 
 **penguin-http** (removed Aug 2026): Never published to PyPI; replaced by domain-specific HTTP packages. Compatibility shim in `penguin-libs._compat` removed.
+
+**penguin-pytest** (removed Aug 2026): Never published to PyPI; zero consumers. Shared semantic test fixtures (users/posts schema with alice/bob/charlie) now live per-repo, next to tests that depend on them.
 
 ## Contributing
 

@@ -5,9 +5,9 @@ Generated: 2026-04-23
 
 **Current Status: BELOW STANDARD** ❌
 
-- **Total Packages**: 34 (9 established, 13 new splits, 1 shim)
+- **Total Packages**: 33 (9 established, 13 new splits, 1 shim)
 - **Passing**: 2 packages
-- **Failing**: 7 established packages (dependency/config issues)
+- **Failing**: 6 established packages (dependency/config issues)
 - **Zero Coverage**: 13 new split packages (blocker)
 
 Project requires **90%+ test coverage**. Current state has critical gaps in both established and new packages.
@@ -28,7 +28,6 @@ Project requires **90%+ test coverage**. Current state has critical gaps in both
 | python-email | ❌ FAIL | 75/77 (97%) | 2 Gmail transport edge case failures |
 | python-limiter | ❌ FAIL | 102/105 (97%) | 3 gRPC middleware extraction failures |
 | python-secrets | ❌ FAIL | 0% | Collection error - Vault import issue |
-| python-pytest | ❌ FAIL | 0% | Collection error - SQLAlchemy import in plugin |
 
 ### Python Packages (New Splits - NO TESTS)
 
@@ -98,29 +97,24 @@ Project requires **90%+ test coverage**. Current state has critical gaps in both
    - Impact: Core secrets package untestable
    - Fix: Debug import path, check for missing optional dependencies
 
-5. **python-pytest import error**
-   - Error: SQLAlchemy import in pytest plugin
-   - Impact: Testing utilities broken
-   - Fix: Add SQLAlchemy to optional dependencies
-
-6. **go-aaa go.mod out of sync**
+5. **go-aaa go.mod out of sync**
    - Error: `go.mod` doesn't match actual dependencies
    - Impact: Go AAA package fails to test
    - Fix: Run `go mod tidy` in `packages/go-aaa/`
 
 ### High Priority Issues (Fix Next)
 
-7. **python-licensing Flask decorator failures** (10 failures)
+6. **python-licensing Flask decorator failures** (10 failures)
    - Error: `RuntimeError: Install Flask with the 'async' extra`
    - Impact: ~10% of licensing tests fail
    - Fix: Add `Flask[async]` to test requirements, or convert async decorators to sync
 
-8. **python-email transport failures** (2 failures)
+7. **python-email transport failures** (2 failures)
    - Error: Gmail token refresh edge cases
    - Impact: 97% coverage, but core functionality gaps
    - Fix: Review test expectations for expired token scenario
 
-9. **python-limiter gRPC failures** (3 failures)
+8. **python-limiter gRPC failures** (3 failures)
    - Error: IP extraction from gRPC peer metadata
    - Impact: 97% coverage, but core rate limiting functionality
    - Fix: Review gRPC test setup and peer string format
@@ -150,7 +144,7 @@ Project requires **90%+ test coverage**. Current state has critical gaps in both
 
 1. **Fix React workspace**: Install jsdom, run `npm run test` to unblock all React testing
 2. **Fix go-aaa**: Run `go mod tidy`, re-run tests
-3. **Fix python import issues**: Debug python-libs, python-dal, python-secrets, python-pytest collection errors
+3. **Fix python import issues**: Debug python-libs, python-dal, python-secrets collection errors
 4. **Fix python-licensing**: Add Flask[async] to dev requirements
 
 ### Short-term (Next Sprint)

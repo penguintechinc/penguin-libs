@@ -40,7 +40,6 @@ on:
       - 'go-xdp-v*'
       - 'go-numa-v*'
       - 'go-dal-v*'
-      - 'penguin-pytest-v*'
       - 'penguin-rpc-v*'
       - 'rust-rpc-v*'
       - 'go-rpc-v*'
@@ -67,7 +66,6 @@ on:
           - python-utils
           - python-aaa
           - python-dal
-          - python-pytest
           - python-email
           - python-limiter
           - flutter-libs
@@ -726,62 +724,6 @@ jobs:
           echo "**Package**: @penguintechinc/react-testutils" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: $(node -p "require('./package.json').version")" >> $GITHUB_STEP_SUMMARY
           echo "**Registry**: npm (public registry)" >> $GITHUB_STEP_SUMMARY
-
-  # ============================================
-  # Python pytest (penguin-pytest) - PyPI
-  # ============================================
-  publish-penguin-pytest:
-    name: Publish penguin-pytest
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    environment: pypi-pytest
-    if: |
-      github.event_name == 'workflow_dispatch' &&
-      (github.event.inputs.package == 'python-pytest' || github.event.inputs.package == 'all') ||
-      startsWith(github.ref, 'refs/tags/penguin-pytest-v') ||
-      startsWith(github.ref, 'refs/tags/v')
-
-    defaults:
-      run:
-        working-directory: packages/python-pytest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
-        with:
-          persist-credentials: false
-
-      - name: Setup Python
-        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
-        with:
-          python-version: '3.13'
-
-      - name: Install build tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install build twine
-
-      - name: Build package
-        run: python -m build
-
-      - name: Check package
-        run: twine check dist/*
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          packages-dir: packages/python-pytest/dist/
-
-      - name: Create release summary
-        run: |
-          VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
-          echo "## Published Package" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Package**: penguin-pytest" >> $GITHUB_STEP_SUMMARY
-          echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
   # Python Email (penguin-email) - PyPI
