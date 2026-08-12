@@ -59,7 +59,7 @@ jobs:
   build-python:
     name: Build & Test Python Packages
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/python-crypto/') || startsWith(github.ref, 'refs/heads/release/python-security/') || startsWith(github.ref, 'refs/heads/release/python-http/') || startsWith(github.ref, 'refs/heads/release/python-libs/') || startsWith(github.ref, 'refs/heads/release/python-licensing/') || startsWith(github.ref, 'refs/heads/release/python-secrets/') || startsWith(github.ref, 'refs/heads/release/python-utils/') }}
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/python-crypto/') || startsWith(github.ref, 'refs/heads/release/python-security/') || startsWith(github.ref, 'refs/heads/release/python-libs/') || startsWith(github.ref, 'refs/heads/release/python-licensing/') || startsWith(github.ref, 'refs/heads/release/python-secrets/') || startsWith(github.ref, 'refs/heads/release/python-utils/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -71,7 +71,6 @@ jobs:
       - run: |
           pip install -e "packages/python-crypto"
           pip install -e "packages/python-security"
-          pip install -e "packages/python-http"
           pip install -e "packages/python-libs[all,dev]"
       - run: pytest packages/python-libs/tests -v
       - run: pip install -e "packages/python-licensing[dev]"
@@ -449,7 +448,7 @@ jobs:
   build-python-split:
     name: Build & Test Python Split Packages
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/python-crypto/') || startsWith(github.ref, 'refs/heads/release/python-security/') || startsWith(github.ref, 'refs/heads/release/python-http/') || startsWith(github.ref, 'refs/heads/release/python-libs/') }}
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/python-crypto/') || startsWith(github.ref, 'refs/heads/release/python-security/') || startsWith(github.ref, 'refs/heads/release/python-libs/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -462,19 +461,16 @@ jobs:
           pip install bandit ruff
           pip install -e "packages/python-crypto[dev]" || pip install -e "packages/python-crypto"
           pip install -e "packages/python-security[dev]" || pip install -e "packages/python-security"
-          pip install -e "packages/python-http[dev]" || pip install -e "packages/python-http"
       - name: Install transition library
         run: pip install -e "packages/python-libs[dev]"
       - name: Lint
         run: |
           cd packages/python-crypto && ruff check src/
           cd ../python-security && ruff check src/
-          cd ../python-http && ruff check src/
       - name: Security - bandit
         run: |
           cd packages/python-crypto && bandit -r src/ -ll
           cd ../python-security && bandit -r src/ -ll
-          cd ../python-http && bandit -r src/ -ll
       - name: Test transition library import
         run: python3 -c "import penguin_libs; from penguin_libs.validation import IsEmail; print('Transition import OK')"
 

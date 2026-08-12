@@ -33,7 +33,6 @@ lint: ## Run linters on all packages
 	cd packages/python-rpc && ruff check src/ tests/ && ruff format --check src/ tests/
 	cd packages/python-crypto && ruff check src/
 	cd packages/python-security && ruff check src/
-	cd packages/python-http && ruff check src/
 	@echo "=== React lint ==="
 	cd packages/react-aaa && npm run lint
 	cd packages/react-libs && npm run lint
@@ -67,7 +66,6 @@ test: ## Run tests on all packages
 	cd packages/python-dal && pytest tests/ -v --tb=short
 	cd packages/python-crypto && pytest tests/ -v --tb=short
 	cd packages/python-security && pytest tests/ -v --tb=short
-	cd packages/python-http && pytest tests/ -v --tb=short
 	@echo "=== React tests ==="
 	cd packages/react-aaa && npm test
 	cd packages/react-libs && npm test

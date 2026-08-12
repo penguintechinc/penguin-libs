@@ -38,7 +38,6 @@ Project requires **90%+ test coverage**. Current state has critical gaps in both
 | python-flask | NO TESTS | 0% | Split from python-libs - needs full test suite |
 | python-grpc | NO TESTS | 0% | Split from python-libs - needs full test suite |
 | python-h3 | NO TESTS | 0% | Split from python-libs - needs full test suite |
-| python-http | NO TESTS | 0% | Split from python-libs - needs full test suite |
 | python-pydantic | NO TESTS | 0% | Split from python-libs - needs full test suite |
 | python-security | NO TESTS | 0% | Split from python-libs - needs full test suite |
 | python-validation | NO TESTS | 0% | Split from python-libs - needs full test suite |
@@ -128,8 +127,8 @@ Project requires **90%+ test coverage**. Current state has critical gaps in both
 
 ### Coverage Gaps (New Packages)
 
-**8 Python packages (0% coverage):**
-- python-crypto, python-flask, python-grpc, python-h3, python-http, python-pydantic, python-security, python-validation
+**7 Python packages (0% coverage):**
+- python-crypto, python-flask, python-grpc, python-h3, python-pydantic, python-security, python-validation
 - All are splits from python-libs
 - Need: Create `tests/` directory with comprehensive unit/integration test suites
 

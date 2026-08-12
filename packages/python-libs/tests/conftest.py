@@ -27,7 +27,6 @@ split_packages = [
     "python-flask",
     "python-grpc",
     "python-h3",
-    "python-http",
     "python-pydantic",
     "python-security",
     "python-validation",

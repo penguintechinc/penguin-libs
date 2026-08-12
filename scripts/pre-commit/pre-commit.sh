@@ -16,7 +16,6 @@ check_go_numa=false
 check_go_xdp=false
 check_python_aaa=false
 check_python_crypto=false
-check_python_http=false
 check_python_security=false
 check_python_utils=false
 check_react_aaa=false
@@ -33,7 +32,6 @@ for f in $CHANGED_FILES; do
     packages/go-xdp/*) check_go_xdp=true ;;
     packages/python-aaa/*) check_python_aaa=true ;;
     packages/python-crypto/*) check_python_crypto=true ;;
-    packages/python-http/*) check_python_http=true ;;
     packages/python-security/*) check_python_security=true ;;
     packages/python-utils/*) check_python_utils=true ;;
     packages/react-aaa/*) check_react_aaa=true ;;
@@ -44,7 +42,7 @@ done
 # If nothing relevant changed, skip
 if ! $check_go_aaa && ! $check_go_common && ! $check_go_crypto && ! $check_go_http && \
    ! $check_go_logging && ! $check_go_numa && ! $check_go_xdp && \
-   ! $check_python_aaa && ! $check_python_crypto && ! $check_python_http && \
+   ! $check_python_aaa && ! $check_python_crypto && \
    ! $check_python_security && ! $check_python_utils && \
    ! $check_react_aaa && ! $check_react_libs; then
   echo "No relevant package changes detected, skipping pre-commit checks."
@@ -87,10 +85,6 @@ fi
 if $check_python_security; then
   echo "Building python-security..."
   cd packages/python-security && python3 -m py_compile src/penguin_security/__init__.py && cd "$REPO_ROOT"
-fi
-if $check_python_http; then
-  echo "Building python-http..."
-  cd packages/python-http && python3 -m py_compile src/penguin_http/__init__.py && cd "$REPO_ROOT"
 fi
 if $check_python_utils; then
   echo "Building python-utils..."
@@ -142,10 +136,6 @@ if $check_python_security; then
   echo "Linting python-security..."
   cd packages/python-security && ruff check src/ && cd "$REPO_ROOT"
 fi
-if $check_python_http; then
-  echo "Linting python-http..."
-  cd packages/python-http && ruff check src/ && cd "$REPO_ROOT"
-fi
 if $check_python_utils; then
   echo "Linting python-utils..."
   cd packages/python-utils && ruff check src/ tests/ && ruff format --check src/ tests/ && cd "$REPO_ROOT"
@@ -184,10 +174,6 @@ if $check_python_security; then
   echo "Security scanning python-security..."
   cd packages/python-security && bandit -r src/ -ll && cd "$REPO_ROOT"
 fi
-if $check_python_http; then
-  echo "Security scanning python-http..."
-  cd packages/python-http && bandit -r src/ -ll && cd "$REPO_ROOT"
-fi
 if $check_python_utils; then
   echo "Security scanning python-utils..."
   cd packages/python-utils && bandit -r src/ -c pyproject.toml && cd "$REPO_ROOT"
@@ -225,10 +211,6 @@ fi
 if $check_python_security; then
   echo "Testing python-security..."
   cd packages/python-security && pytest tests/ -v --tb=short && cd "$REPO_ROOT"
-fi
-if $check_python_http; then
-  echo "Testing python-http..."
-  cd packages/python-http && pytest tests/ -v --tb=short && cd "$REPO_ROOT"
 fi
 if $check_python_utils; then
   echo "Testing python-utils..."
