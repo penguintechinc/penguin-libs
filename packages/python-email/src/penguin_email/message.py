@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .signature import Signature
+
 
 @dataclass(slots=True)
 class Attachment:
@@ -60,38 +62,39 @@ class EmailMessage:
         self._table_caption: str = ""
 
         self._attachments: list[Attachment] = []
+        self._signature: Signature | None = None
         self._built: bool = False
 
     # ------------------------------------------------------------------
     # Address helpers
     # ------------------------------------------------------------------
 
-    def from_addr(self, addr: str) -> "EmailMessage":
+    def from_addr(self, addr: str) -> EmailMessage:
         """Set the From address."""
         self._from = addr
         return self
 
-    def to(self, *addrs: str) -> "EmailMessage":
+    def to(self, *addrs: str) -> EmailMessage:
         """Add one or more To recipients."""
         self._to.extend(addrs)
         return self
 
-    def cc(self, *addrs: str) -> "EmailMessage":
+    def cc(self, *addrs: str) -> EmailMessage:
         """Add one or more CC recipients."""
         self._cc.extend(addrs)
         return self
 
-    def bcc(self, *addrs: str) -> "EmailMessage":
+    def bcc(self, *addrs: str) -> EmailMessage:
         """Add one or more BCC recipients."""
         self._bcc.extend(addrs)
         return self
 
-    def reply_to(self, addr: str) -> "EmailMessage":
+    def reply_to(self, addr: str) -> EmailMessage:
         """Set the Reply-To address."""
         self._reply_to = addr
         return self
 
-    def subject(self, subject: str) -> "EmailMessage":
+    def subject(self, subject: str) -> EmailMessage:
         """Set the email subject line."""
         self._subject = subject
         return self
@@ -100,17 +103,17 @@ class EmailMessage:
     # Body sources (exactly one required)
     # ------------------------------------------------------------------
 
-    def html(self, html: str) -> "EmailMessage":
+    def html(self, html: str) -> EmailMessage:
         """Set raw HTML body directly."""
         self._html_body = html
         return self
 
-    def text(self, text: str) -> "EmailMessage":
+    def text(self, text: str) -> EmailMessage:
         """Override the auto-generated plain-text body."""
         self._text_body = text
         return self
 
-    def template(self, template_name: str, **kwargs: Any) -> "EmailMessage":
+    def template(self, template_name: str, **kwargs: Any) -> EmailMessage:
         """Use a built-in Jinja2 template by name.
 
         Available names: ``welcome``, ``notification``, ``transactional``,
@@ -120,7 +123,7 @@ class EmailMessage:
         self._template_kwargs = kwargs
         return self
 
-    def template_file(self, path: str, **kwargs: Any) -> "EmailMessage":
+    def template_file(self, path: str, **kwargs: Any) -> EmailMessage:
         """Use a custom ``.html.j2`` template from the filesystem."""
         self._template_file = path
         self._template_kwargs = kwargs
@@ -130,7 +133,7 @@ class EmailMessage:
     # Structured content helpers
     # ------------------------------------------------------------------
 
-    def form(self, data: dict[str, str]) -> "EmailMessage":
+    def form(self, data: dict[str, str]) -> EmailMessage:
         """Render a two-column key/value form table.
 
         Raises :exc:`ValueError` if *data* is empty.
@@ -145,7 +148,7 @@ class EmailMessage:
         headers: list[str],
         rows: list[list[Any]],
         caption: str = "",
-    ) -> "EmailMessage":
+    ) -> EmailMessage:
         """Embed an HTML table with *headers* and *rows*."""
         self._table_headers = headers
         self._table_rows = rows
@@ -156,7 +159,7 @@ class EmailMessage:
     # Attachments
     # ------------------------------------------------------------------
 
-    def attach(self, path: str, filename: str = "") -> "EmailMessage":
+    def attach(self, path: str, filename: str = "") -> EmailMessage:
         """Attach a file from the filesystem."""
         p = Path(path)
         fn = filename or p.name
@@ -171,14 +174,14 @@ class EmailMessage:
         data: bytes,
         filename: str,
         content_type: str = "application/octet-stream",
-    ) -> "EmailMessage":
+    ) -> EmailMessage:
         """Attach raw bytes."""
         self._attachments.append(
             Attachment(filename=filename, content_type=content_type, data=data)
         )
         return self
 
-    def inline_image(self, path: str, cid: str) -> "EmailMessage":
+    def inline_image(self, path: str, cid: str) -> EmailMessage:
         """Attach an image as an inline resource referenced by ``cid``."""
         p = Path(path)
         ct, _ = mimetypes.guess_type(path)
@@ -193,10 +196,23 @@ class EmailMessage:
         return self
 
     # ------------------------------------------------------------------
+    # Signature
+    # ------------------------------------------------------------------
+
+    def signature(self, sig: Signature) -> EmailMessage:
+        """Attach a per-message :class:`~penguin_email.signature.Signature`.
+
+        Overrides any ``default_signature`` configured on the
+        :class:`~penguin_email.client.EmailClient` sending this message.
+        """
+        self._signature = sig
+        return self
+
+    # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
 
-    def build(self) -> "EmailMessage":
+    def build(self) -> EmailMessage:
         """Validate the message and mark it as ready to send.
 
         Raises :exc:`ValueError` if:
@@ -221,13 +237,11 @@ class EmailMessage:
         )
         if body_sources > 1:
             raise ValueError(
-                "Specify exactly one body source: html(), template(), "
-                "template_file(), or form()"
+                "Specify exactly one body source: html(), template(), template_file(), or form()"
             )
         if body_sources == 0:
             raise ValueError(
-                "A body source is required: html(), template(), "
-                "template_file(), or form()"
+                "A body source is required: html(), template(), template_file(), or form()"
             )
 
         self._built = True
@@ -300,6 +314,10 @@ class EmailMessage:
     @property
     def attachments(self) -> list[Attachment]:
         return list(self._attachments)
+
+    @property
+    def signature_block(self) -> Signature | None:
+        return self._signature
 
     @property
     def is_built(self) -> bool:

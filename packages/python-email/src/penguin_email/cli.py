@@ -24,8 +24,7 @@ def _cmd_auth(args: argparse.Namespace) -> int:
         from .auth.gmail_oauth import run_oauth_flow
     except ImportError:
         print(
-            "ERROR: Gmail support not installed. "
-            "Run: pip install 'penguin-email[gmail]'",
+            "ERROR: Gmail support not installed. Run: pip install 'penguin-email[gmail]'",
             file=sys.stderr,
         )
         return 1
@@ -49,8 +48,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
             transport = GmailTransport.from_env()
         except ImportError:
             print(
-                "ERROR: Gmail support not installed. "
-                "Run: pip install 'penguin-email[gmail]'",
+                "ERROR: Gmail support not installed. Run: pip install 'penguin-email[gmail]'",
                 file=sys.stderr,
             )
             return 1

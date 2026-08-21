@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, call, mock_open, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 
 class TestRunOAuthFlow:
@@ -18,9 +16,7 @@ class TestRunOAuthFlow:
         mock_flow = MagicMock()
         mock_flow.run_local_server.return_value = mock_creds
 
-        with patch(
-            "penguin_email.auth.gmail_oauth.InstalledAppFlow"
-        ) as mock_flow_cls:
+        with patch("penguin_email.auth.gmail_oauth.InstalledAppFlow") as mock_flow_cls:
             mock_flow_cls.from_client_secrets_file.return_value = mock_flow
             from penguin_email.auth.gmail_oauth import run_oauth_flow
 
