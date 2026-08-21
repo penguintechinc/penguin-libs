@@ -1,5 +1,4 @@
-"""
-penguin-libs — transition library.
+"""penguin-libs — transition library.
 
 All functionality has moved to focused packages. This package re-exports
 everything for backwards compatibility. Install the focused package directly

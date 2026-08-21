@@ -1,6 +1,7 @@
 """Tests for the PenguinTech License Server Python client (python_client module)."""
 
 import time
+from datetime import UTC
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -70,7 +71,9 @@ class TestPenguinTechLicenseClientInit:
 class TestFromEnv:
     """Tests for PenguinTechLicenseClient.from_env class method."""
 
-    @patch.dict("os.environ", {"LICENSE_KEY": "PENG-1111-2222-3333-4444-ABCD", "PRODUCT_NAME": "myapp"})
+    @patch.dict(
+        "os.environ", {"LICENSE_KEY": "PENG-1111-2222-3333-4444-ABCD", "PRODUCT_NAME": "myapp"}
+    )
     def test_from_env_success(self):
         """from_env creates client from environment variables."""
         client = PenguinTechLicenseClient.from_env()
@@ -78,7 +81,14 @@ class TestFromEnv:
         assert client.license_key == "PENG-1111-2222-3333-4444-ABCD"
         assert client.product == "myapp"
 
-    @patch.dict("os.environ", {"LICENSE_KEY": "PENG-1111-2222-3333-4444-ABCD", "PRODUCT_NAME": "myapp", "LICENSE_SERVER_URL": "https://custom.io"})
+    @patch.dict(
+        "os.environ",
+        {
+            "LICENSE_KEY": "PENG-1111-2222-3333-4444-ABCD",
+            "PRODUCT_NAME": "myapp",
+            "LICENSE_SERVER_URL": "https://custom.io",
+        },
+    )
     def test_from_env_with_custom_url(self):
         """from_env uses LICENSE_SERVER_URL when set."""
         client = PenguinTechLicenseClient.from_env()
@@ -97,7 +107,9 @@ class TestFromEnv:
         result = PenguinTechLicenseClient.from_env()
         assert result is None
 
-    @patch.dict("os.environ", {"LICENSE_KEY": "PENG-1111-2222-3333-4444-ABCD", "PRODUCT_NAME": "myapp"})
+    @patch.dict(
+        "os.environ", {"LICENSE_KEY": "PENG-1111-2222-3333-4444-ABCD", "PRODUCT_NAME": "myapp"}
+    )
     def test_from_env_custom_timeout(self):
         """from_env passes timeout parameter."""
         client = PenguinTechLicenseClient.from_env(timeout=60)
@@ -115,7 +127,7 @@ class TestValidate:
 
     @patch("penguin_licensing.python_client.requests.Session.post")
     def test_validate_success(self, mock_post):
-        """validate returns data on success."""
+        """Validate returns data on success."""
         mock_resp = MagicMock()
         mock_resp.raise_for_status.return_value = None
         mock_resp.json.return_value = {
@@ -133,7 +145,7 @@ class TestValidate:
 
     @patch("penguin_licensing.python_client.requests.Session.post")
     def test_validate_invalid_license(self, mock_post):
-        """validate raises LicenseValidationError when license is invalid."""
+        """Validate raises LicenseValidationError when license is invalid."""
         mock_resp = MagicMock()
         mock_resp.raise_for_status.return_value = None
         mock_resp.json.return_value = {"valid": False, "message": "Expired"}
@@ -145,7 +157,7 @@ class TestValidate:
 
     @patch("penguin_licensing.python_client.requests.Session.post")
     def test_validate_http_error(self, mock_post):
-        """validate raises LicenseValidationError on HTTP errors."""
+        """Validate raises LicenseValidationError on HTTP errors."""
         mock_resp = MagicMock()
         mock_resp.raise_for_status.side_effect = requests.HTTPError("403")
         mock_post.return_value = mock_resp
@@ -156,7 +168,7 @@ class TestValidate:
 
     @patch("penguin_licensing.python_client.requests.Session.post")
     def test_validate_connection_error(self, mock_post):
-        """validate raises LicenseValidationError on connection errors."""
+        """Validate raises LicenseValidationError on connection errors."""
         mock_post.side_effect = requests.ConnectionError("unreachable")
 
         client = self._make_client()
@@ -165,7 +177,7 @@ class TestValidate:
 
     @patch("penguin_licensing.python_client.requests.Session.post")
     def test_validate_no_server_id_in_metadata(self, mock_post):
-        """validate works without server_id in metadata."""
+        """Validate works without server_id in metadata."""
         mock_resp = MagicMock()
         mock_resp.raise_for_status.return_value = None
         mock_resp.json.return_value = {
@@ -182,7 +194,7 @@ class TestValidate:
 
     @patch("penguin_licensing.python_client.requests.Session.post")
     def test_validate_no_metadata_key(self, mock_post):
-        """validate works when metadata key is absent."""
+        """Validate works when metadata key is absent."""
         mock_resp = MagicMock()
         mock_resp.raise_for_status.return_value = None
         mock_resp.json.return_value = {"valid": True, "features": []}
@@ -195,7 +207,7 @@ class TestValidate:
 
     @patch("penguin_licensing.python_client.requests.Session.post")
     def test_validate_updates_feature_cache(self, mock_post):
-        """validate populates the feature cache from response."""
+        """Validate populates the feature cache from response."""
         mock_resp = MagicMock()
         mock_resp.raise_for_status.return_value = None
         mock_resp.json.return_value = {
@@ -238,9 +250,7 @@ class TestCheckFeature:
         with patch.object(client.session, "post") as mock_post:
             mock_resp = MagicMock()
             mock_resp.raise_for_status.return_value = None
-            mock_resp.json.return_value = {
-                "features": [{"entitled": True}]
-            }
+            mock_resp.json.return_value = {"features": [{"entitled": True}]}
             mock_post.return_value = mock_resp
 
             result = client.check_feature("sso")
@@ -251,9 +261,7 @@ class TestCheckFeature:
         """check_feature fetches from server when no cache exists."""
         mock_resp = MagicMock()
         mock_resp.raise_for_status.return_value = None
-        mock_resp.json.return_value = {
-            "features": [{"entitled": True}]
-        }
+        mock_resp.json.return_value = {"features": [{"entitled": True}]}
         mock_post.return_value = mock_resp
 
         client = self._make_client()
@@ -264,9 +272,7 @@ class TestCheckFeature:
         """check_feature skips cache when use_cache=False."""
         mock_resp = MagicMock()
         mock_resp.raise_for_status.return_value = None
-        mock_resp.json.return_value = {
-            "features": [{"entitled": False}]
-        }
+        mock_resp.json.return_value = {"features": [{"entitled": False}]}
         mock_post.return_value = mock_resp
 
         client = self._make_client()
@@ -305,9 +311,7 @@ class TestCheckFeature:
         with patch.object(client.session, "post") as mock_post:
             mock_resp = MagicMock()
             mock_resp.raise_for_status.return_value = None
-            mock_resp.json.return_value = {
-                "features": [{"entitled": False}]
-            }
+            mock_resp.json.return_value = {"features": [{"entitled": False}]}
             mock_post.return_value = mock_resp
 
             result = client.check_feature("sso")
@@ -324,7 +328,7 @@ class TestKeepalive:
 
     @patch("penguin_licensing.python_client.requests.Session.post")
     def test_keepalive_with_server_id(self, mock_post):
-        """keepalive sends request when server_id already set."""
+        """Keepalive sends request when server_id already set."""
         mock_resp = MagicMock()
         mock_resp.raise_for_status.return_value = None
         mock_resp.json.return_value = {"success": True}
@@ -337,7 +341,7 @@ class TestKeepalive:
 
     @patch("penguin_licensing.python_client.requests.Session.post")
     def test_keepalive_validates_first_when_no_server_id(self, mock_post):
-        """keepalive calls validate first when server_id is not set."""
+        """Keepalive calls validate first when server_id is not set."""
         validate_resp = MagicMock()
         validate_resp.raise_for_status.return_value = None
         validate_resp.json.return_value = {
@@ -358,7 +362,7 @@ class TestKeepalive:
 
     @patch("penguin_licensing.python_client.requests.Session.post")
     def test_keepalive_validate_raises(self, mock_post):
-        """keepalive raises when validate raises LicenseValidationError."""
+        """Keepalive raises when validate raises LicenseValidationError."""
         validate_resp = MagicMock()
         validate_resp.raise_for_status.return_value = None
         validate_resp.json.return_value = {
@@ -372,7 +376,7 @@ class TestKeepalive:
             client.keepalive()
 
     def test_keepalive_validate_returns_invalid_without_raising(self):
-        """keepalive raises when validate returns invalid dict (mocked validate)."""
+        """Keepalive raises when validate returns invalid dict (mocked validate)."""
         client = self._make_client()
         # Mock validate to return invalid without raising
         with patch.object(client, "validate", return_value={"valid": False}):
@@ -381,7 +385,7 @@ class TestKeepalive:
 
     @patch("penguin_licensing.python_client.requests.Session.post")
     def test_keepalive_with_usage_data(self, mock_post):
-        """keepalive includes usage_data in payload."""
+        """Keepalive includes usage_data in payload."""
         mock_resp = MagicMock()
         mock_resp.raise_for_status.return_value = None
         mock_resp.json.return_value = {"success": True}
@@ -399,7 +403,7 @@ class TestKeepalive:
 
     @patch("penguin_licensing.python_client.requests.Session.post")
     def test_keepalive_request_error(self, mock_post):
-        """keepalive raises LicenseValidationError on request error."""
+        """Keepalive raises LicenseValidationError on request error."""
         mock_post.side_effect = requests.ConnectionError("fail")
 
         client = self._make_client()
@@ -469,10 +473,12 @@ class TestUpdateFeatureCache:
         client = PenguinTechLicenseClient(
             license_key="PENG-1111-2222-3333-4444-ABCD", product="myapp"
         )
-        client._update_feature_cache([
-            {"name": "sso", "entitled": True},
-            {"name": "analytics", "entitled": False},
-        ])
+        client._update_feature_cache(
+            [
+                {"name": "sso", "entitled": True},
+                {"name": "analytics", "entitled": False},
+            ]
+        )
         assert client._feature_cache == {"sso": True, "analytics": False}
         assert client._cache_timestamp is not None
 
@@ -481,10 +487,12 @@ class TestUpdateFeatureCache:
         client = PenguinTechLicenseClient(
             license_key="PENG-1111-2222-3333-4444-ABCD", product="myapp"
         )
-        client._update_feature_cache([
-            {"entitled": True},
-            {"name": "sso", "entitled": True},
-        ])
+        client._update_feature_cache(
+            [
+                {"entitled": True},
+                {"name": "sso", "entitled": True},
+            ]
+        )
         assert client._feature_cache == {"sso": True}
 
     def test_update_feature_cache_default_entitled(self):
@@ -537,7 +545,9 @@ class TestIsValidLicenseKey:
     """Tests for PenguinTechLicenseClient.is_valid_license_key static method."""
 
     def test_valid_key(self):
-        assert PenguinTechLicenseClient.is_valid_license_key("PENG-1111-2222-3333-4444-ABCD") is True
+        assert (
+            PenguinTechLicenseClient.is_valid_license_key("PENG-1111-2222-3333-4444-ABCD") is True
+        )
 
     def test_invalid_empty(self):
         assert PenguinTechLicenseClient.is_valid_license_key("") is False
@@ -546,13 +556,17 @@ class TestIsValidLicenseKey:
         assert PenguinTechLicenseClient.is_valid_license_key(None) is False
 
     def test_invalid_wrong_prefix(self):
-        assert PenguinTechLicenseClient.is_valid_license_key("TEST-1111-2222-3333-4444-ABCD") is False
+        assert (
+            PenguinTechLicenseClient.is_valid_license_key("TEST-1111-2222-3333-4444-ABCD") is False
+        )
 
     def test_invalid_wrong_length(self):
         assert PenguinTechLicenseClient.is_valid_license_key("PENG-1111-2222") is False
 
     def test_invalid_wrong_dash_count(self):
-        assert PenguinTechLicenseClient.is_valid_license_key("PENG-1111-2222-3333-4444ABCDE") is False
+        assert (
+            PenguinTechLicenseClient.is_valid_license_key("PENG-1111-2222-3333-4444ABCDE") is False
+        )
 
 
 class TestGetClient:
@@ -561,21 +575,27 @@ class TestGetClient:
     def setup_method(self):
         """Reset global client before each test."""
         import penguin_licensing.python_client as mod
+
         mod._global_client = None
 
     def teardown_method(self):
         """Reset global client after each test."""
         import penguin_licensing.python_client as mod
+
         mod._global_client = None
 
-    @patch.dict("os.environ", {"LICENSE_KEY": "PENG-1111-2222-3333-4444-ABCD", "PRODUCT_NAME": "myapp"})
+    @patch.dict(
+        "os.environ", {"LICENSE_KEY": "PENG-1111-2222-3333-4444-ABCD", "PRODUCT_NAME": "myapp"}
+    )
     def test_get_client_creates_from_env(self):
         """get_client creates client from env on first call."""
         client = get_client()
         assert client is not None
         assert client.license_key == "PENG-1111-2222-3333-4444-ABCD"
 
-    @patch.dict("os.environ", {"LICENSE_KEY": "PENG-1111-2222-3333-4444-ABCD", "PRODUCT_NAME": "myapp"})
+    @patch.dict(
+        "os.environ", {"LICENSE_KEY": "PENG-1111-2222-3333-4444-ABCD", "PRODUCT_NAME": "myapp"}
+    )
     def test_get_client_returns_same_instance(self):
         """get_client returns same instance on repeated calls."""
         c1 = get_client()
@@ -619,9 +639,11 @@ class TestRequiresFeature:
     def test_requires_feature_raises_when_no_client(self):
         """requires_feature raises when no client available."""
         import penguin_licensing.python_client as mod
+
         mod._global_client = None
 
         with patch.dict("os.environ", {}, clear=True):
+
             @requires_feature("sso")
             def my_func(x):
                 return x * 2
@@ -665,10 +687,12 @@ class TestInitializeLicensing:
 
     def setup_method(self):
         import penguin_licensing.python_client as mod
+
         mod._global_client = None
 
     def teardown_method(self):
         import penguin_licensing.python_client as mod
+
         mod._global_client = None
 
     @patch("penguin_licensing.python_client.requests.Session.post")
@@ -685,12 +709,11 @@ class TestInitializeLicensing:
         }
         mock_post.return_value = mock_resp
 
-        result = initialize_licensing(
-            license_key="PENG-1111-2222-3333-4444-ABCD", product="myapp"
-        )
+        result = initialize_licensing(license_key="PENG-1111-2222-3333-4444-ABCD", product="myapp")
         assert result["valid"] is True
 
         import penguin_licensing.python_client as mod
+
         assert mod._global_client is not None
 
     def test_initialize_licensing_missing_key(self):
@@ -705,7 +728,9 @@ class TestInitializeLicensing:
             with pytest.raises(LicenseValidationError, match="required"):
                 initialize_licensing()
 
-    @patch.dict("os.environ", {"LICENSE_KEY": "PENG-1111-2222-3333-4444-ABCD", "PRODUCT_NAME": "myapp"})
+    @patch.dict(
+        "os.environ", {"LICENSE_KEY": "PENG-1111-2222-3333-4444-ABCD", "PRODUCT_NAME": "myapp"}
+    )
     @patch("penguin_licensing.python_client.requests.Session.post")
     def test_initialize_licensing_from_env(self, mock_post):
         """initialize_licensing reads from env vars when params not provided."""
@@ -741,9 +766,7 @@ class TestInitializeLicensing:
         }
         mock_post.return_value = mock_resp
 
-        result = initialize_licensing(
-            license_key="PENG-1111-2222-3333-4444-ABCD", product="myapp"
-        )
+        result = initialize_licensing(license_key="PENG-1111-2222-3333-4444-ABCD", product="myapp")
         assert len(result["features"]) == 2
 
 
@@ -752,10 +775,12 @@ class TestCheckFeatureModuleLevel:
 
     def setup_method(self):
         import penguin_licensing.python_client as mod
+
         mod._global_client = None
 
     def teardown_method(self):
         import penguin_licensing.python_client as mod
+
         mod._global_client = None
 
     def test_check_feature_no_client(self):
@@ -780,10 +805,12 @@ class TestSendKeepalive:
 
     def setup_method(self):
         import penguin_licensing.python_client as mod
+
         mod._global_client = None
 
     def teardown_method(self):
         import penguin_licensing.python_client as mod
+
         mod._global_client = None
 
     def test_send_keepalive_no_client(self):
@@ -837,16 +864,14 @@ def _server_error_response(status_code=503):
     """Build a mock 5xx response that raises on raise_for_status()."""
     response = MagicMock()
     response.status_code = status_code
-    response.raise_for_status.side_effect = requests.HTTPError(
-        f"{status_code} Server Error"
-    )
+    response.raise_for_status.side_effect = requests.HTTPError(f"{status_code} Server Error")
     return response
 
 
 class TestPenguinTechLicenseClientForceRefresh:
     """Tests for the force_refresh escape hatch on validate()."""
 
-    @patch('penguin_licensing.python_client.requests.Session.post')
+    @patch("penguin_licensing.python_client.requests.Session.post")
     def test_cache_hit_skips_server(self, mock_post):
         """A second validate() inside the TTL is served from cache."""
         mock_post.return_value = _valid_validate_response()
@@ -857,7 +882,7 @@ class TestPenguinTechLicenseClientForceRefresh:
 
         assert mock_post.call_count == 1
 
-    @patch('penguin_licensing.python_client.requests.Session.post')
+    @patch("penguin_licensing.python_client.requests.Session.post")
     def test_force_refresh_recontacts_server(self, mock_post):
         """force_refresh=True bypasses a warm cache and re-hits the server."""
         mock_post.return_value = _valid_validate_response()
@@ -873,7 +898,7 @@ class TestPenguinTechLicenseClientForceRefresh:
 class TestPenguinTechLicenseClientFailClosed:
     """Tests for fail-closed behavior in PenguinTechLicenseClient."""
 
-    @patch('penguin_licensing.python_client.requests.Session.post')
+    @patch("penguin_licensing.python_client.requests.Session.post")
     def test_definitive_rejection_revocation(self, mock_post):
         """403 rejection raises LicenseValidationError (revocation)."""
         rejection_response = MagicMock()
@@ -886,7 +911,7 @@ class TestPenguinTechLicenseClientFailClosed:
         with pytest.raises(LicenseValidationError, match="revoked"):
             client.validate()
 
-    @patch('penguin_licensing.python_client.requests.Session.post')
+    @patch("penguin_licensing.python_client.requests.Session.post")
     def test_server_error_returns_cached(self, mock_post):
         """A forced refresh hitting a 5xx serves the last known-good value."""
         mock_post.side_effect = [
@@ -907,7 +932,7 @@ class TestPenguinTechLicenseClientFailClosed:
         assert result2["tier"] == "professional"
         assert result2 is client._cached_validation
 
-    @patch('penguin_licensing.python_client.requests.Session.post')
+    @patch("penguin_licensing.python_client.requests.Session.post")
     def test_transport_error_returns_cached(self, mock_post):
         """A forced refresh hitting a transport error serves the cached value."""
         mock_post.side_effect = [
@@ -926,7 +951,7 @@ class TestPenguinTechLicenseClientFailClosed:
         assert result2["tier"] == "professional"
         assert result2 is client._cached_validation
 
-    @patch('penguin_licensing.python_client.requests.Session.post')
+    @patch("penguin_licensing.python_client.requests.Session.post")
     def test_no_cache_transport_error_raises(self, mock_post):
         """With no cached value a transport error is fatal, never permissive."""
         mock_post.side_effect = requests.RequestException("Network error")
@@ -939,7 +964,7 @@ class TestPenguinTechLicenseClientFailClosed:
         assert mock_post.call_count == 1
         assert client._cached_validation is None
 
-    @patch('penguin_licensing.python_client.requests.Session.post')
+    @patch("penguin_licensing.python_client.requests.Session.post")
     def test_revocation_drops_cached_entitlement(self, mock_post):
         """401/403/404 drops the cache instead of serving the stale tier."""
         rejection_response = MagicMock()
@@ -968,12 +993,12 @@ class TestPenguinTechLicenseClientFailClosed:
 
         assert mock_post.call_count == 3
 
-    @patch('penguin_licensing.python_client.requests.Session.post')
+    @patch("penguin_licensing.python_client.requests.Session.post")
     def test_expiry_within_grace_period(self, mock_post):
         """License expiry within 72h grace period still valid."""
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        expired_at = datetime.now(timezone.utc) - timedelta(hours=24)
+        expired_at = datetime.now(UTC) - timedelta(hours=24)
         expiry_response = MagicMock()
         expiry_response.status_code = 200
         expiry_response.json.return_value = {
@@ -982,7 +1007,7 @@ class TestPenguinTechLicenseClientFailClosed:
             "product": "elder",
             "license_version": "2.0",
             "license_key": "PENG-TEST-1234",
-            "expires_at": expired_at.isoformat().replace('+00:00', 'Z'),
+            "expires_at": expired_at.isoformat().replace("+00:00", "Z"),
             "issued_at": "2024-01-01T00:00:00Z",
             "tier": "enterprise",
             "features": [],
@@ -999,12 +1024,12 @@ class TestPenguinTechLicenseClientFailClosed:
         assert result["valid"] is True
         assert result["tier"] == "enterprise"
 
-    @patch('penguin_licensing.python_client.requests.Session.post')
+    @patch("penguin_licensing.python_client.requests.Session.post")
     def test_expiry_beyond_grace_period(self, mock_post):
         """License expiry beyond 72h grace period rejected."""
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        expired_at = datetime.now(timezone.utc) - timedelta(hours=75)
+        expired_at = datetime.now(UTC) - timedelta(hours=75)
         expiry_response = MagicMock()
         expiry_response.status_code = 200
         expiry_response.json.return_value = {
@@ -1013,7 +1038,7 @@ class TestPenguinTechLicenseClientFailClosed:
             "product": "elder",
             "license_version": "2.0",
             "license_key": "PENG-TEST-1234",
-            "expires_at": expired_at.isoformat().replace('+00:00', 'Z'),
+            "expires_at": expired_at.isoformat().replace("+00:00", "Z"),
             "issued_at": "2024-01-01T00:00:00Z",
             "tier": "enterprise",
             "features": [],

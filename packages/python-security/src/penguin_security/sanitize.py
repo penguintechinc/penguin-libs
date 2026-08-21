@@ -4,8 +4,7 @@ import re
 
 
 def sanitize_html(text: str) -> str:
-    """
-    Sanitize HTML to prevent XSS attacks.
+    """Sanitize HTML to prevent XSS attacks.
 
     Removes:
     - Script tags (but extracts and cleans their text content)
@@ -36,45 +35,48 @@ def sanitize_html(text: str) -> str:
         content = match.group(1)
         # Remove dangerous JavaScript functions/patterns
         dangerous_patterns = [
-            r'alert\s*\(',
-            r'confirm\s*\(',
-            r'prompt\s*\(',
-            r'eval\s*\(',
-            r'Function\s*\(',
-            r'fetch\s*\(',
-            r'XMLHttpRequest',
-            r'WebSocket',
+            r"alert\s*\(",
+            r"confirm\s*\(",
+            r"prompt\s*\(",
+            r"eval\s*\(",
+            r"Function\s*\(",
+            r"fetch\s*\(",
+            r"XMLHttpRequest",
+            r"WebSocket",
         ]
         # If content contains any dangerous patterns, remove entirely
         for pattern in dangerous_patterns:
             if re.search(pattern, content, re.IGNORECASE):
-                return ''
+                return ""
         # Otherwise preserve the content (it might be data or safe text)
         return content
 
-    text = re.sub(r"<script[^>]*>(.*?)</script>", sanitize_script_tag, text, flags=re.IGNORECASE | re.DOTALL)  # noqa: E501
+    text = re.sub(
+        r"<script[^>]*>(.*?)</script>", sanitize_script_tag, text, flags=re.IGNORECASE | re.DOTALL
+    )  # noqa: E501
 
     # Remove event handlers (onclick, onerror, onload, etc.)
     text = re.sub(r'\s+on\w+\s*=\s*["\']?[^"\'>\s]*["\']?', "", text, flags=re.IGNORECASE)  # noqa: E501
 
     # Remove javascript: URLs
-    text = re.sub(r'javascript:', "", text, flags=re.IGNORECASE)
+    text = re.sub(r"javascript:", "", text, flags=re.IGNORECASE)
 
     # Remove data: URLs that might contain scripts
-    text = re.sub(r'data:text/html[^,]*,', "", text, flags=re.IGNORECASE)
+    text = re.sub(r"data:text/html[^,]*,", "", text, flags=re.IGNORECASE)
 
     # Remove SVG with onload/onerror and their content
     text = re.sub(r"<svg[^>]*>.*?</svg>", "", text, flags=re.IGNORECASE | re.DOTALL)  # noqa: E501
 
     # Remove iframe, embed, object tags and their content
-    text = re.sub(r"<(iframe|embed|object)[^>]*>.*?</\1>", "", text, flags=re.IGNORECASE | re.DOTALL)  # noqa: E501
+    text = re.sub(
+        r"<(iframe|embed|object)[^>]*>.*?</\1>", "", text, flags=re.IGNORECASE | re.DOTALL
+    )  # noqa: E501
 
     return text
 
 
 def escape_sql_string(text: str) -> str:
-    """
-    Escape SQL string to prevent SQL injection.
+    """Escape SQL string to prevent SQL injection.
 
     Note: This is a basic escaping function. For production, use
     parameterized queries instead.
@@ -104,8 +106,7 @@ def escape_sql_string(text: str) -> str:
 
 
 def escape_shell_arg(text: str) -> str:
-    """
-    Escape shell argument to prevent shell injection.
+    """Escape shell argument to prevent shell injection.
 
     Wraps the argument in single quotes and escapes any single quotes
     within the string.

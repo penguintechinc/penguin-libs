@@ -9,25 +9,25 @@ import pytest
 
 
 # Create exception classes first
-class MockNotFound(Exception):
+class MockNotFoundError(Exception):
     """Mock NotFound exception."""
 
     pass
 
 
-class MockPermissionDenied(Exception):
+class MockPermissionDeniedError(Exception):
     """Mock PermissionDenied exception."""
 
     pass
 
 
-class MockUnauthenticated(Exception):
+class MockUnauthenticatedError(Exception):
     """Mock Unauthenticated exception."""
 
     pass
 
 
-class MockAlreadyExists(Exception):
+class MockAlreadyExistsError(Exception):
     """Mock AlreadyExists exception."""
 
     pass
@@ -35,10 +35,10 @@ class MockAlreadyExists(Exception):
 
 # Create mock modules that persist across all tests
 _mock_api_core_exceptions = MagicMock()
-_mock_api_core_exceptions.NotFound = MockNotFound
-_mock_api_core_exceptions.PermissionDenied = MockPermissionDenied
-_mock_api_core_exceptions.Unauthenticated = MockUnauthenticated
-_mock_api_core_exceptions.AlreadyExists = MockAlreadyExists
+_mock_api_core_exceptions.NotFound = MockNotFoundError
+_mock_api_core_exceptions.PermissionDenied = MockPermissionDeniedError
+_mock_api_core_exceptions.Unauthenticated = MockUnauthenticatedError
+_mock_api_core_exceptions.AlreadyExists = MockAlreadyExistsError
 
 _mock_secretmanager = MagicMock()
 
@@ -59,11 +59,8 @@ sys.modules["google.api_core.exceptions"] = _mock_api_core_exceptions
 @pytest.fixture(autouse=True)
 def reset_gcp_mocks() -> None:
     """Reset GCP mocks before each test."""
-    # Save the original SecretManagerServiceClient mock
-    original_client = _mock_secretmanager.SecretManagerServiceClient
-
     # Reset all call history but keep the mock object itself
-    if hasattr(_mock_secretmanager, 'reset_mock'):
+    if hasattr(_mock_secretmanager, "reset_mock"):
         _mock_secretmanager.reset_mock()
 
     # Recreate SecretManagerServiceClient to be fresh for each test

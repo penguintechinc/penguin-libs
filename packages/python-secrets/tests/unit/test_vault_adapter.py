@@ -6,7 +6,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from hvac.exceptions import InvalidPath, Unauthorized, VaultError, VaultDown
+from hvac.exceptions import InvalidPath, Unauthorized, VaultDown, VaultError
 
 from penguin_sal.adapters.vault import VaultAdapter
 from penguin_sal.core.exceptions import (
@@ -27,7 +27,7 @@ def config() -> ConnectionConfig:
         port=8200,
         path="",
         username=None,
-        password="test-token",
+        password="test-token",  # noqa: S106 -- test fixture placeholder, not a real credential
         params={
             "mount_point": "secret",
             "kv_version": "2",
@@ -71,9 +71,7 @@ class TestVaultAdapterInit:
         url = adapter._build_url()
         assert url == "https://vault.example.com:8200"
 
-    def test_build_url_custom_port(
-        self, config: ConnectionConfig
-    ) -> None:
+    def test_build_url_custom_port(self, config: ConnectionConfig) -> None:
         """Test URL with custom port."""
         config.port = 9200
         adapter = VaultAdapter(config)
@@ -94,20 +92,18 @@ class TestVaultAdapterAuth:
         """Test token authentication."""
         adapter.client.is_authenticated.return_value = True
         adapter.authenticate()
-        assert adapter.client.token == "test-token"
+        assert adapter.client.token == "test-token"  # noqa: S105 -- fixture literal set above, not a real credential
         adapter.client.is_authenticated.assert_called_once()
 
-    def test_authenticate_with_token_from_params(
-        self, config: ConnectionConfig
-    ) -> None:
+    def test_authenticate_with_token_from_params(self, config: ConnectionConfig) -> None:
         """Test token auth from params."""
         config.password = None
-        config.params["token"] = "param-token"
+        config.params["token"] = "param-token"  # noqa: S105 -- test fixture placeholder, not a real credential
         adapter = VaultAdapter(config)
         adapter.client = MagicMock()
         adapter.client.is_authenticated.return_value = True
         adapter.authenticate()
-        assert adapter.client.token == "param-token"
+        assert adapter.client.token == "param-token"  # noqa: S105 -- fixture literal set above, not a real credential
 
     def test_authenticate_with_approle(self, config: ConnectionConfig) -> None:
         """Test AppRole authentication."""
@@ -120,19 +116,15 @@ class TestVaultAdapterAuth:
         )
         adapter = VaultAdapter(config)
         adapter.client = MagicMock()
-        adapter.client.auth.approle.login.return_value = {
-            "auth": {"client_token": "role-token"}
-        }
+        adapter.client.auth.approle.login.return_value = {"auth": {"client_token": "role-token"}}
         adapter.authenticate()
-        assert adapter.client.token == "role-token"
+        assert adapter.client.token == "role-token"  # noqa: S105 -- fixture literal set above, not a real credential
         adapter.client.auth.approle.login.assert_called_once_with(
             role_id="test-role",
-            secret_id="test-secret",
+            secret_id="test-secret",  # noqa: S106 -- fixture literal set above, not a real credential
         )
 
-    def test_authenticate_no_credentials(
-        self, config: ConnectionConfig
-    ) -> None:
+    def test_authenticate_no_credentials(self, config: ConnectionConfig) -> None:
         """Test auth failure when no credentials."""
         config.password = None
         config.params = {}
@@ -214,9 +206,7 @@ class TestVaultAdapterGet:
 
     def test_get_not_found(self, adapter: VaultAdapter) -> None:
         """Test get raises SecretNotFoundError."""
-        adapter.client.secrets.kv.v2.read_secret_version.side_effect = InvalidPath(
-            ""
-        )
+        adapter.client.secrets.kv.v2.read_secret_version.side_effect = InvalidPath("")
         with pytest.raises(SecretNotFoundError) as exc:
             adapter.get("missing/secret")
         assert exc.value.key == "missing/secret"
@@ -287,6 +277,8 @@ class TestVaultAdapterSet:
         secret = adapter.set("api/key", "abc123xyz")
         call_kwargs = adapter.client.secrets.kv.v2.create_or_update_secret.call_args[1]
         assert call_kwargs["secret"] == {"value": "abc123xyz"}
+        assert secret.key == "api/key"
+        assert secret.value == {"value": "abc123xyz"}
 
     def test_set_kv1_secret(self, config: ConnectionConfig) -> None:
         """Test writing KV v1 secret."""
@@ -300,8 +292,8 @@ class TestVaultAdapterSet:
 
     def test_set_authorization_error(self, adapter: VaultAdapter) -> None:
         """Test set raises BackendError on auth failure."""
-        adapter.client.secrets.kv.v2.create_or_update_secret.side_effect = (
-            Unauthorized("Permission denied")
+        adapter.client.secrets.kv.v2.create_or_update_secret.side_effect = Unauthorized(
+            "Permission denied"
         )
         with pytest.raises(BackendError):
             adapter.set("protected/secret", "value")
@@ -319,9 +311,7 @@ class TestVaultAdapterDelete:
 
     def test_delete_kv2_success(self, adapter: VaultAdapter) -> None:
         """Test successful KV v2 deletion."""
-        adapter.client.secrets.kv.v2.delete_metadata_and_all_versions.return_value = (
-            None
-        )
+        adapter.client.secrets.kv.v2.delete_metadata_and_all_versions.return_value = None
         result = adapter.delete("app/secret")
         assert result is True
         adapter.client.secrets.kv.v2.delete_metadata_and_all_versions.assert_called_once()
@@ -338,16 +328,14 @@ class TestVaultAdapterDelete:
 
     def test_delete_not_found(self, adapter: VaultAdapter) -> None:
         """Test delete returns False for missing secret."""
-        adapter.client.secrets.kv.v2.delete_metadata_and_all_versions.side_effect = (
-            InvalidPath("")
-        )
+        adapter.client.secrets.kv.v2.delete_metadata_and_all_versions.side_effect = InvalidPath("")
         result = adapter.delete("missing/secret")
         assert result is False
 
     def test_delete_authorization_error(self, adapter: VaultAdapter) -> None:
         """Test delete raises BackendError on auth failure."""
-        adapter.client.secrets.kv.v2.delete_metadata_and_all_versions.side_effect = (
-            Unauthorized("Permission denied")
+        adapter.client.secrets.kv.v2.delete_metadata_and_all_versions.side_effect = Unauthorized(
+            "Permission denied"
         )
         with pytest.raises(BackendError):
             adapter.delete("protected/secret")
@@ -406,9 +394,7 @@ class TestVaultAdapterList:
 
     def test_list_authorization_error(self, adapter: VaultAdapter) -> None:
         """Test list raises BackendError on auth failure."""
-        adapter.client.secrets.kv.v2.list_secrets.side_effect = Unauthorized(
-            "Permission denied"
-        )
+        adapter.client.secrets.kv.v2.list_secrets.side_effect = Unauthorized("Permission denied")
         with pytest.raises(BackendError):
             adapter.list("protected/")
 
@@ -450,9 +436,7 @@ class TestVaultAdapterExists:
 
     def test_exists_handles_errors(self, adapter: VaultAdapter) -> None:
         """Test exists handles unexpected errors."""
-        adapter.client.secrets.kv.v2.read_secret_version.side_effect = Exception(
-            "Unexpected error"
-        )
+        adapter.client.secrets.kv.v2.read_secret_version.side_effect = Exception("Unexpected error")
         assert adapter.exists("test/secret") is False
 
 

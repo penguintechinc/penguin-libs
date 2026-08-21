@@ -3,20 +3,23 @@
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from penguin_crypto.hybrid import hybrid_encrypt, hybrid_decrypt
 from penguin_crypto.ecc import generate_x25519_keypair
+from penguin_crypto.hybrid import hybrid_decrypt, hybrid_encrypt
 
 
 class TestHybridEncryption:
     """Tests for X25519 + AES-256-GCM hybrid encryption."""
 
-    def test_hybrid_encrypt_decrypt_roundtrip(self) -> None:
-        """Test hybrid encrypt/decrypt roundtrip."""
+    def test_hybrid_decrypt_fails_without_matching_private_key(self) -> None:
+        """Test hybrid decryption fails when using the wrong recipient private key."""
         _, recipient_public = generate_x25519_keypair()
+        wrong_private, _ = generate_x25519_keypair()
         plaintext = b"Secret message"
 
         ciphertext = hybrid_encrypt(plaintext, recipient_public)
-        # Should not succeed - need the private key
+
+        with pytest.raises(InvalidTag):
+            hybrid_decrypt(ciphertext, wrong_private)
 
     def test_hybrid_encrypt_decrypt_complete(self) -> None:
         """Test complete hybrid encryption roundtrip."""

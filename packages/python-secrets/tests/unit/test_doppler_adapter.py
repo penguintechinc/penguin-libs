@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import sys
-from datetime import datetime
 from typing import Any
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -36,7 +35,7 @@ def config_with_token() -> ConnectionConfig:
     return ConnectionConfig(
         scheme="doppler",
         host="api.doppler.com",
-        password="service_token_123",
+        password="service_token_123",  # noqa: S106 -- test fixture placeholder, not a real credential
         params={
             "project": "my-project",
             "config": "prod",
@@ -64,7 +63,7 @@ def config_minimal() -> ConnectionConfig:
     return ConnectionConfig(
         scheme="doppler",
         host="api.doppler.com",
-        password="service_token_789",
+        password="service_token_789",  # noqa: S106 -- test fixture placeholder, not a real credential
         params={"project": "my-project"},
     )
 
@@ -98,7 +97,9 @@ class TestDopplerAdapterInitConnection:
         assert adapter._client is mock_client
         assert adapter._project == "my-project"
         assert adapter._config_name == "prod"
-        mock_doppler_sdk.Doppler.assert_called_once_with(token="service_token_123")
+        mock_doppler_sdk.Doppler.assert_called_once_with(
+            token="service_token_123"  # noqa: S106 -- asserting against the fixture literal set above, not a real credential
+        )
 
     def test_init_connection_with_params_token(
         self, mock_doppler_sdk: Any, config_with_token_in_params: ConnectionConfig
@@ -110,7 +111,9 @@ class TestDopplerAdapterInitConnection:
         adapter._init_connection()
 
         assert adapter._connected is True
-        mock_doppler_sdk.Doppler.assert_called_once_with(token="service_token_456")
+        mock_doppler_sdk.Doppler.assert_called_once_with(
+            token="service_token_456"  # noqa: S106 -- asserting against the fixture literal set above, not a real credential
+        )
 
     def test_init_connection_default_config_name(
         self, mock_doppler_sdk: Any, config_minimal: ConnectionConfig
@@ -123,9 +126,7 @@ class TestDopplerAdapterInitConnection:
 
         assert adapter._config_name == "dev"
 
-    def test_init_connection_missing_token(
-        self, mock_doppler_sdk: Any
-    ) -> None:
+    def test_init_connection_missing_token(self, mock_doppler_sdk: Any) -> None:
         config = ConnectionConfig(
             scheme="doppler", host="api.doppler.com", params={"project": "my-project"}
         )
@@ -135,13 +136,11 @@ class TestDopplerAdapterInitConnection:
         with pytest.raises(ValueError, match="token required"):
             adapter._init_connection()
 
-    def test_init_connection_missing_project(
-        self, mock_doppler_sdk: Any
-    ) -> None:
+    def test_init_connection_missing_project(self, mock_doppler_sdk: Any) -> None:
         config = ConnectionConfig(
             scheme="doppler",
             host="api.doppler.com",
-            password="service_token",
+            password="service_token",  # noqa: S106 -- test fixture placeholder, not a real credential
         )
 
         adapter = DopplerAdapter(config)
@@ -149,9 +148,7 @@ class TestDopplerAdapterInitConnection:
         with pytest.raises(ValueError, match="project required"):
             adapter._init_connection()
 
-    def test_init_connection_sdk_not_installed(
-        self, config_with_token: ConnectionConfig
-    ) -> None:
+    def test_init_connection_sdk_not_installed(self, config_with_token: ConnectionConfig) -> None:
         # Inject ImportError into sys.modules for dopplersdk
         original = sys.modules.get("dopplersdk")
         sys.modules["dopplersdk"] = None  # Simulate missing module
@@ -160,7 +157,9 @@ class TestDopplerAdapterInitConnection:
             adapter = DopplerAdapter(config_with_token)
 
             # Mock the import to raise ImportError
-            with patch("builtins.__import__", side_effect=ImportError("No module named 'dopplersdk'")):
+            with patch(
+                "builtins.__import__", side_effect=ImportError("No module named 'dopplersdk'")
+            ):
                 with pytest.raises(ImportError, match="dopplersdk is required"):
                     adapter._init_connection()
         finally:
@@ -187,9 +186,7 @@ class TestDopplerAdapterAuthenticate:
 
         mock_client.secrets.list.assert_called_once()
 
-    def test_authenticate_not_connected(
-        self, config_with_token: ConnectionConfig
-    ) -> None:
+    def test_authenticate_not_connected(self, config_with_token: ConnectionConfig) -> None:
         adapter = DopplerAdapter(config_with_token)
 
         with pytest.raises(ConnectionError, match="not initialized"):
@@ -238,9 +235,7 @@ class TestDopplerAdapterAuthenticate:
 class TestDopplerAdapterGet:
     """Test get method."""
 
-    def test_get_success(
-        self, mock_doppler_sdk: Any, config_with_token: ConnectionConfig
-    ) -> None:
+    def test_get_success(self, mock_doppler_sdk: Any, config_with_token: ConnectionConfig) -> None:
         mock_client = MagicMock()
         mock_doppler_sdk.Doppler.return_value = mock_client
         mock_client.secrets.get.return_value = {
@@ -374,9 +369,7 @@ class TestDopplerAdapterSet:
 
         adapter = DopplerAdapter(config_with_token)
         adapter._init_connection()
-        result = adapter.set(
-            "MY_KEY", "value", metadata={"owner": "admin", "env": "prod"}
-        )
+        result = adapter.set("MY_KEY", "value", metadata={"owner": "admin", "env": "prod"})
 
         assert result.metadata == {"owner": "admin", "env": "prod"}
 
@@ -505,9 +498,7 @@ class TestDopplerAdapterList:
 
         assert len(result.keys) == 2
 
-    def test_list_empty(
-        self, mock_doppler_sdk: Any, config_with_token: ConnectionConfig
-    ) -> None:
+    def test_list_empty(self, mock_doppler_sdk: Any, config_with_token: ConnectionConfig) -> None:
         mock_client = MagicMock()
         mock_doppler_sdk.Doppler.return_value = mock_client
         mock_client.secrets.list.return_value = {"secrets": {}}
@@ -541,14 +532,10 @@ class TestDopplerAdapterList:
 class TestDopplerAdapterExists:
     """Test exists method."""
 
-    def test_exists_true(
-        self, mock_doppler_sdk: Any, config_with_token: ConnectionConfig
-    ) -> None:
+    def test_exists_true(self, mock_doppler_sdk: Any, config_with_token: ConnectionConfig) -> None:
         mock_client = MagicMock()
         mock_doppler_sdk.Doppler.return_value = mock_client
-        mock_client.secrets.list.return_value = {
-            "secrets": {"MY_KEY": {}, "OTHER_KEY": {}}
-        }
+        mock_client.secrets.list.return_value = {"secrets": {"MY_KEY": {}, "OTHER_KEY": {}}}
 
         adapter = DopplerAdapter(config_with_token)
         adapter._init_connection()
@@ -556,14 +543,10 @@ class TestDopplerAdapterExists:
 
         assert result is True
 
-    def test_exists_false(
-        self, mock_doppler_sdk: Any, config_with_token: ConnectionConfig
-    ) -> None:
+    def test_exists_false(self, mock_doppler_sdk: Any, config_with_token: ConnectionConfig) -> None:
         mock_client = MagicMock()
         mock_doppler_sdk.Doppler.return_value = mock_client
-        mock_client.secrets.list.return_value = {
-            "secrets": {"MY_KEY": {}, "OTHER_KEY": {}}
-        }
+        mock_client.secrets.list.return_value = {"secrets": {"MY_KEY": {}, "OTHER_KEY": {}}}
 
         adapter = DopplerAdapter(config_with_token)
         adapter._init_connection()
@@ -620,9 +603,7 @@ class TestDopplerAdapterHealthCheck:
 
         assert result is False
 
-    def test_health_check_not_connected(
-        self, config_with_token: ConnectionConfig
-    ) -> None:
+    def test_health_check_not_connected(self, config_with_token: ConnectionConfig) -> None:
         adapter = DopplerAdapter(config_with_token)
         result = adapter.health_check()
 

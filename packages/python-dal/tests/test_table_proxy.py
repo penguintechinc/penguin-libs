@@ -13,11 +13,11 @@ class TestTableProxy:
 
     def test_getattr_nonexistent_raises(self, db):
         with pytest.raises(AttributeError, match="no column"):
-            db.users.nonexistent_column
+            _ = db.users.nonexistent_column
 
     def test_getattr_private_raises(self, db):
         with pytest.raises(AttributeError):
-            db.users._private
+            _ = db.users._private
 
     def test_table_name_property(self, db):
         proxy = db.users

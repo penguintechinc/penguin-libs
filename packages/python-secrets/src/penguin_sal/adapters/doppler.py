@@ -48,8 +48,7 @@ class DopplerAdapter(BaseAdapter):
         token = self.config.password or self.config.params.get("token")
         if not token:
             raise ValueError(
-                "Doppler service token required in config.password or "
-                "config.params['token']"
+                "Doppler service token required in config.password or config.params['token']"
             )
 
         # Get project and config name
@@ -77,14 +76,10 @@ class DopplerAdapter(BaseAdapter):
 
         try:
             # Verify access by listing secrets
-            self._client.secrets.list(
-                project=self._project, config=self._config_name
-            )
+            self._client.secrets.list(project=self._project, config=self._config_name)
         except Exception as e:
             if "invalid" in str(e).lower() or "unauthorized" in str(e).lower():
-                raise AuthenticationError(
-                    f"Failed to authenticate with Doppler: {e}"
-                ) from e
+                raise AuthenticationError(f"Failed to authenticate with Doppler: {e}") from e
             raise BackendError(
                 f"Failed to authenticate with Doppler: {e}",
                 backend="doppler",
@@ -255,9 +250,7 @@ class DopplerAdapter(BaseAdapter):
             raise ConnectionError("Doppler connection not initialized")
 
         try:
-            response = self._client.secrets.list(
-                project=self._project, config=self._config_name
-            )
+            response = self._client.secrets.list(project=self._project, config=self._config_name)
 
             # Extract secret names
             secrets = response.get("secrets", {})
@@ -297,9 +290,7 @@ class DopplerAdapter(BaseAdapter):
             raise ConnectionError("Doppler connection not initialized")
 
         try:
-            response = self._client.secrets.list(
-                project=self._project, config=self._config_name
-            )
+            response = self._client.secrets.list(project=self._project, config=self._config_name)
 
             secrets = response.get("secrets", {})
             return key in secrets
@@ -325,9 +316,7 @@ class DopplerAdapter(BaseAdapter):
 
         try:
             # Try to list projects as a health check
-            self._client.secrets.list(
-                project=self._project, config=self._config_name
-            )
+            self._client.secrets.list(project=self._project, config=self._config_name)
             return True
 
         except Exception:

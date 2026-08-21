@@ -8,21 +8,24 @@ from penguin_limiter.config import Algorithm, RateLimitConfig, parse_limit, pars
 
 
 class TestParseLimitString:
-    @pytest.mark.parametrize("spec,limit,window", [
-        ("100/minute", 100, 60),
-        ("10/second", 10, 1),
-        ("5000/hour", 5000, 3600),
-        ("1/day", 1, 86400),
-        ("50/min", 50, 60),
-        ("30/sec", 30, 1),
-        ("200/hr", 200, 3600),
-        ("  100 / minute  ", 100, 60),  # whitespace tolerance
-        ("100/MINUTE", 100, 60),        # case insensitive
-    ])
+    @pytest.mark.parametrize(
+        "spec,limit,window",
+        [
+            ("100/minute", 100, 60),
+            ("10/second", 10, 1),
+            ("5000/hour", 5000, 3600),
+            ("1/day", 1, 86400),
+            ("50/min", 50, 60),
+            ("30/sec", 30, 1),
+            ("200/hr", 200, 3600),
+            ("  100 / minute  ", 100, 60),  # whitespace tolerance
+            ("100/MINUTE", 100, 60),  # case insensitive
+        ],
+    )
     def test_valid_specs(self, spec: str, limit: int, window: int) -> None:
-        l, w = parse_limit(spec)
-        assert l == limit
-        assert w == window
+        parsed_limit, parsed_window = parse_limit(spec)
+        assert parsed_limit == limit
+        assert parsed_window == window
 
     def test_invalid_spec_raises(self) -> None:
         with pytest.raises(ValueError, match="Invalid rate-limit spec"):

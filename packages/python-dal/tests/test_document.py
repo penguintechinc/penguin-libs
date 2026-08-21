@@ -1,16 +1,17 @@
 """Tests for document store backends."""
+
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from bson import ObjectId
 
 from penguin_dal.document.mongodb import (
-    MongoDAL,
     AsyncMongoDAL,
-    MongoConfig,
     FindOptions,
+    MongoConfig,
+    MongoDAL,
 )
 
 
@@ -20,6 +21,7 @@ class TestMongoDAL:
     def test_init_creates_client(self):
         """Test initialization creates MongoDB client."""
         import pymongo
+
         mock_client = MagicMock()
         pymongo.MongoClient = MagicMock(return_value=mock_client)
         mock_client.__getitem__ = MagicMock(return_value=MagicMock())
@@ -33,6 +35,7 @@ class TestMongoDAL:
     def test_insert_one_returns_str_id(self):
         """Test insert_one returns string _id."""
         import pymongo
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -53,6 +56,7 @@ class TestMongoDAL:
     def test_find_one_returns_dict_with_str_id(self):
         """Test find_one returns dict with ObjectId converted to str."""
         import pymongo
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -73,6 +77,7 @@ class TestMongoDAL:
     def test_find_one_returns_none(self):
         """Test find_one returns None when not found."""
         import pymongo
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -90,6 +95,7 @@ class TestMongoDAL:
     def test_find_with_limit_and_skip(self):
         """Test find applies limit and skip."""
         import pymongo
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -112,6 +118,7 @@ class TestMongoDAL:
     def test_find_with_sort(self):
         """Test find applies sort."""
         import pymongo
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -134,6 +141,7 @@ class TestMongoDAL:
     def test_find_returns_list_of_dicts(self):
         """Test find returns list of dicts with str _id."""
         import pymongo
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -163,6 +171,7 @@ class TestMongoDAL:
     def test_update_one_returns_modified_count(self):
         """Test update_one returns modified count."""
         import pymongo
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -183,6 +192,7 @@ class TestMongoDAL:
     def test_delete_one_returns_deleted_count(self):
         """Test delete_one returns deleted count."""
         import pymongo
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -202,6 +212,7 @@ class TestMongoDAL:
     def test_count_with_filter(self):
         """Test count with filter."""
         import pymongo
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -220,6 +231,7 @@ class TestMongoDAL:
     def test_count_without_filter(self):
         """Test count without filter counts all."""
         import pymongo
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -238,6 +250,7 @@ class TestMongoDAL:
     def test_create_index(self):
         """Test create_index."""
         import pymongo
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -254,6 +267,7 @@ class TestMongoDAL:
     def test_close(self):
         """Test close closes connection."""
         import pymongo
+
         mock_client = MagicMock()
         pymongo.MongoClient = MagicMock(return_value=mock_client)
         mock_client.__getitem__ = MagicMock(return_value=MagicMock())
@@ -271,6 +285,7 @@ class TestAsyncMongoDAL:
     async def test_async_init(self):
         """Test async initialization."""
         import motor.motor_asyncio
+
         mock_client = MagicMock()
         motor.motor_asyncio.AsyncMongoClient = MagicMock(return_value=mock_client)
         mock_client.__getitem__ = MagicMock(return_value=MagicMock())
@@ -283,6 +298,7 @@ class TestAsyncMongoDAL:
     async def test_async_insert_one(self):
         """Test async insert_one."""
         import motor.motor_asyncio
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -302,6 +318,7 @@ class TestAsyncMongoDAL:
     async def test_async_find_one(self):
         """Test async find_one."""
         import motor.motor_asyncio
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -321,6 +338,7 @@ class TestAsyncMongoDAL:
     async def test_async_find(self):
         """Test async find."""
         import motor.motor_asyncio
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -348,6 +366,7 @@ class TestAsyncMongoDAL:
     async def test_async_update_one(self):
         """Test async update_one."""
         import motor.motor_asyncio
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -360,15 +379,14 @@ class TestAsyncMongoDAL:
         motor.motor_asyncio.AsyncMongoClient = MagicMock(return_value=mock_client)
 
         dal = AsyncMongoDAL(MongoConfig(uri="mongodb://localhost", db_name="testdb"))
-        count = await dal.update_one(
-            "users", {"name": "Alice"}, {"$set": {"age": 30}}
-        )
+        count = await dal.update_one("users", {"name": "Alice"}, {"$set": {"age": 30}})
 
         assert count == 1
 
     async def test_async_delete_one(self):
         """Test async delete_one."""
         import motor.motor_asyncio
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -388,6 +406,7 @@ class TestAsyncMongoDAL:
     async def test_async_count(self):
         """Test async count."""
         import motor.motor_asyncio
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -405,6 +424,7 @@ class TestAsyncMongoDAL:
     async def test_async_create_index(self):
         """Test async create_index."""
         import motor.motor_asyncio
+
         mock_client = MagicMock()
         mock_db = MagicMock()
         mock_coll = MagicMock()
@@ -422,6 +442,7 @@ class TestAsyncMongoDAL:
     async def test_async_close(self):
         """Test async close."""
         import motor.motor_asyncio
+
         mock_client = MagicMock()
         motor.motor_asyncio.AsyncMongoClient = MagicMock(return_value=mock_client)
         mock_client.__getitem__ = MagicMock(return_value=MagicMock())

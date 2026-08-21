@@ -1,17 +1,18 @@
 """Tests for penguin-sal exception hierarchy."""
 
 import pytest
+
 from penguin_sal.core.exceptions import (
-    PySecretsError,
-    ConnectionError,
+    AdapterNotInstalledError,
     AuthenticationError,
     AuthorizationError,
-    SecretNotFoundError,
-    InvalidURIError,
-    InvalidSecretValueError,
     BackendError,
+    ConnectionError,
+    InvalidSecretValueError,
+    InvalidURIError,
+    PySecretsError,
     RetryExhaustedError,
-    AdapterNotInstalledError,
+    SecretNotFoundError,
 )
 
 
@@ -125,7 +126,7 @@ class TestAdapterNotInstalledError:
     """Test AdapterNotInstalledError exception."""
 
     def test_adapter_not_installed(self) -> None:
-        """AdapterNotInstalledError stores adapter_name and install_extra with install instruction."""
+        """AdapterNotInstalledError stores adapter_name/install_extra with install instruction."""
         exc = AdapterNotInstalledError("vault", "vault")
         assert exc.adapter_name == "vault"
         assert exc.install_extra == "vault"

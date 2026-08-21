@@ -1,4 +1,5 @@
 """Protocol interfaces for all penguin-dal v2 backends."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -41,9 +42,7 @@ class FindOptions:
 class StorageStore(Protocol):
     """Protocol for synchronous object/file storage backends."""
 
-    def put(
-        self, key: str, data: bytes, opts: PutOptions | None = None
-    ) -> None:
+    def put(self, key: str, data: bytes, opts: PutOptions | None = None) -> None:
         """Store object at key."""
         ...
 
@@ -72,9 +71,7 @@ class StorageStore(Protocol):
 class AsyncStorageStore(Protocol):
     """Protocol for asynchronous object/file storage backends."""
 
-    async def put(
-        self, key: str, data: bytes, opts: PutOptions | None = None
-    ) -> None:
+    async def put(self, key: str, data: bytes, opts: PutOptions | None = None) -> None:
         """Store object at key."""
         ...
 
@@ -131,9 +128,7 @@ class CacheStore(Protocol):
         """Get multiple values. Non-existent keys map to None."""
         ...
 
-    def set_many(
-        self, mapping: dict[str, bytes], ttl: int | None = None
-    ) -> None:
+    def set_many(self, mapping: dict[str, bytes], ttl: int | None = None) -> None:
         """Set multiple key-value pairs."""
         ...
 
@@ -170,9 +165,7 @@ class AsyncCacheStore(Protocol):
         """Get multiple values. Non-existent keys map to None."""
         ...
 
-    async def set_many(
-        self, mapping: dict[str, bytes], ttl: int | None = None
-    ) -> None:
+    async def set_many(self, mapping: dict[str, bytes], ttl: int | None = None) -> None:
         """Set multiple key-value pairs."""
         ...
 
@@ -214,7 +207,11 @@ class AsyncStreamProducer(Protocol):
         """Publish message to topic."""
         ...
 
-    async def flush(self, timeout: float = 10.0) -> None:
+    # noqa: ASYNC109 below -- mirrors the real underlying client libraries'
+    # actual flush(timeout=...) signature (e.g. confluent-kafka
+    # Producer.flush); concrete backends must match this shape, not
+    # asyncio.timeout
+    async def flush(self, timeout: float = 10.0) -> None:  # noqa: ASYNC109
         """Wait for all pending messages to be published."""
         ...
 
@@ -273,9 +270,7 @@ class DocumentStore(Protocol):
         """Insert document into collection. Returns document ID."""
         ...
 
-    def find_one(
-        self, collection: str, filter: dict[str, Any]
-    ) -> dict[str, Any] | None:
+    def find_one(self, collection: str, filter: dict[str, Any]) -> dict[str, Any] | None:
         """Find one document matching filter."""
         ...
 
@@ -298,9 +293,7 @@ class DocumentStore(Protocol):
         """Update one document. Returns count of documents updated."""
         ...
 
-    def delete_one(
-        self, collection: str, filter: dict[str, Any]
-    ) -> int:
+    def delete_one(self, collection: str, filter: dict[str, Any]) -> int:
         """Delete one document. Returns count of documents deleted."""
         ...
 
@@ -330,9 +323,7 @@ class AsyncDocumentStore(Protocol):
         """Insert document into collection. Returns document ID."""
         ...
 
-    async def find_one(
-        self, collection: str, filter: dict[str, Any]
-    ) -> dict[str, Any] | None:
+    async def find_one(self, collection: str, filter: dict[str, Any]) -> dict[str, Any] | None:
         """Find one document matching filter."""
         ...
 
@@ -355,9 +346,7 @@ class AsyncDocumentStore(Protocol):
         """Update one document. Returns count of documents updated."""
         ...
 
-    async def delete_one(
-        self, collection: str, filter: dict[str, Any]
-    ) -> int:
+    async def delete_one(self, collection: str, filter: dict[str, Any]) -> int:
         """Delete one document. Returns count of documents deleted."""
         ...
 

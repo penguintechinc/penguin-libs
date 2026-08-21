@@ -1,5 +1,4 @@
-"""
-Crypto module - Modern cryptographic primitives.
+"""Crypto module - Modern cryptographic primitives.
 
 Provides:
 - Symmetric encryption: AES-256-GCM

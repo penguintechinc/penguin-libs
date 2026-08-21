@@ -1,10 +1,11 @@
 """NFS file storage backend."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from penguin_dal.protocols import PutOptions, StorageStore
+from penguin_dal.protocols import PutOptions
 
 
 @dataclass(slots=True)
@@ -24,22 +25,16 @@ class NFSStore:
         self._base_path = Path(config.mount_path)
 
         if not self._base_path.exists():
-            raise ValueError(
-                f"Mount path does not exist: {config.mount_path}"
-            )
+            raise ValueError(f"Mount path does not exist: {config.mount_path}")
 
         if not self._base_path.is_dir():
-            raise ValueError(
-                f"Mount path is not a directory: {config.mount_path}"
-            )
+            raise ValueError(f"Mount path is not a directory: {config.mount_path}")
 
     def _get_file_path(self, key: str) -> Path:
         """Build full file path from key."""
         return self._base_path / key
 
-    def put(
-        self, key: str, data: bytes, opts: PutOptions | None = None
-    ) -> None:
+    def put(self, key: str, data: bytes, opts: PutOptions | None = None) -> None:
         """Store object at key."""
         file_path = self._get_file_path(key)
 

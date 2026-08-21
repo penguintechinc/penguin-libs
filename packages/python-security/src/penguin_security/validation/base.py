@@ -1,5 +1,4 @@
-"""
-Base validation classes and utilities.
+"""Base validation classes and utilities.
 
 Provides the foundation for PyDAL-style validators with:
 - Validator abstract base class with __call__ pattern
@@ -32,8 +31,7 @@ class ValidationError(Exception):
 
 @dataclass(slots=True, frozen=True)
 class ValidationResult[T]:
-    """
-    Result of a validation operation.
+    """Result of a validation operation.
 
     Attributes:
         is_valid: Whether the validation passed
@@ -56,8 +54,7 @@ class ValidationResult[T]:
         return cls(is_valid=False, value=None, error=error)
 
     def unwrap(self) -> T:
-        """
-        Get the validated value or raise ValidationError.
+        """Get the validated value or raise ValidationError.
 
         Returns:
             The validated value
@@ -70,8 +67,7 @@ class ValidationResult[T]:
         return self.value
 
     def unwrap_or(self, default: T) -> T:
-        """
-        Get the validated value or return a default.
+        """Get the validated value or return a default.
 
         Args:
             default: Value to return if validation failed
@@ -85,8 +81,7 @@ class ValidationResult[T]:
 
 
 class Validator[T, V](ABC):
-    """
-    Abstract base class for validators.
+    """Abstract base class for validators.
 
     Validators follow the PyDAL IS_* pattern with __call__ method.
     Subclasses must implement the validate() method.
@@ -107,8 +102,7 @@ class Validator[T, V](ABC):
     """
 
     def __call__(self, value: T) -> ValidationResult[V]:
-        """
-        Validate the input value.
+        """Validate the input value.
 
         Args:
             value: The value to validate
@@ -120,8 +114,7 @@ class Validator[T, V](ABC):
 
     @abstractmethod
     def validate(self, value: T) -> ValidationResult[V]:
-        """
-        Perform the actual validation.
+        """Perform the actual validation.
 
         Args:
             value: The value to validate
@@ -132,8 +125,7 @@ class Validator[T, V](ABC):
         ...
 
     def and_then(self, other: Validator[V, Any]) -> ChainedValidator[T, Any]:
-        """
-        Chain this validator with another.
+        """Chain this validator with another.
 
         Args:
             other: The next validator in the chain
@@ -145,8 +137,7 @@ class Validator[T, V](ABC):
 
 
 class ChainedValidator[T, V](Validator[T, V]):
-    """
-    A validator that chains multiple validators together.
+    """A validator that chains multiple validators together.
 
     Validators are run in sequence. If any validator fails,
     the chain stops and returns the failure result.
@@ -173,8 +164,7 @@ class ChainedValidator[T, V](Validator[T, V]):
 
 
 def chain(*validators: Validator[Any, Any]) -> ChainedValidator[Any, Any]:
-    """
-    Create a chained validator from multiple validators.
+    """Create a chained validator from multiple validators.
 
     Validators are run in sequence. If any validator fails,
     the chain stops and returns the failure result.

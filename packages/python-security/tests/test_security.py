@@ -5,7 +5,6 @@ and input escaping utilities.
 """
 
 import time
-from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -34,7 +33,7 @@ class TestSanitizeHtml:
         """Test that javascript: URLs are removed."""
         from penguin_security import sanitize_html
 
-        result = sanitize_html('<a href="javascript:alert(\'xss\')">link</a>')
+        result = sanitize_html("<a href=\"javascript:alert('xss')\">link</a>")
         assert "javascript:" not in result
         assert "link" in result
 
@@ -313,13 +312,13 @@ class TestValidateCsrfToken:
         """Test that validation is case-sensitive."""
         from penguin_security import validate_csrf_token
 
-        token = "ABC123"
+        token = "ABC123"  # noqa: S105 -- test fixture placeholder, not a real credential
         assert validate_csrf_token(token, "abc123") is False
 
     def test_validate_csrf_token_uses_hmac_compare(self) -> None:
         """Test that validation uses hmac.compare_digest (constant-time by design)."""
         import inspect
-        import hmac
+
         from penguin_security.csrf import validate_csrf_token
 
         source = inspect.getsource(validate_csrf_token)
@@ -405,7 +404,7 @@ class TestVerifyPassword:
         """Test verification with correct password."""
         from penguin_security import hash_password, verify_password
 
-        password = "my_secure_password"
+        password = "my_secure_password"  # noqa: S105 -- test fixture placeholder, not a real credential
         hashed = hash_password(password)
         assert verify_password(password, hashed) is True
 
@@ -427,7 +426,7 @@ class TestVerifyPassword:
         """Test verification with Unicode password."""
         from penguin_security import hash_password, verify_password
 
-        password = "密码123"
+        password = "密码123"  # noqa: S105 -- test fixture placeholder, not a real credential
         hashed = hash_password(password)
         assert verify_password(password, hashed) is True
 
@@ -442,7 +441,7 @@ class TestVerifyPassword:
         """Test that verification uses constant-time comparison."""
         from penguin_security import hash_password, verify_password
 
-        password = "test_password"
+        password = "test_password"  # noqa: S105 -- test fixture placeholder, not a real credential
         hashed = hash_password(password)
 
         # Time correct and wrong passwords
@@ -486,7 +485,7 @@ class TestCheckRateLimit:
         """Test that requests within limit are allowed."""
         from penguin_security import check_rate_limit
 
-        for i in range(5):
+        for _ in range(5):
             assert check_rate_limit("key1", limit=10, window=60) is True
 
     def test_check_rate_limit_exceeds_limit(self) -> None:
@@ -497,7 +496,7 @@ class TestCheckRateLimit:
         test_key = f"test_key_{time.time()}"
 
         # Fill up the limit
-        for i in range(5):
+        for _ in range(5):
             check_rate_limit(test_key, limit=5, window=60)
 
         # Next request should fail
@@ -582,7 +581,7 @@ class TestSecurityIntegration:
         """Test complete password hashing and verification workflow."""
         from penguin_security import hash_password, verify_password
 
-        password = "user_password_123"
+        password = "user_password_123"  # noqa: S105 -- test fixture placeholder, not a real credential
 
         # Hash on registration
         stored_hash = hash_password(password)
@@ -610,8 +609,9 @@ class TestSecurityIntegration:
 
     def test_concurrent_rate_limit_safety(self) -> None:
         """Test that rate limiter handles concurrent requests safely."""
-        from penguin_security import check_rate_limit
         import threading
+
+        from penguin_security import check_rate_limit
 
         test_key = f"concurrent_{time.time()}"
         limit = 10
@@ -671,7 +671,7 @@ class TestEdgeCases:
         """Test verifying password with whitespace."""
         from penguin_security import hash_password, verify_password
 
-        password = "  password  "
+        password = "  password  "  # noqa: S105 -- test fixture placeholder, not a real credential
         hashed = hash_password(password)
         # Whitespace should be significant
         assert verify_password(password, hashed) is True

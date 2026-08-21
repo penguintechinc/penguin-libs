@@ -30,7 +30,8 @@ from __future__ import annotations
 
 import functools
 import time
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from ..algorithms import RateLimitResult
 from ..algorithms.fixed_window import FixedWindow
@@ -85,6 +86,7 @@ class FlaskRateLimiter:
     ) -> None:
         if storage is None:
             from ..storage.memory import MemoryStorage
+
             storage = MemoryStorage()
         self._config = config
         self._storage = storage
@@ -168,9 +170,7 @@ class FlaskRateLimiter:
             fail_open=self._config.fail_open,
             add_headers=self._config.add_headers,
             skip_private_ips=(
-                skip_private_ips
-                if skip_private_ips is not None
-                else self._config.skip_private_ips
+                skip_private_ips if skip_private_ips is not None else self._config.skip_private_ips
             ),
         )
         route_algo = _build_algorithm(route_config, self._storage)

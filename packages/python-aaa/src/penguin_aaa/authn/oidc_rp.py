@@ -41,8 +41,7 @@ class OIDCRPConfig:
 
 
 class OIDCRelyingParty:
-    """
-    OIDC Relying Party for validating tokens issued by an external provider.
+    """OIDC Relying Party for validating tokens issued by an external provider.
 
     Discovers JWKS from the issuer's discovery document, validates tokens,
     and provides helpers for the authorization code flow.
@@ -54,8 +53,7 @@ class OIDCRelyingParty:
         self._jwks_client: PyJWKClient | None = None
 
     async def discover(self) -> dict[str, Any]:
-        """
-        Fetch and cache the OIDC discovery document from the issuer.
+        """Fetch and cache the OIDC discovery document from the issuer.
 
         Returns:
             The parsed discovery document dict.
@@ -84,8 +82,7 @@ class OIDCRelyingParty:
         return document
 
     async def validate_token(self, raw_token: str, expected_nonce: str | None = None) -> Claims:
-        """
-        Validate a raw JWT token string and return its parsed claims.
+        """Validate a raw JWT token string and return its parsed claims.
 
         Args:
             raw_token: The encoded JWT string.
@@ -104,8 +101,8 @@ class OIDCRelyingParty:
         if self._jwks_client is None:
             await self.discover()
 
-        assert self._jwks_client is not None
-        assert self._discovery is not None
+        if self._jwks_client is None or self._discovery is None:
+            raise RuntimeError("OIDC discovery did not populate JWKS client/document")
         signing_key = self._jwks_client.get_signing_key_from_jwt(raw_token)
 
         skew_seconds = int(self._config.clock_skew.total_seconds())
@@ -142,8 +139,7 @@ class OIDCRelyingParty:
         return await self.validate_token(raw_token)
 
     def validate_state(self, returned_state: str, expected_state: str) -> bool:
-        """
-        Constant-time comparison of OAuth2 state parameters.
+        """Constant-time comparison of OAuth2 state parameters.
 
         Args:
             returned_state: The state value received from the redirect.
@@ -155,8 +151,7 @@ class OIDCRelyingParty:
         return hmac.compare_digest(returned_state, expected_state)
 
     def generate_state(self) -> str:
-        """
-        Generate a cryptographically random state token for CSRF protection.
+        """Generate a cryptographically random state token for CSRF protection.
 
         Returns:
             A URL-safe random string.
@@ -170,8 +165,7 @@ class OIDCRelyingParty:
         code_challenge: str | None = None,
         code_challenge_method: str = "S256",
     ) -> str:
-        """
-        Build the authorization redirect URL for the code flow.
+        """Build the authorization redirect URL for the code flow.
 
         Args:
             state: CSRF state token (from generate_state()).
@@ -211,8 +205,7 @@ class OIDCRelyingParty:
 
 
 def generate_pkce_pair() -> tuple[str, str]:
-    """
-    Generate a PKCE (Proof Key for Public Clients) verifier and challenge.
+    """Generate a PKCE (Proof Key for Public Clients) verifier and challenge.
 
     Returns:
         A tuple of (verifier, challenge_s256) where verifier is 32 random bytes
@@ -232,8 +225,7 @@ def generate_pkce_pair() -> tuple[str, str]:
 
 
 def _normalise_list_fields(payload: dict[str, Any], fields: tuple[str, ...]) -> None:
-    """
-    Ensure specified fields in a JWT payload are lists, not bare strings.
+    """Ensure specified fields in a JWT payload are lists, not bare strings.
 
     Modifies payload in place.  Space-separated strings (common for scope)
     are split into individual items.

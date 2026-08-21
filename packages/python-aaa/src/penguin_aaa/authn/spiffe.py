@@ -23,8 +23,7 @@ class SPIFFEConfig:
 
 
 class SPIFFEAuthenticator:
-    """
-    Validates peer SPIFFE IDs against a configured allowlist.
+    """Validates peer SPIFFE IDs against a configured allowlist.
 
     In production this is paired with a SPIFFE Workload API client that
     retrieves the peer's SVID from the agent socket.  This class handles
@@ -35,8 +34,7 @@ class SPIFFEAuthenticator:
         self._config = config
 
     def validate_peer_id(self, spiffe_id: str) -> bool:
-        """
-        Check whether a peer SPIFFE ID is permitted.
+        """Check whether a peer SPIFFE ID is permitted.
 
         The ID must be a valid spiffe:// URI and must be present in the
         configured allowed_ids list.  An empty allowlist denies all peers.
@@ -58,8 +56,7 @@ class SPIFFEAuthenticator:
         return spiffe_id in self._config.allowed_ids
 
     def is_same_trust_domain(self, spiffe_id: str) -> bool:
-        """
-        Check whether a SPIFFE ID belongs to the configured trust domain.
+        """Check whether a SPIFFE ID belongs to the configured trust domain.
 
         Args:
             spiffe_id: The SPIFFE ID to inspect.
@@ -78,8 +75,7 @@ class SPIFFEAuthenticator:
         return peer_domain == self._config.trust_domain
 
     def authenticate(self, spiffe_id: str) -> None:
-        """
-        Authenticate a SPIFFE ID by validating it is allowed.
+        """Authenticate a SPIFFE ID by validating it is allowed.
 
         Raises:
             ValueError: If the SPIFFE ID is invalid or not in the allowlist.

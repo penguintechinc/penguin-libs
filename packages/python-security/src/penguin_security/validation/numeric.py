@@ -1,5 +1,4 @@
-"""
-Numeric validators - PyDAL-style validators for numeric inputs.
+"""Numeric validators - PyDAL-style validators for numeric inputs.
 
 Provides:
 - IsInt: Validates integer values
@@ -19,8 +18,7 @@ NumericInput = int | float | str
 
 
 class IsInt(Validator[NumericInput, int]):
-    """
-    Validates that a value is or can be converted to an integer.
+    """Validates that a value is or can be converted to an integer.
 
     Example:
         validator = IsInt()
@@ -58,8 +56,7 @@ class IsInt(Validator[NumericInput, int]):
 
 
 class IsFloat(Validator[NumericInput, float]):
-    """
-    Validates that a value is or can be converted to a float.
+    """Validates that a value is or can be converted to a float.
 
     Example:
         validator = IsFloat()
@@ -89,8 +86,7 @@ class IsFloat(Validator[NumericInput, float]):
 
 
 class IsIntInRange(Validator[NumericInput, int]):
-    """
-    Validates that an integer is within a specified range.
+    """Validates that an integer is within a specified range.
 
     Args:
         min_value: Minimum value (inclusive), or None for no minimum
@@ -120,7 +116,11 @@ class IsIntInRange(Validator[NumericInput, int]):
             return ValidationResult.failure(int_result.error or "Value must be an integer")
 
         int_value = int_result.value
-        assert int_value is not None  # Type narrowing
+        if int_value is None:
+            # Unreachable given int_result.is_valid is True, but guard
+            # explicitly rather than assert: this is a security validation
+            # library and assert is stripped under -O.
+            raise TypeError("Validated int result had no value")
 
         if self.min_value is not None and int_value < self.min_value:
             msg = self.error_message or f"Value must be at least {self.min_value}"
@@ -134,8 +134,7 @@ class IsIntInRange(Validator[NumericInput, int]):
 
 
 class IsFloatInRange(Validator[NumericInput, float]):
-    """
-    Validates that a float is within a specified range.
+    """Validates that a float is within a specified range.
 
     Args:
         min_value: Minimum value (inclusive), or None for no minimum
@@ -165,7 +164,11 @@ class IsFloatInRange(Validator[NumericInput, float]):
             return ValidationResult.failure(float_result.error or "Value must be a number")
 
         float_value = float_result.value
-        assert float_value is not None  # Type narrowing
+        if float_value is None:
+            # Unreachable given float_result.is_valid is True, but guard
+            # explicitly rather than assert: this is a security validation
+            # library and assert is stripped under -O.
+            raise TypeError("Validated float result had no value")
 
         if self.min_value is not None and float_value < self.min_value:
             msg = self.error_message or f"Value must be at least {self.min_value}"
@@ -179,8 +182,7 @@ class IsFloatInRange(Validator[NumericInput, float]):
 
 
 class IsPositive(Validator[NumericInput, float]):
-    """
-    Validates that a number is positive (> 0).
+    """Validates that a number is positive (> 0).
 
     Args:
         allow_zero: Whether to allow zero
@@ -202,7 +204,11 @@ class IsPositive(Validator[NumericInput, float]):
             return ValidationResult.failure(float_result.error or "Value must be a number")
 
         float_value = float_result.value
-        assert float_value is not None
+        if float_value is None:
+            # Unreachable given float_result.is_valid is True, but guard
+            # explicitly rather than assert: this is a security validation
+            # library and assert is stripped under -O.
+            raise TypeError("Validated float result had no value")
 
         if self.allow_zero:
             if float_value < 0:
@@ -217,8 +223,7 @@ class IsPositive(Validator[NumericInput, float]):
 
 
 class IsNegative(Validator[NumericInput, float]):
-    """
-    Validates that a number is negative (< 0).
+    """Validates that a number is negative (< 0).
 
     Args:
         allow_zero: Whether to allow zero
@@ -240,7 +245,11 @@ class IsNegative(Validator[NumericInput, float]):
             return ValidationResult.failure(float_result.error or "Value must be a number")
 
         float_value = float_result.value
-        assert float_value is not None
+        if float_value is None:
+            # Unreachable given float_result.is_valid is True, but guard
+            # explicitly rather than assert: this is a security validation
+            # library and assert is stripped under -O.
+            raise TypeError("Validated float result had no value")
 
         if self.allow_zero:
             if float_value > 0:

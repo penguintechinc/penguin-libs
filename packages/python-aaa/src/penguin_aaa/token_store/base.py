@@ -11,8 +11,7 @@ class TokenStore(Protocol):
     """Protocol for token storage backends (refresh tokens, revocation, nonces)."""
 
     def store_refresh(self, token: str, claims: Claims, ttl: timedelta) -> None:
-        """
-        Store a refresh token with associated claims and expiry.
+        """Store a refresh token with associated claims and expiry.
 
         Args:
             token: The opaque refresh token string.
@@ -22,8 +21,7 @@ class TokenStore(Protocol):
         ...
 
     def get_claims_for_refresh(self, token: str) -> Claims | None:
-        """
-        Retrieve claims for a refresh token.
+        """Retrieve claims for a refresh token.
 
         Returns None if the token is not found, expired, or revoked.
 
@@ -36,8 +34,7 @@ class TokenStore(Protocol):
         ...
 
     def revoke_refresh(self, token: str) -> None:
-        """
-        Revoke a refresh token immediately.
+        """Revoke a refresh token immediately.
 
         Args:
             token: The opaque refresh token string to revoke.
@@ -45,8 +42,7 @@ class TokenStore(Protocol):
         ...
 
     def add_revoked_jti(self, jti: str, ttl: timedelta) -> None:
-        """
-        Add a JWT ID (jti) to the revocation list.
+        """Add a JWT ID (jti) to the revocation list.
 
         Args:
             jti: The JWT ID claim value.
@@ -55,8 +51,7 @@ class TokenStore(Protocol):
         ...
 
     def is_jti_revoked(self, jti: str) -> bool:
-        """
-        Check if a JWT ID (jti) is revoked.
+        """Check if a JWT ID (jti) is revoked.
 
         Args:
             jti: The JWT ID claim value.
@@ -67,8 +62,7 @@ class TokenStore(Protocol):
         ...
 
     def store_nonce(self, nonce: str, sub: str, ttl: timedelta) -> None:
-        """
-        Store a nonce for one-time use.
+        """Store a nonce for one-time use.
 
         Args:
             nonce: The nonce value.
@@ -78,8 +72,7 @@ class TokenStore(Protocol):
         ...
 
     def consume_nonce(self, nonce: str, sub: str) -> bool:
-        """
-        Consume a nonce (one-time use).
+        """Consume a nonce (one-time use).
 
         The nonce must exist, not be expired, and the subject must match.
         If valid, the nonce is deleted and True is returned.

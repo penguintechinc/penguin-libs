@@ -8,10 +8,6 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-# Mock infisicalsdk before importing the adapter
-sys.modules["infisicalsdk"] = MagicMock()
-
-from penguin_sal.adapters.infisical import InfisicalAdapter
 from penguin_sal.core.exceptions import (
     AdapterNotInstalledError,
     AuthenticationError,
@@ -20,6 +16,17 @@ from penguin_sal.core.exceptions import (
     SecretNotFoundError,
 )
 from penguin_sal.core.types import ConnectionConfig, Secret, SecretList
+
+# Mock infisicalsdk before importing the adapter
+sys.modules["infisicalsdk"] = MagicMock()
+
+# noqa: E402 below -- must follow the sys.modules mock above so the adapter's
+# top-level import picks up the fake infisicalsdk
+from penguin_sal.adapters.infisical import InfisicalAdapter  # noqa: E402
+
+# Placeholder token for ConnectionConfig fixtures below where the token value
+# is incidental to the test (not the thing under assertion).
+_FAKE_TOKEN = "token"  # noqa: S105 -- test fixture placeholder, not a real credential
 
 
 class TestInfisicalAdapterInit:
@@ -63,9 +70,7 @@ class TestInfisicalAdapterConnection:
         adapter = InfisicalAdapter(config)
         adapter._init_connection()
 
-        mock_client_class.assert_called_once_with(
-            site_url="https://infisical.example.com"
-        )
+        mock_client_class.assert_called_once_with(site_url="https://infisical.example.com")
         assert adapter._client is mock_client
         assert adapter._connected is True
 
@@ -83,9 +88,7 @@ class TestInfisicalAdapterConnection:
         adapter = InfisicalAdapter(config)
         adapter._init_connection()
 
-        mock_client_class.assert_called_once_with(
-            site_url="https://infisical.example.com:8080"
-        )
+        mock_client_class.assert_called_once_with(site_url="https://infisical.example.com:8080")
 
     @patch("infisicalsdk.InfisicalClient")
     def test_init_connection_client_failure(self, mock_client_class: Mock) -> None:
@@ -126,14 +129,16 @@ class TestInfisicalAdapterAuthentication:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="my-token-123",
+            password="my-token-123",  # noqa: S106 -- test fixture placeholder, not a real credential
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
         adapter._init_connection()
         adapter.authenticate()
 
-        mock_client.auth.assert_called_once_with(token="my-token-123")
+        mock_client.auth.assert_called_once_with(
+            token="my-token-123"  # noqa: S106 -- asserting against the fixture literal set above, not a real credential
+        )
 
     @patch("infisicalsdk.InfisicalClient")
     def test_authenticate_with_params_token(self, mock_client_class: Mock) -> None:
@@ -149,7 +154,9 @@ class TestInfisicalAdapterAuthentication:
         adapter._init_connection()
         adapter.authenticate()
 
-        mock_client.auth.assert_called_once_with(token="param-token-456")
+        mock_client.auth.assert_called_once_with(
+            token="param-token-456"  # noqa: S106 -- asserting against the fixture literal set above, not a real credential
+        )
 
     @patch("infisicalsdk.InfisicalClient")
     def test_authenticate_no_token(self, mock_client_class: Mock) -> None:
@@ -176,7 +183,7 @@ class TestInfisicalAdapterAuthentication:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="bad-token",
+            password="bad-token",  # noqa: S106 -- test fixture placeholder, not a real credential
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -203,7 +210,7 @@ class TestInfisicalAdapterGet:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123", "environment": "prod"},
         )
         adapter = InfisicalAdapter(config)
@@ -230,7 +237,7 @@ class TestInfisicalAdapterGet:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -247,7 +254,7 @@ class TestInfisicalAdapterGet:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={},  # Missing project_id
         )
         adapter = InfisicalAdapter(config)
@@ -266,7 +273,7 @@ class TestInfisicalAdapterGet:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -294,7 +301,7 @@ class TestInfisicalAdapterSet:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123", "environment": "staging"},
         )
         adapter = InfisicalAdapter(config)
@@ -327,7 +334,7 @@ class TestInfisicalAdapterSet:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -355,7 +362,7 @@ class TestInfisicalAdapterSet:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -377,7 +384,7 @@ class TestInfisicalAdapterSet:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -400,7 +407,7 @@ class TestInfisicalAdapterDelete:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -425,7 +432,7 @@ class TestInfisicalAdapterDelete:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -447,7 +454,7 @@ class TestInfisicalAdapterDelete:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -474,7 +481,7 @@ class TestInfisicalAdapterList:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -501,7 +508,7 @@ class TestInfisicalAdapterList:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -528,7 +535,7 @@ class TestInfisicalAdapterList:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -549,7 +556,7 @@ class TestInfisicalAdapterList:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -572,7 +579,7 @@ class TestInfisicalAdapterExists:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -590,7 +597,7 @@ class TestInfisicalAdapterExists:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -612,7 +619,7 @@ class TestInfisicalAdapterHealthCheck:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -628,7 +635,7 @@ class TestInfisicalAdapterHealthCheck:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={},
         )
         adapter = InfisicalAdapter(config)
@@ -646,7 +653,7 @@ class TestInfisicalAdapterHealthCheck:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
         adapter = InfisicalAdapter(config)
@@ -692,7 +699,7 @@ class TestInfisicalAdapterContextManager:
         config = ConnectionConfig(
             scheme="infisical",
             host="infisical.example.com",
-            password="token",
+            password=_FAKE_TOKEN,
             params={"project_id": "proj-123"},
         )
 

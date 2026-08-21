@@ -51,8 +51,7 @@ class KubernetesSecretsAdapter(BaseAdapter):
             from kubernetes import config as k8s_config
         except ImportError as e:
             raise ConnectionError(
-                "kubernetes client not installed. "
-                "Install with: pip install penguin-sal[k8s]"
+                "kubernetes client not installed. Install with: pip install penguin-sal[k8s]"
             ) from e
 
         kubeconfig_path = self.config.params.get("kubeconfig")
@@ -67,9 +66,7 @@ class KubernetesSecretsAdapter(BaseAdapter):
                 except k8s_config.config_exception.ConfigException:
                     k8s_config.load_kube_config()
         except Exception as e:
-            raise ConnectionError(
-                f"Failed to load Kubernetes configuration: {e}"
-            ) from e
+            raise ConnectionError(f"Failed to load Kubernetes configuration: {e}") from e
 
         self._api_client = client.CoreV1Api()
         self._connected = True
@@ -107,13 +104,9 @@ class KubernetesSecretsAdapter(BaseAdapter):
             BackendError: If the API call fails.
         """
         try:
-            k8s_secret = self._api_client.read_namespaced_secret(
-                key, self._namespace
-            )
+            k8s_secret = self._api_client.read_namespaced_secret(key, self._namespace)
         except Exception as e:
-            self._raise_for_api_exception(
-                e, f"Failed to retrieve secret '{key}'", key
-            )
+            self._raise_for_api_exception(e, f"Failed to retrieve secret '{key}'", key)
 
         # Decode base64 data
         decoded_data: dict[str, Any] = {}
@@ -138,12 +131,8 @@ class KubernetesSecretsAdapter(BaseAdapter):
         return Secret(
             key=key,
             value=value,
-            version=int(k8s_secret.metadata.resource_version or 0)
-            if k8s_secret.metadata
-            else None,
-            created_at=k8s_secret.metadata.creation_timestamp
-            if k8s_secret.metadata
-            else None,
+            version=int(k8s_secret.metadata.resource_version or 0) if k8s_secret.metadata else None,
+            created_at=k8s_secret.metadata.creation_timestamp if k8s_secret.metadata else None,
             updated_at=k8s_secret.metadata.managed_fields[-1].time
             if k8s_secret.metadata and k8s_secret.metadata.managed_fields
             else None,
@@ -209,35 +198,23 @@ class KubernetesSecretsAdapter(BaseAdapter):
             # Try to get existing secret
             self._api_client.read_namespaced_secret(key, self._namespace)
             # Update if exists
-            result = self._api_client.patch_namespaced_secret(
-                key, self._namespace, k8s_secret
-            )
+            result = self._api_client.patch_namespaced_secret(key, self._namespace, k8s_secret)
         except Exception as e:
             # Check if it's 404 (not found)
             if hasattr(e, "status") and e.status == 404:  # type: ignore[attr-defined]
                 # Create if doesn't exist
                 try:
-                    result = self._api_client.create_namespaced_secret(
-                        self._namespace, k8s_secret
-                    )
+                    result = self._api_client.create_namespaced_secret(self._namespace, k8s_secret)
                 except Exception as create_err:
-                    self._raise_for_api_exception(
-                        create_err, f"Failed to create secret '{key}'"
-                    )
+                    self._raise_for_api_exception(create_err, f"Failed to create secret '{key}'")
             else:
-                self._raise_for_api_exception(
-                    e, f"Failed to set secret '{key}'"
-                )
+                self._raise_for_api_exception(e, f"Failed to set secret '{key}'")
 
         return Secret(
             key=key,
             value=value,
-            version=int(result.metadata.resource_version or 0)
-            if result.metadata
-            else None,
-            created_at=result.metadata.creation_timestamp
-            if result.metadata
-            else None,
+            version=int(result.metadata.resource_version or 0) if result.metadata else None,
+            created_at=result.metadata.creation_timestamp if result.metadata else None,
             updated_at=datetime.now(UTC),
             metadata=labels if labels else None,
         )
@@ -263,9 +240,7 @@ class KubernetesSecretsAdapter(BaseAdapter):
         except Exception as e:
             if hasattr(e, "status") and e.status == 404:  # type: ignore[attr-defined]
                 return False
-            self._raise_for_api_exception(
-                e, f"Failed to delete secret '{key}'"
-            )
+            self._raise_for_api_exception(e, f"Failed to delete secret '{key}'")
 
     def list(self, prefix: str = "", limit: int | None = None) -> SecretList:
         """List Kubernetes Secrets in the namespace.
@@ -291,7 +266,8 @@ class KubernetesSecretsAdapter(BaseAdapter):
         keys = [
             item.metadata.name
             for item in (secrets.items or [])
-            if item.metadata and item.metadata.name
+            if item.metadata
+            and item.metadata.name
             and (not prefix or item.metadata.name.startswith(prefix))
         ]
 

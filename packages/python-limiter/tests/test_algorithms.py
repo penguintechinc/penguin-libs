@@ -5,17 +5,15 @@ from __future__ import annotations
 import time
 from unittest.mock import MagicMock
 
-import pytest
-
 from penguin_limiter.algorithms.fixed_window import FixedWindow
 from penguin_limiter.algorithms.sliding_window import SlidingWindow
 from penguin_limiter.algorithms.token_bucket import TokenBucket
 from penguin_limiter.storage.memory import MemoryStorage
 
-
 # ---------------------------------------------------------------------------
 # FixedWindow
 # ---------------------------------------------------------------------------
+
 
 class TestFixedWindow:
     def test_first_request_allowed(self) -> None:
@@ -61,6 +59,7 @@ class TestFixedWindow:
 # SlidingWindow
 # ---------------------------------------------------------------------------
 
+
 class TestSlidingWindow:
     def test_within_limit_allowed(self) -> None:
         storage = MemoryStorage()
@@ -105,6 +104,7 @@ class TestSlidingWindow:
 # ---------------------------------------------------------------------------
 # TokenBucket
 # ---------------------------------------------------------------------------
+
 
 class TestTokenBucket:
     def test_first_request_consumes_one_token(self) -> None:

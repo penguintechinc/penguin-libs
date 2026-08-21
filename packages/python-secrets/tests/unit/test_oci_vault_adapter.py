@@ -6,9 +6,19 @@ import base64
 import json
 import sys
 from datetime import datetime
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock
 
 import pytest
+
+from penguin_sal.core.exceptions import (
+    AdapterNotInstalledError,
+    AuthenticationError,
+    AuthorizationError,
+    BackendError,
+    ConnectionError,
+    SecretNotFoundError,
+)
+from penguin_sal.core.types import ConnectionConfig
 
 # Mock OCI module before importing adapter to avoid import errors when SDK not installed
 mock_oci = MagicMock()
@@ -33,16 +43,9 @@ sys.modules["oci.vault"] = mock_oci.vault
 sys.modules["oci.vault.models"] = mock_oci.vault.models
 sys.modules["oci.secrets"] = mock_oci.secrets
 
-from penguin_sal.adapters.oci_vault import OCIVaultAdapter
-from penguin_sal.core.exceptions import (
-    AdapterNotInstalledError,
-    AuthenticationError,
-    AuthorizationError,
-    BackendError,
-    ConnectionError,
-    SecretNotFoundError,
-)
-from penguin_sal.core.types import ConnectionConfig
+# noqa: E402 below -- must follow the sys.modules mock above so the adapter's
+# top-level import picks up the fake oci SDK
+from penguin_sal.adapters.oci_vault import OCIVaultAdapter  # noqa: E402
 
 
 @pytest.fixture
@@ -133,8 +136,6 @@ class TestOCIVaultAdapterInit:
 
         try:
             # Need to reload the adapter module to trigger the ImportError
-            import importlib
-            import penguin_sal.adapters.oci_vault
 
             # This should raise AdapterNotInstalledError in __init__
             with pytest.raises(AdapterNotInstalledError) as exc_info:
@@ -173,9 +174,7 @@ class TestOCIVaultAdapterConnection:
 
     def test_init_connection_missing_compartment_id(self, mock_oci):
         """Test connection fails without compartment_id."""
-        config = ConnectionConfig(
-            scheme="oci-vault", host="us-ashburn-1", params={}
-        )
+        config = ConnectionConfig(scheme="oci-vault", host="us-ashburn-1", params={})
         adapter = OCIVaultAdapter(config)
         with pytest.raises(ConnectionError) as exc_info:
             adapter._init_connection()
@@ -263,7 +262,7 @@ class TestOCIVaultAdapterGet:
         adapter._init_connection()
 
         # Mock secret response
-        secret_value = "my-secret-value"
+        secret_value = "my-secret-value"  # noqa: S105 -- test fixture placeholder, not a real credential
         encoded_value = base64.b64encode(secret_value.encode()).decode()
 
         mock_content = MagicMock()
@@ -285,7 +284,9 @@ class TestOCIVaultAdapterGet:
         assert secret.key == "my-secret"
         assert secret.value == secret_value
         assert secret.version == 1
-        assert secret.metadata["secret_bundle_id"] == "ocid1.secret.oc1..test"
+        assert (
+            secret.metadata["secret_bundle_id"] == "ocid1.secret.oc1..test"  # noqa: S105 -- synthetic test OCID, not a real credential
+        )
 
     def test_get_dict_value(self, config: ConnectionConfig, mock_oci):
         """Test retrieving secret with dict value."""
@@ -442,7 +443,7 @@ class TestOCIVaultAdapterDelete:
 
         # Mock get response for finding secret ID
         mock_bundle = MagicMock()
-        mock_bundle.secret_id = "ocid1.secret.oc1..test"
+        mock_bundle.secret_id = "ocid1.secret.oc1..test"  # noqa: S105 -- synthetic test OCID, not a real credential
         mock_response = MagicMock()
         mock_response.data = mock_bundle
 
@@ -475,7 +476,7 @@ class TestOCIVaultAdapterDelete:
 
         # Get succeeds, but delete fails
         mock_bundle = MagicMock()
-        mock_bundle.secret_id = "ocid1.secret.oc1..test"
+        mock_bundle.secret_id = "ocid1.secret.oc1..test"  # noqa: S105 -- synthetic test OCID, not a real credential
         mock_response = MagicMock()
         mock_response.data = mock_bundle
 
@@ -499,9 +500,9 @@ class TestOCIVaultAdapterList:
 
         # Mock list response
         mock_secret1 = MagicMock()
-        mock_secret1.secret_name = "secret-1"
+        mock_secret1.secret_name = "secret-1"  # noqa: S105 -- test fixture placeholder, not a real credential
         mock_secret2 = MagicMock()
-        mock_secret2.secret_name = "secret-2"
+        mock_secret2.secret_name = "secret-2"  # noqa: S105 -- test fixture placeholder, not a real credential
 
         mock_response = MagicMock()
         mock_response.data = [mock_secret1, mock_secret2]
@@ -523,11 +524,11 @@ class TestOCIVaultAdapterList:
 
         # Mock list response
         mock_secret1 = MagicMock()
-        mock_secret1.secret_name = "prod-secret-1"
+        mock_secret1.secret_name = "prod-secret-1"  # noqa: S105 -- test fixture placeholder, not a real credential
         mock_secret2 = MagicMock()
-        mock_secret2.secret_name = "prod-secret-2"
+        mock_secret2.secret_name = "prod-secret-2"  # noqa: S105 -- test fixture placeholder, not a real credential
         mock_secret3 = MagicMock()
-        mock_secret3.secret_name = "dev-secret-1"
+        mock_secret3.secret_name = "dev-secret-1"  # noqa: S105 -- test fixture placeholder, not a real credential
 
         mock_response = MagicMock()
         mock_response.data = [mock_secret1, mock_secret2, mock_secret3]

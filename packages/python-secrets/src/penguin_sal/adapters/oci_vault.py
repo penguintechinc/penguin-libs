@@ -117,9 +117,7 @@ class OCIVaultAdapter(BaseAdapter):
             import oci
 
             # Verify by listing vaults in compartment
-            response = self._vaults_client.list_vaults(
-                compartment_id=self._compartment_id, limit=1
-            )
+            response = self._vaults_client.list_vaults(compartment_id=self._compartment_id, limit=1)
 
             if response.data:
                 if not self._vault_id:
@@ -444,11 +442,8 @@ class OCIVaultAdapter(BaseAdapter):
                 return False
 
         try:
-
             # Simple health check: list vaults
-            self._vaults_client.list_vaults(
-                compartment_id=self._compartment_id, limit=1
-            )
+            self._vaults_client.list_vaults(compartment_id=self._compartment_id, limit=1)
             return True
         except Exception:
             return False

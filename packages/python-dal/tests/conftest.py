@@ -1,7 +1,7 @@
 """Shared test fixtures for penguin-dal."""
 
 import sys
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy import Boolean, Column, Integer, MetaData, String, Table, create_engine, text

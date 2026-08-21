@@ -20,21 +20,21 @@ import ipaddress
 # ---------------------------------------------------------------------------
 
 _PRIVATE_V4: tuple[ipaddress.IPv4Network, ...] = (
-    ipaddress.IPv4Network("10.0.0.0/8"),        # RFC 1918 class-A
-    ipaddress.IPv4Network("172.16.0.0/12"),     # RFC 1918 class-B
-    ipaddress.IPv4Network("192.168.0.0/16"),    # RFC 1918 class-C
-    ipaddress.IPv4Network("127.0.0.0/8"),       # loopback
-    ipaddress.IPv4Network("169.254.0.0/16"),    # link-local (APIPA)
-    ipaddress.IPv4Network("100.64.0.0/10"),     # carrier-grade NAT (RFC 6598)
-    ipaddress.IPv4Network("0.0.0.0/8"),         # "this" network
+    ipaddress.IPv4Network("10.0.0.0/8"),  # RFC 1918 class-A
+    ipaddress.IPv4Network("172.16.0.0/12"),  # RFC 1918 class-B
+    ipaddress.IPv4Network("192.168.0.0/16"),  # RFC 1918 class-C
+    ipaddress.IPv4Network("127.0.0.0/8"),  # loopback
+    ipaddress.IPv4Network("169.254.0.0/16"),  # link-local (APIPA)
+    ipaddress.IPv4Network("100.64.0.0/10"),  # carrier-grade NAT (RFC 6598)
+    ipaddress.IPv4Network("0.0.0.0/8"),  # "this" network
 )
 
 _PRIVATE_V6: tuple[ipaddress.IPv6Network, ...] = (
-    ipaddress.IPv6Network("::1/128"),           # loopback
-    ipaddress.IPv6Network("fc00::/7"),          # unique local (ULA)
-    ipaddress.IPv6Network("fe80::/10"),         # link-local
-    ipaddress.IPv6Network("::ffff:0:0/96"),     # IPv4-mapped
-    ipaddress.IPv6Network("64:ff9b::/96"),      # IPv4-translated (NAT64)
+    ipaddress.IPv6Network("::1/128"),  # loopback
+    ipaddress.IPv6Network("fc00::/7"),  # unique local (ULA)
+    ipaddress.IPv6Network("fe80::/10"),  # link-local
+    ipaddress.IPv6Network("::ffff:0:0/96"),  # IPv4-mapped
+    ipaddress.IPv6Network("64:ff9b::/96"),  # IPv4-translated (NAT64)
 )
 
 

@@ -95,7 +95,16 @@ class TestAdapterRegistry:
 
     def test_known_schemes_present(self) -> None:
         expected = {
-            "vault", "infisical", "cyberark", "aws-sm", "gcp-sm",
-            "azure-kv", "oci-vault", "k8s", "1password", "passbolt", "doppler",
+            "vault",
+            "infisical",
+            "cyberark",
+            "aws-sm",
+            "gcp-sm",
+            "azure-kv",
+            "oci-vault",
+            "k8s",
+            "1password",
+            "passbolt",
+            "doppler",
         }
         assert set(_ADAPTER_REGISTRY.keys()) == expected

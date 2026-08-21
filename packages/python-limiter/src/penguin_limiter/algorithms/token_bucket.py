@@ -11,10 +11,13 @@ immediately, then is throttled to the steady-state rate.
 
 from __future__ import annotations
 
+import logging
 import time
 
 from ..algorithms import RateLimitResult
 from ..storage import RateLimitStorage
+
+_logger = logging.getLogger(__name__)
 
 
 class TokenBucket:
@@ -78,7 +81,9 @@ class TokenBucket:
         try:
             self._storage.set_token_state(key, tokens, now, self._window * 2)
         except Exception:
-            pass  # fail-open: don't deny if we can't persist state
+            # Fail-open: a storage outage must not block traffic, but it's still
+            # worth surfacing so backend flakiness doesn't go unnoticed.
+            _logger.warning("Failed to persist token bucket state for key=%s", key, exc_info=True)
 
         return RateLimitResult(
             allowed=allowed,

@@ -1,4 +1,5 @@
 """Redis cache backend for penguin-dal."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -28,9 +29,7 @@ class RedisCache:
         try:
             import redis
         except ImportError as e:
-            raise ImportError(
-                "Install redis: pip install penguin-dal[redis]"
-            ) from e
+            raise ImportError("Install redis: pip install penguin-dal[redis]") from e
 
         self.config = config
         self.client = redis.Redis(
@@ -84,9 +83,7 @@ class RedisCache:
             cursor = 0
             batch_size = 100
             while True:
-                cursor, keys = self.client.scan(
-                    cursor, match=scan_pattern, count=batch_size
-                )
+                cursor, keys = self.client.scan(cursor, match=scan_pattern, count=batch_size)
                 if keys:
                     self.client.delete(*keys)
                 if cursor == 0:
@@ -101,14 +98,12 @@ class RedisCache:
         values = self.client.mget(full_keys)
 
         result = {}
-        for original_key, value in zip(keys, values):
+        for original_key, value in zip(keys, values, strict=True):
             result[original_key] = value
 
         return result
 
-    def set_many(
-        self, mapping: dict[str, bytes], ttl: int | None = None
-    ) -> None:
+    def set_many(self, mapping: dict[str, bytes], ttl: int | None = None) -> None:
         """Set multiple key-value pairs using pipeline."""
         if not mapping:
             return
@@ -135,9 +130,7 @@ class AsyncRedisCache:
         try:
             import redis.asyncio
         except ImportError as e:
-            raise ImportError(
-                "Install redis: pip install penguin-dal[redis]"
-            ) from e
+            raise ImportError("Install redis: pip install penguin-dal[redis]") from e
 
         self.config = config
         self.client: Any = redis.asyncio.Redis(
@@ -191,9 +184,7 @@ class AsyncRedisCache:
             cursor = 0
             batch_size = 100
             while True:
-                cursor, keys = await self.client.scan(
-                    cursor, match=scan_pattern, count=batch_size
-                )
+                cursor, keys = await self.client.scan(cursor, match=scan_pattern, count=batch_size)
                 if keys:
                     await self.client.delete(*keys)
                 if cursor == 0:
@@ -208,14 +199,12 @@ class AsyncRedisCache:
         values = await self.client.mget(full_keys)
 
         result = {}
-        for original_key, value in zip(keys, values):
+        for original_key, value in zip(keys, values, strict=True):
             result[original_key] = value
 
         return result
 
-    async def set_many(
-        self, mapping: dict[str, bytes], ttl: int | None = None
-    ) -> None:
+    async def set_many(self, mapping: dict[str, bytes], ttl: int | None = None) -> None:
         """Set multiple key-value pairs using pipeline."""
         if not mapping:
             return

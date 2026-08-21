@@ -2,12 +2,11 @@
 
 # flake8: noqa: E501
 
-
 import os
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, cast
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 import requests
 import structlog
@@ -25,7 +24,7 @@ class Feature:
     entitled: bool
     units: int  # 0 = unlimited, -1 = not applicable
     description: str
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 @dataclass(slots=True)
@@ -40,16 +39,15 @@ class LicenseInfo:
     expires_at: datetime
     issued_at: datetime
     tier: str  # community, professional, enterprise
-    features: List[Feature]
-    limits: Dict[str, Any]
-    metadata: Dict[str, Any]
-    server_id: Optional[str] = None
-    message: Optional[str] = None
+    features: list[Feature]
+    limits: dict[str, Any]
+    metadata: dict[str, Any]
+    server_id: str | None = None
+    message: str | None = None
 
 
 class LicenseClient:
-    """
-    Client for PenguinTech License Server integration.
+    """Client for PenguinTech License Server integration.
 
     Provides license validation, feature checking, and keepalive reporting.
     Caches validation results in memory for performance.
@@ -57,12 +55,11 @@ class LicenseClient:
 
     def __init__(
         self,
-        license_key: Optional[str] = None,
+        license_key: str | None = None,
         product: str = "elder",
-        base_url: Optional[str] = None,
+        base_url: str | None = None,
     ):
-        """
-        Initialize license client.
+        """Initialize license client.
 
         Args:
             license_key: PenguinTech license key (PENG-XXXX-...)
@@ -83,11 +80,11 @@ class LicenseClient:
         # Enforce TLS for license server (https required, except loopback)
         self.base_url = require_https_url(self.base_url)
 
-        self.server_id: Optional[str] = None
+        self.server_id: str | None = None
 
         # Cache validation results (5 minute TTL)
-        self._cached_validation: Optional[LicenseInfo] = None
-        self._cache_expiry: Optional[datetime] = None
+        self._cached_validation: LicenseInfo | None = None
+        self._cache_expiry: datetime | None = None
 
         # Session for connection pooling
         self.session = requests.Session()
@@ -102,8 +99,7 @@ class LicenseClient:
             self.session.headers["Authorization"] = f"Bearer {self.license_key}"
 
     def validate(self, force_refresh: bool = False) -> LicenseInfo:
-        """
-        Validate license and get server ID for keepalives.
+        """Validate license and get server ID for keepalives.
 
         Fail-closed policy:
         - 401/403/404: definitive rejection, drop cache, return community tier
@@ -118,7 +114,7 @@ class LicenseClient:
         """
         # Check cache first
         if not force_refresh and self._cached_validation and self._cache_expiry:
-            if datetime.now(timezone.utc) < self._cache_expiry:
+            if datetime.now(UTC) < self._cache_expiry:
                 logger.debug("license_validation_cache_hit")
                 return self._cached_validation
 
@@ -148,8 +144,8 @@ class LicenseClient:
                     product=self.product,
                     license_version="2.0",
                     license_key=self.license_key,
-                    expires_at=datetime.now(timezone.utc),
-                    issued_at=datetime.now(timezone.utc),
+                    expires_at=datetime.now(UTC),
+                    issued_at=datetime.now(UTC),
                     tier="community",
                     features=[],
                     limits={},
@@ -192,7 +188,7 @@ class LicenseClient:
                 )
 
                 # Enforce expiry with 72h grace period
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 grace_period = timedelta(hours=72)
                 if license_info.expires_at < now:
                     if license_info.expires_at + grace_period < now:
@@ -206,8 +202,8 @@ class LicenseClient:
                             product=self.product,
                             license_version="2.0",
                             license_key=self.license_key,
-                            expires_at=datetime.now(timezone.utc),
-                            issued_at=datetime.now(timezone.utc),
+                            expires_at=datetime.now(UTC),
+                            issued_at=datetime.now(UTC),
                             tier="community",
                             features=[],
                             limits={},
@@ -226,7 +222,7 @@ class LicenseClient:
 
                 # Cache validation result
                 self._cached_validation = license_info
-                self._cache_expiry = datetime.now(timezone.utc) + timedelta(minutes=5)
+                self._cache_expiry = datetime.now(UTC) + timedelta(minutes=5)
 
                 logger.info(
                     "license_validation_success",
@@ -261,8 +257,7 @@ class LicenseClient:
             return self._get_community_tier_info(message=f"Validation error: {str(e)}")
 
     def check_feature(self, feature_name: str) -> bool:
-        """
-        Check if specific feature is enabled.
+        """Check if specific feature is enabled.
 
         Args:
             feature_name: Feature identifier to check
@@ -282,8 +277,7 @@ class LicenseClient:
         return False
 
     def check_tier(self, required_tier: str) -> bool:
-        """
-        Check if license meets minimum tier requirement.
+        """Check if license meets minimum tier requirement.
 
         Tier hierarchy: community < professional < enterprise
 
@@ -301,9 +295,8 @@ class LicenseClient:
 
         return current_level >= required_level
 
-    def keepalive(self, usage_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Send keepalive with optional usage statistics.
+    def keepalive(self, usage_data: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Send keepalive with optional usage statistics.
 
         Args:
             usage_data: Optional usage statistics to report
@@ -321,7 +314,7 @@ class LicenseClient:
             if not validation.valid or not validation.server_id:
                 return {"success": False, "message": "No server ID available"}
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "product": self.product,
             "server_id": self.server_id,
         }
@@ -338,7 +331,7 @@ class LicenseClient:
 
             if response.status_code == 200:
                 logger.info("keepalive_success", server_id=self.server_id)
-                return cast(Dict[str, Any], response.json())
+                return cast(dict[str, Any], response.json())
             else:
                 logger.error(
                     "keepalive_failed",
@@ -354,7 +347,7 @@ class LicenseClient:
             logger.error("keepalive_exception", error=str(e))
             return {"success": False, "message": f"Keepalive error: {str(e)}"}
 
-    def _get_community_tier_info(self, message: Optional[str] = None) -> LicenseInfo:
+    def _get_community_tier_info(self, message: str | None = None) -> LicenseInfo:
         """Get default community tier license info."""
         return LicenseInfo(
             valid=True,  # Community tier is always valid
@@ -362,8 +355,8 @@ class LicenseClient:
             product=self.product,
             license_version="2.0",
             license_key="",
-            expires_at=datetime.max.replace(tzinfo=timezone.utc),
-            issued_at=datetime.now(timezone.utc),
+            expires_at=datetime.max.replace(tzinfo=UTC),
+            issued_at=datetime.now(UTC),
             tier="community",
             features=[
                 Feature(
@@ -382,13 +375,12 @@ class LicenseClient:
 
 # Global license client instance, guarded for threaded WSGI/ASGI servers where
 # concurrent first requests would otherwise each construct their own client.
-_license_client: Optional[LicenseClient] = None
+_license_client: LicenseClient | None = None
 _license_client_lock = threading.Lock()
 
 
 def get_license_client() -> LicenseClient:
-    """
-    Get global license client instance.
+    """Get global license client instance.
 
     Initialization is double-checked under a lock: the warm-cache-survives-outage
     guarantee only holds if every caller shares one client, and an unguarded
@@ -413,8 +405,7 @@ def get_license_client() -> LicenseClient:
 
 
 def init_license_client(app: Any) -> LicenseClient:
-    """
-    Initialize license client from Flask app config.
+    """Initialize license client from Flask app config.
 
     Args:
         app: Flask application instance

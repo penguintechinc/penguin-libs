@@ -1,6 +1,5 @@
 """Tests for Field class."""
 
-import pytest
 from sqlalchemy import (
     JSON,
     BigInteger,

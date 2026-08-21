@@ -1,16 +1,18 @@
 """Tests for cache backends."""
+
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
-from penguin_dal.cache.redis import RedisCache, AsyncRedisCache, RedisConfig
-from penguin_dal.cache.valkey import ValkeyCache, AsyncValkeyCache, ValkeyConfig
+import pytest
+
 from penguin_dal.cache.memcache import (
     MemcacheCache,
     MemcacheConfig,
     UnsupportedOperationError,
 )
+from penguin_dal.cache.redis import AsyncRedisCache, RedisCache, RedisConfig
+from penguin_dal.cache.valkey import AsyncValkeyCache, ValkeyCache, ValkeyConfig
 
 
 class TestRedisCache:
@@ -19,6 +21,7 @@ class TestRedisCache:
     def test_init_creates_client(self):
         """Test initialization creates Redis client."""
         import redis
+
         mock_client = MagicMock()
         redis.Redis = MagicMock(return_value=mock_client)
 
@@ -31,6 +34,7 @@ class TestRedisCache:
     def test_get_returns_value(self):
         """Test get returns value from Redis."""
         import redis
+
         mock_client = MagicMock()
         mock_client.get.return_value = b"value"
         redis.Redis = MagicMock(return_value=mock_client)
@@ -44,6 +48,7 @@ class TestRedisCache:
     def test_get_returns_none_for_missing(self):
         """Test get returns None for missing key."""
         import redis
+
         mock_client = MagicMock()
         mock_client.get.return_value = None
         redis.Redis = MagicMock(return_value=mock_client)
@@ -56,6 +61,7 @@ class TestRedisCache:
     def test_set_without_ttl(self):
         """Test set without TTL."""
         import redis
+
         mock_client = MagicMock()
         redis.Redis = MagicMock(return_value=mock_client)
 
@@ -67,6 +73,7 @@ class TestRedisCache:
     def test_set_with_ttl(self):
         """Test set with TTL."""
         import redis
+
         mock_client = MagicMock()
         redis.Redis = MagicMock(return_value=mock_client)
 
@@ -78,6 +85,7 @@ class TestRedisCache:
     def test_delete(self):
         """Test delete removes key."""
         import redis
+
         mock_client = MagicMock()
         redis.Redis = MagicMock(return_value=mock_client)
 
@@ -89,6 +97,7 @@ class TestRedisCache:
     def test_exists_true(self):
         """Test exists returns True when key present."""
         import redis
+
         mock_client = MagicMock()
         mock_client.exists.return_value = 1
         redis.Redis = MagicMock(return_value=mock_client)
@@ -101,6 +110,7 @@ class TestRedisCache:
     def test_exists_false(self):
         """Test exists returns False when key missing."""
         import redis
+
         mock_client = MagicMock()
         mock_client.exists.return_value = 0
         redis.Redis = MagicMock(return_value=mock_client)
@@ -113,6 +123,7 @@ class TestRedisCache:
     def test_increment(self):
         """Test increment returns new value."""
         import redis
+
         mock_client = MagicMock()
         mock_client.incrby.return_value = 5
         redis.Redis = MagicMock(return_value=mock_client)
@@ -126,6 +137,7 @@ class TestRedisCache:
     def test_flush_without_prefix(self):
         """Test flush without prefix calls flushdb."""
         import redis
+
         mock_client = MagicMock()
         redis.Redis = MagicMock(return_value=mock_client)
 
@@ -137,6 +149,7 @@ class TestRedisCache:
     def test_flush_with_prefix(self):
         """Test flush with prefix scans and deletes."""
         import redis
+
         mock_client = MagicMock()
         mock_client.scan.return_value = (0, [b"app:key1", b"app:key2"])
         redis.Redis = MagicMock(return_value=mock_client)
@@ -150,6 +163,7 @@ class TestRedisCache:
     def test_get_many(self):
         """Test get_many uses MGET and returns dict."""
         import redis
+
         mock_client = MagicMock()
         mock_client.mget.return_value = [b"val1", b"val2", None]
         redis.Redis = MagicMock(return_value=mock_client)
@@ -163,6 +177,7 @@ class TestRedisCache:
     def test_get_many_empty(self):
         """Test get_many with empty list."""
         import redis
+
         redis.Redis = MagicMock(return_value=MagicMock())
 
         cache = RedisCache(RedisConfig())
@@ -173,6 +188,7 @@ class TestRedisCache:
     def test_set_many_without_ttl(self):
         """Test set_many without TTL uses pipeline."""
         import redis
+
         mock_client = MagicMock()
         mock_pipe = MagicMock()
         mock_client.pipeline.return_value = mock_pipe
@@ -187,6 +203,7 @@ class TestRedisCache:
     def test_set_many_with_ttl(self):
         """Test set_many with TTL uses setex."""
         import redis
+
         mock_client = MagicMock()
         mock_pipe = MagicMock()
         mock_client.pipeline.return_value = mock_pipe
@@ -201,6 +218,7 @@ class TestRedisCache:
     def test_close(self):
         """Test close closes connection."""
         import redis
+
         mock_client = MagicMock()
         redis.Redis = MagicMock(return_value=mock_client)
 
@@ -212,6 +230,7 @@ class TestRedisCache:
     def test_key_prefix_applied(self):
         """Test that key prefix is applied to all operations."""
         import redis
+
         mock_client = MagicMock()
         redis.Redis = MagicMock(return_value=mock_client)
 
@@ -228,6 +247,7 @@ class TestAsyncRedisCache:
     async def test_async_get(self):
         """Test async get."""
         import redis.asyncio
+
         mock_client = AsyncMock()
         mock_client.get.return_value = b"value"
         redis.asyncio.Redis = MagicMock(return_value=mock_client)
@@ -240,6 +260,7 @@ class TestAsyncRedisCache:
     async def test_async_set_with_ttl(self):
         """Test async set with TTL."""
         import redis.asyncio
+
         mock_client = AsyncMock()
         redis.asyncio.Redis = MagicMock(return_value=mock_client)
 
@@ -251,6 +272,7 @@ class TestAsyncRedisCache:
     async def test_async_close(self):
         """Test async close."""
         import redis.asyncio
+
         mock_client = AsyncMock()
         redis.asyncio.Redis = MagicMock(return_value=mock_client)
 
@@ -266,6 +288,7 @@ class TestValkeyCache:
     def test_init_creates_client(self):
         """Test initialization creates Valkey client."""
         import valkey
+
         mock_client = MagicMock()
         valkey.Valkey = MagicMock(return_value=mock_client)
 
@@ -278,6 +301,7 @@ class TestValkeyCache:
     def test_get_returns_value(self):
         """Test get returns value from Valkey."""
         import valkey
+
         mock_client = MagicMock()
         mock_client.get.return_value = b"value"
         valkey.Valkey = MagicMock(return_value=mock_client)
@@ -290,6 +314,7 @@ class TestValkeyCache:
     def test_close(self):
         """Test close closes connection."""
         import valkey
+
         mock_client = MagicMock()
         valkey.Valkey = MagicMock(return_value=mock_client)
 
@@ -306,6 +331,7 @@ class TestAsyncValkeyCache:
     async def test_async_get(self):
         """Test async get."""
         import valkey.asyncio
+
         mock_client = AsyncMock()
         mock_client.get.return_value = b"value"
         valkey.asyncio.Valkey = MagicMock(return_value=mock_client)
@@ -318,6 +344,7 @@ class TestAsyncValkeyCache:
     async def test_async_close(self):
         """Test async close."""
         import valkey.asyncio
+
         mock_client = AsyncMock()
         valkey.asyncio.Valkey = MagicMock(return_value=mock_client)
 
@@ -332,23 +359,23 @@ class TestMemcacheCache:
 
     def test_init_creates_pooled_client(self):
         """Test initialization creates pooled client."""
-        from pymemcache.client.pool import ObjectPooledClient
         mock_client = MagicMock()
-        ObjectPooledClient = MagicMock(return_value=mock_client)
+        mock_pooled_client_cls = MagicMock(return_value=mock_client)
 
         config = MemcacheConfig(servers=["localhost:11211"])
         import pymemcache.client.pool
-        pymemcache.client.pool.ObjectPooledClient = ObjectPooledClient
+
+        pymemcache.client.pool.ObjectPooledClient = mock_pooled_client_cls
         cache = MemcacheCache(config)
 
         assert cache.client == mock_client
-        ObjectPooledClient.assert_called_once()
+        mock_pooled_client_cls.assert_called_once()
 
     def test_parse_server_with_port(self):
         """Test server parsing with port."""
-        from pymemcache.client.pool import ObjectPooledClient
         mock_pooled = MagicMock(return_value=MagicMock())
         import pymemcache.client.pool
+
         pymemcache.client.pool.ObjectPooledClient = mock_pooled
 
         config = MemcacheConfig(servers=["cache.example.com:11211"])
@@ -364,6 +391,7 @@ class TestMemcacheCache:
         mock_client = MagicMock()
         mock_client.get.return_value = b"value"
         import pymemcache.client.pool
+
         pymemcache.client.pool.ObjectPooledClient = MagicMock(return_value=mock_client)
 
         cache = MemcacheCache(MemcacheConfig(servers=["localhost:11211"]))
@@ -375,6 +403,7 @@ class TestMemcacheCache:
         """Test set without TTL."""
         mock_client = MagicMock()
         import pymemcache.client.pool
+
         pymemcache.client.pool.ObjectPooledClient = MagicMock(return_value=mock_client)
 
         cache = MemcacheCache(MemcacheConfig(servers=["localhost:11211"]))
@@ -388,6 +417,7 @@ class TestMemcacheCache:
         """Test set with TTL."""
         mock_client = MagicMock()
         import pymemcache.client.pool
+
         pymemcache.client.pool.ObjectPooledClient = MagicMock(return_value=mock_client)
 
         cache = MemcacheCache(MemcacheConfig(servers=["localhost:11211"]))
@@ -400,6 +430,7 @@ class TestMemcacheCache:
         """Test delete."""
         mock_client = MagicMock()
         import pymemcache.client.pool
+
         pymemcache.client.pool.ObjectPooledClient = MagicMock(return_value=mock_client)
 
         cache = MemcacheCache(MemcacheConfig(servers=["localhost:11211"]))
@@ -412,6 +443,7 @@ class TestMemcacheCache:
         mock_client = MagicMock()
         mock_client.get.return_value = b"value"
         import pymemcache.client.pool
+
         pymemcache.client.pool.ObjectPooledClient = MagicMock(return_value=mock_client)
 
         cache = MemcacheCache(MemcacheConfig(servers=["localhost:11211"]))
@@ -424,6 +456,7 @@ class TestMemcacheCache:
         mock_client = MagicMock()
         mock_client.get.return_value = None
         import pymemcache.client.pool
+
         pymemcache.client.pool.ObjectPooledClient = MagicMock(return_value=mock_client)
 
         cache = MemcacheCache(MemcacheConfig(servers=["localhost:11211"]))
@@ -436,6 +469,7 @@ class TestMemcacheCache:
         mock_client = MagicMock()
         mock_client.incr.return_value = 5
         import pymemcache.client.pool
+
         pymemcache.client.pool.ObjectPooledClient = MagicMock(return_value=mock_client)
 
         cache = MemcacheCache(MemcacheConfig(servers=["localhost:11211"]))
@@ -447,6 +481,7 @@ class TestMemcacheCache:
         """Test flush without prefix calls flush_all."""
         mock_client = MagicMock()
         import pymemcache.client.pool
+
         pymemcache.client.pool.ObjectPooledClient = MagicMock(return_value=mock_client)
 
         cache = MemcacheCache(MemcacheConfig(servers=["localhost:11211"]))
@@ -457,6 +492,7 @@ class TestMemcacheCache:
     def test_flush_with_prefix_raises(self):
         """Test flush with prefix raises UnsupportedOperationError."""
         import pymemcache.client.pool
+
         pymemcache.client.pool.ObjectPooledClient = MagicMock(return_value=MagicMock())
 
         cache = MemcacheCache(MemcacheConfig(servers=["localhost:11211"]))
@@ -469,6 +505,7 @@ class TestMemcacheCache:
         mock_client = MagicMock()
         mock_client.get_many.return_value = {b"key1": b"val1", b"key2": b"val2"}
         import pymemcache.client.pool
+
         pymemcache.client.pool.ObjectPooledClient = MagicMock(return_value=mock_client)
 
         cache = MemcacheCache(MemcacheConfig(servers=["localhost:11211"]))
@@ -480,6 +517,7 @@ class TestMemcacheCache:
         """Test set_many."""
         mock_client = MagicMock()
         import pymemcache.client.pool
+
         pymemcache.client.pool.ObjectPooledClient = MagicMock(return_value=mock_client)
 
         cache = MemcacheCache(MemcacheConfig(servers=["localhost:11211"]))
@@ -491,6 +529,7 @@ class TestMemcacheCache:
         """Test close."""
         mock_client = MagicMock()
         import pymemcache.client.pool
+
         pymemcache.client.pool.ObjectPooledClient = MagicMock(return_value=mock_client)
 
         cache = MemcacheCache(MemcacheConfig(servers=["localhost:11211"]))

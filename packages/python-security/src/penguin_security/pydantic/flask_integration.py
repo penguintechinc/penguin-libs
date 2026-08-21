@@ -18,8 +18,7 @@ class ValidationErrorResponse:
 
     @staticmethod
     def from_pydantic_error(error: ValidationError) -> tuple[dict[str, Any], int]:
-        """
-        Convert Pydantic ValidationError to Flask response tuple.
+        """Convert Pydantic ValidationError to Flask response tuple.
 
         Args:
             error: Pydantic ValidationError instance
@@ -50,8 +49,7 @@ class ValidationErrorResponse:
 
 
 def validate_body[T: BaseModel](model_class: type[T]) -> T:
-    """
-    Validate request body against Pydantic model.
+    """Validate request body against Pydantic model.
 
     Args:
         model_class: Pydantic model class to validate against
@@ -67,8 +65,7 @@ def validate_body[T: BaseModel](model_class: type[T]) -> T:
 
 
 def validate_query_params[T: BaseModel](model_class: type[T]) -> T:
-    """
-    Validate query parameters against Pydantic model.
+    """Validate query parameters against Pydantic model.
 
     Args:
         model_class: Pydantic model class to validate against
@@ -87,8 +84,7 @@ def validated_request(
     body_model: type[BaseModel] | None = None,
     query_model: type[BaseModel] | None = None,
 ) -> Callable:
-    """
-    Decorator that validates request body and/or query parameters.
+    """Decorator that validates request body and/or query parameters.
 
     Injects validated models as 'body' and/or 'query' keyword arguments.
 
@@ -146,8 +142,7 @@ def validated_request(
 def model_response(
     model: BaseModel, status_code: int = 200, exclude_none: bool = True
 ) -> tuple[Response, int]:
-    """
-    Convert Pydantic model to Flask JSON response.
+    """Convert Pydantic model to Flask JSON response.
 
     Args:
         model: Pydantic model instance to serialize

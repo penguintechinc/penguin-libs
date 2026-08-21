@@ -35,8 +35,7 @@ class UpstreamProvider:
 
 
 class MultiIssuerRelyingParty:
-    """
-    Validates tokens from multiple upstream OIDC providers.
+    """Validates tokens from multiple upstream OIDC providers.
 
     Each incoming token's `iss` claim is matched to the corresponding configured
     provider. If no provider matches the issuer, validation fails.
@@ -59,8 +58,7 @@ class MultiIssuerRelyingParty:
             self._rps[provider.config.issuer_url.rstrip("/")] = rp
 
     async def validate_token(self, raw_token: str, expected_nonce: str | None = None) -> Claims:
-        """
-        Validate a token from any configured upstream provider.
+        """Validate a token from any configured upstream provider.
 
         Extracts the issuer from the unverified header, finds the matching RP,
         then performs full validation. Returns mapped Claims on success.

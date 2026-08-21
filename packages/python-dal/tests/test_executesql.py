@@ -1,15 +1,13 @@
 """Tests for DB.executesql and AsyncDB.executesql."""
 
-from collections import OrderedDict
 import warnings
+from collections import OrderedDict
 
 import pytest
-from sqlalchemy import text
 
-from penguin_dal.db import DB, AsyncDB
 from penguin_dal.exceptions import DALSecurityWarning
 from penguin_dal.field import Field
-from penguin_dal.query import Rows, Row
+from penguin_dal.query import Row, Rows
 
 
 class TestDBExecutesql:
@@ -60,7 +58,7 @@ class TestDBExecutesql:
         assert result[0]["id"] == 1
 
     def test_select_with_fields_returns_rows(self, db):
-        """fields parameter returns Rows."""
+        """Fields parameter returns Rows."""
         result = db.executesql(
             "SELECT id, email, name FROM users WHERE id = ?", (1,), fields=["id", "email", "name"]
         )
@@ -72,7 +70,7 @@ class TestDBExecutesql:
         assert row.email == "alice@example.com"
 
     def test_select_with_colnames_returns_rows(self, db):
-        """colnames parameter returns Rows."""
+        """Colnames parameter returns Rows."""
         result = db.executesql(
             "SELECT id, email FROM users WHERE id = ?", (1,), colnames=["user_id", "user_email"]
         )
@@ -180,12 +178,12 @@ class TestDBExecutesql:
 
     def test_no_injection_warning_for_non_sql_quotes(self, db):
         """No warning for quotes not in sensitive clauses."""
-        with warnings.catch_warnings(record=True) as w:
+        with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             # Comment with quotes - not a WHERE/VALUES clause
             db.executesql("SELECT 1 -- Comment with 'quotes'")
             # May or may not warn depending on heuristic - just ensure it doesn't crash
-            assert isinstance(result := db.executesql("SELECT 1"), list)
+            assert isinstance(db.executesql("SELECT 1"), list)
 
     def test_empty_result_set(self, db):
         """Empty result set returns empty list."""
@@ -254,7 +252,7 @@ class TestAsyncDBExecutesql:
 
     @pytest.mark.asyncio
     async def test_select_with_fields_returns_rows(self, async_db):
-        """fields parameter returns Rows."""
+        """Fields parameter returns Rows."""
         result = await async_db.executesql(
             "SELECT id, email, name FROM users WHERE id = ?", (1,), fields=["id", "email", "name"]
         )

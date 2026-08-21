@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -20,10 +18,12 @@ from penguin_sal.core.types import ConnectionConfig, Secret
 
 def _make_client_error(code: str, message: str) -> BaseException:
     """Build the exception the adapter actually catches: a genuine botocore
-    ClientError when botocore is installed, else a duck-typed Exception."""
+    ClientError when botocore is installed, else a duck-typed Exception.
+    """
     response = {"Error": {"Code": code, "Message": message}}
     try:
         import botocore.exceptions  # type: ignore[import-not-found]
+
         return botocore.exceptions.ClientError(response, "TestOperation")  # type: ignore[arg-type]
     except ImportError:
         err = Exception(message)
@@ -65,6 +65,7 @@ class TestInitConnection:
         adapter = AWSSecretsManagerAdapter(config)
 
         import sys
+
         boto3_backup = sys.modules.pop("boto3", None)
         try:
             with patch.dict(sys.modules, {"boto3": None}):
@@ -75,9 +76,7 @@ class TestInitConnection:
                 sys.modules["boto3"] = boto3_backup
 
     def test_uses_config_host_as_endpoint_url(self) -> None:
-        config = ConnectionConfig(
-            scheme="aws-sm", host="http://localhost:4566"
-        )
+        config = ConnectionConfig(scheme="aws-sm", host="http://localhost:4566")
         adapter = AWSSecretsManagerAdapter(config)
 
         mock_client = MagicMock()
@@ -113,16 +112,43 @@ class TestInitConnection:
             username="AKIAIOSFODNN7EXAMPLE",
         )
         adapter = AWSSecretsManagerAdapter(config)
-        assert config.username == "AKIAIOSFODNN7EXAMPLE"
+
+        with patch("builtins.__import__") as mock_import_builtin:
+            mock_boto3 = MagicMock()
+
+            def import_side_effect(name, *args, **kwargs):
+                if name == "boto3":
+                    return mock_boto3
+                return __import__(name, *args, **kwargs)
+
+            mock_import_builtin.side_effect = import_side_effect
+            adapter._init_connection()
+
+        assert mock_boto3.client.call_args.kwargs["aws_access_key_id"] == "AKIAIOSFODNN7EXAMPLE"
 
     def test_uses_password_as_secret_access_key(self) -> None:
         config = ConnectionConfig(
             scheme="aws-sm",
             host="localhost",
-            password="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            password="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",  # noqa: S106 -- AWS's own published EXAMPLE secret key from their docs, not a real credential
         )
         adapter = AWSSecretsManagerAdapter(config)
-        assert config.password == "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+        with patch("builtins.__import__") as mock_import_builtin:
+            mock_boto3 = MagicMock()
+
+            def import_side_effect(name, *args, **kwargs):
+                if name == "boto3":
+                    return mock_boto3
+                return __import__(name, *args, **kwargs)
+
+            mock_import_builtin.side_effect = import_side_effect
+            adapter._init_connection()
+
+        assert (
+            mock_boto3.client.call_args.kwargs["aws_secret_access_key"]
+            == "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"  # noqa: S105 -- AWS's own published EXAMPLE secret key, not a real credential
+        )
 
     def test_sets_connected_true_on_success(self) -> None:
         config = ConnectionConfig(scheme="aws-sm", host="localhost")
@@ -280,7 +306,10 @@ class TestGet:
         result = adapter.get("test-key")
 
         assert result.metadata is not None
-        assert result.metadata["arn"] == "arn:aws:secretsmanager:us-east-1:123456789012:secret:my-secret"
+        assert (
+            result.metadata["arn"]
+            == "arn:aws:secretsmanager:us-east-1:123456789012:secret:my-secret"
+        )
         assert result.metadata["version_id"] == "abc123"
 
     def test_raises_secret_not_found_error_on_missing_secret(self) -> None:
@@ -502,9 +531,7 @@ class TestList:
         mock_client = MagicMock()
         paginator = MagicMock()
         mock_client.get_paginator.return_value = paginator
-        paginator.paginate.return_value = [
-            {"SecretList": [{"Name": f"key{i}"} for i in range(10)]}
-        ]
+        paginator.paginate.return_value = [{"SecretList": [{"Name": f"key{i}"} for i in range(10)]}]
         adapter._client = mock_client
         adapter._connected = True
 

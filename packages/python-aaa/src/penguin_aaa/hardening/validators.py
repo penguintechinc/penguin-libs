@@ -4,8 +4,7 @@ from urllib.parse import urlparse
 
 
 def validate_https_url(url: str, field_name: str) -> None:
-    """
-    Validate that a URL uses the HTTPS scheme.
+    """Validate that a URL uses the HTTPS scheme.
 
     Localhost URLs (127.0.0.1, ::1, localhost) are accepted with either
     HTTP or HTTPS to facilitate local development and testing.
@@ -36,8 +35,7 @@ def validate_https_url(url: str, field_name: str) -> None:
 
 
 def validate_spiffe_id(spiffe_id: str) -> None:
-    """
-    Validate that a SPIFFE ID conforms to the spiffe:// URI scheme.
+    """Validate that a SPIFFE ID conforms to the spiffe:// URI scheme.
 
     Args:
         spiffe_id: The SPIFFE ID string to validate.
@@ -60,8 +58,7 @@ def validate_spiffe_id(spiffe_id: str) -> None:
 
 
 def validate_algorithm(alg: str, allowed: frozenset[str]) -> None:
-    """
-    Validate a cryptographic algorithm identifier against an allowlist.
+    """Validate a cryptographic algorithm identifier against an allowlist.
 
     Always rejects "none" and "HS256" to prevent algorithm confusion attacks.
 

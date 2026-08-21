@@ -1,25 +1,28 @@
 """Tests for streaming backends."""
+
 from __future__ import annotations
 
 import base64
 import json
 import sys
-from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Mock the external streaming libraries before importing stream modules
+# Mock the external streaming libraries before importing stream modules.
+# noqa: E402 below (all three import groups) -- must follow the sys.modules
+# mocks above so kafka.py/valkey_streams.py pick up the fake confluent_kafka
+# and valkey SDKs at import time.
 sys.modules["confluent_kafka"] = MagicMock()
 sys.modules["valkey"] = MagicMock()
 
-from penguin_dal.stream.kafka import KafkaConfig, KafkaConsumer, KafkaProducer
-from penguin_dal.stream.redis_streams import (
+from penguin_dal.stream.kafka import KafkaConfig, KafkaConsumer, KafkaProducer  # noqa: E402
+from penguin_dal.stream.redis_streams import (  # noqa: E402
     RedisStreamConfig,
     RedisStreamConsumer,
     RedisStreamProducer,
 )
-from penguin_dal.stream.valkey_streams import (
+from penguin_dal.stream.valkey_streams import (  # noqa: E402
     ValkeyStreamConfig,
     ValkeyStreamConsumer,
     ValkeyStreamProducer,

@@ -1,5 +1,4 @@
-"""
-DateTime validators - PyDAL-style validators for date/time inputs.
+"""DateTime validators - PyDAL-style validators for date/time inputs.
 
 Provides:
 - IsDate: Validates date strings
@@ -21,8 +20,7 @@ DateTimeInput = str | datetime
 
 
 class IsDate(Validator[DateInput, date]):
-    """
-    Validates that a value is or can be parsed as a date.
+    """Validates that a value is or can be parsed as a date.
 
     Args:
         format: Expected date format (strptime format string)
@@ -66,8 +64,7 @@ class IsDate(Validator[DateInput, date]):
 
 
 class IsDateTime(Validator[DateTimeInput, datetime]):
-    """
-    Validates that a value is or can be parsed as a datetime.
+    """Validates that a value is or can be parsed as a datetime.
 
     Args:
         format: Expected datetime format (strptime format string)
@@ -112,8 +109,7 @@ class IsDateTime(Validator[DateTimeInput, datetime]):
 
 
 class IsTime(Validator[TimeInput, time]):
-    """
-    Validates that a value is or can be parsed as a time.
+    """Validates that a value is or can be parsed as a time.
 
     Args:
         format: Expected time format (strptime format string)
@@ -157,8 +153,7 @@ class IsTime(Validator[TimeInput, time]):
 
 
 class IsDateInRange(Validator[DateInput, date]):
-    """
-    Validates that a date is within a specified range.
+    """Validates that a date is within a specified range.
 
     Args:
         min_date: Minimum date (inclusive), or None for no minimum
@@ -196,7 +191,11 @@ class IsDateInRange(Validator[DateInput, date]):
             return ValidationResult.failure(result.error or "Invalid date")
 
         date_value = result.value
-        assert date_value is not None  # Type narrowing
+        if date_value is None:
+            # Unreachable given result.is_valid is True (IsDate.success always
+            # carries a value), but guard explicitly rather than assert: this
+            # is a security validation library and assert is stripped under -O.
+            raise TypeError("Validated date result had no value")
 
         # Check range
         if self.min_date is not None and date_value < self.min_date:

@@ -9,13 +9,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Mock onepasswordconnectsdk before importing adapter
-sys.modules["onepasswordconnectsdk"] = MagicMock()
-sys.modules["onepasswordconnectsdk.client"] = MagicMock()
-sys.modules["onepasswordconnectsdk.models"] = MagicMock()
-sys.modules["onepasswordconnectsdk.models.item"] = MagicMock()
-
-from penguin_sal.adapters.onepassword import OnePasswordAdapter
 from penguin_sal.core.exceptions import (
     AuthenticationError,
     BackendError,
@@ -23,6 +16,16 @@ from penguin_sal.core.exceptions import (
     SecretNotFoundError,
 )
 from penguin_sal.core.types import ConnectionConfig, Secret, SecretList
+
+# Mock onepasswordconnectsdk before importing adapter
+sys.modules["onepasswordconnectsdk"] = MagicMock()
+sys.modules["onepasswordconnectsdk.client"] = MagicMock()
+sys.modules["onepasswordconnectsdk.models"] = MagicMock()
+sys.modules["onepasswordconnectsdk.models.item"] = MagicMock()
+
+# noqa: E402 below -- must follow the sys.modules mock above so the adapter's
+# top-level import picks up the fake onepasswordconnectsdk
+from penguin_sal.adapters.onepassword import OnePasswordAdapter  # noqa: E402
 
 
 class MockItem:
@@ -52,7 +55,7 @@ def config() -> ConnectionConfig:
         scheme="https",
         host="localhost",
         port=8080,
-        password="test-token",
+        password="test-token",  # noqa: S106 -- test fixture placeholder, not a real credential
         params={"vault_id": "test-vault-id"},
     )
 
@@ -88,7 +91,9 @@ class TestOnePasswordAdapterInitConnection:
         """Connection initialized from config."""
         adapter = OnePasswordAdapter(config)
         # Mock sdk_new_client to raise so it falls back to Client init
-        with patch("penguin_sal.adapters.onepassword.sdk_new_client", side_effect=Exception("no env")):
+        with patch(
+            "penguin_sal.adapters.onepassword.sdk_new_client", side_effect=Exception("no env")
+        ):
             with patch("penguin_sal.adapters.onepassword.Client", return_value=mock_client):
                 adapter._init_connection()
                 assert adapter._connected is True
@@ -104,9 +109,7 @@ class TestOnePasswordAdapterInitConnection:
             adapter._init_connection()
             assert adapter._client is mock_client
 
-    def test_init_connection_missing_token(
-        self, mock_client: MagicMock
-    ) -> None:
+    def test_init_connection_missing_token(self, mock_client: MagicMock) -> None:
         """ConnectionError raised without token."""
         config = ConnectionConfig(scheme="https", host="localhost")
         adapter = OnePasswordAdapter(config)
@@ -118,12 +121,12 @@ class TestOnePasswordAdapterInitConnection:
             with pytest.raises(ConnectionError, match="token required"):
                 adapter._init_connection()
 
-    def test_init_connection_missing_vault_id(
-        self, mock_client: MagicMock
-    ) -> None:
+    def test_init_connection_missing_vault_id(self, mock_client: MagicMock) -> None:
         """ConnectionError raised without vault ID."""
         config = ConnectionConfig(
-            scheme="https", host="localhost", password="token"
+            scheme="https",
+            host="localhost",
+            password="token",  # noqa: S106 -- test fixture placeholder, not a real credential
         )
         adapter = OnePasswordAdapter(config)
 
@@ -131,14 +134,12 @@ class TestOnePasswordAdapterInitConnection:
             with pytest.raises(ConnectionError, match="vault ID required"):
                 adapter._init_connection()
 
-    def test_init_connection_vault_param_fallback(
-        self, mock_client: MagicMock
-    ) -> None:
+    def test_init_connection_vault_param_fallback(self, mock_client: MagicMock) -> None:
         """Accepts 'vault' param as fallback for 'vault_id'."""
         config = ConnectionConfig(
             scheme="https",
             host="localhost",
-            password="token",
+            password="token",  # noqa: S106 -- test fixture placeholder, not a real credential
             params={"vault": "my-vault"},
         )
         adapter = OnePasswordAdapter(config)
@@ -151,9 +152,7 @@ class TestOnePasswordAdapterInitConnection:
 class TestOnePasswordAdapterAuthenticate:
     """Test authentication."""
 
-    def test_authenticate_success(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_authenticate_success(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Successful authentication."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -169,9 +168,7 @@ class TestOnePasswordAdapterAuthenticate:
         with pytest.raises(ConnectionError, match="Not connected"):
             adapter.authenticate()
 
-    def test_authenticate_failure(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_authenticate_failure(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """AuthenticationError on failure."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -184,16 +181,16 @@ class TestOnePasswordAdapterAuthenticate:
 class TestOnePasswordAdapterGet:
     """Test secret retrieval."""
 
-    def test_get_success(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_get_success(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Retrieve a secret by key."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
         adapter._vault_id = "test-vault"
 
         mock_item = MockItem(
-            id="item-1", title="my-secret", password="secret-value"
+            id="item-1",
+            title="my-secret",
+            password="secret-value",  # noqa: S106 -- test fixture placeholder, not a real credential
         )
         mock_client.items.list.return_value = [mock_item]
 
@@ -204,9 +201,7 @@ class TestOnePasswordAdapterGet:
         assert secret.value == "secret-value"
         assert secret.version is None
 
-    def test_get_from_field(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_get_from_field(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Extract password from field if not in password attr."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -222,9 +217,7 @@ class TestOnePasswordAdapterGet:
         secret = adapter.get("my-secret")
         assert secret.value == "field-password"
 
-    def test_get_not_found(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_get_not_found(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """SecretNotFoundError when key doesn't exist."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -232,14 +225,10 @@ class TestOnePasswordAdapterGet:
 
         mock_client.items.list.return_value = []
 
-        with pytest.raises(
-            SecretNotFoundError, match="Secret not found: missing-key"
-        ):
+        with pytest.raises(SecretNotFoundError, match="Secret not found: missing-key"):
             adapter.get("missing-key")
 
-    def test_get_backend_error(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_get_backend_error(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """BackendError on request failure."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -262,9 +251,7 @@ class TestOnePasswordAdapterGet:
 class TestOnePasswordAdapterSet:
     """Test secret creation/update."""
 
-    def test_set_new_secret(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_set_new_secret(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Create a new secret."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -273,22 +260,24 @@ class TestOnePasswordAdapterSet:
         mock_client.items.list.return_value = []
         mock_client.items.create.return_value = MagicMock()
 
-        with patch("onepasswordconnectsdk.models.item.Item") as MockItem:
-            with patch("onepasswordconnectsdk.models.item.ItemPassword") as MockItemPassword:
-                secret = adapter.set("new-secret", "secret-value")
-                assert secret.key == "new-secret"
-                mock_client.items.create.assert_called_once()
+        with (
+            patch("onepasswordconnectsdk.models.item.Item"),
+            patch("onepasswordconnectsdk.models.item.ItemPassword"),
+        ):
+            secret = adapter.set("new-secret", "secret-value")
+            assert secret.key == "new-secret"
+            mock_client.items.create.assert_called_once()
 
-    def test_set_update_existing(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_set_update_existing(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Update an existing secret."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
         adapter._vault_id = "test-vault"
 
         mock_item = MockItem(
-            id="item-1", title="my-secret", password="old-value"
+            id="item-1",
+            title="my-secret",
+            password="old-value",  # noqa: S106 -- test fixture placeholder, not a real credential
         )
         mock_client.items.list.return_value = [mock_item]
 
@@ -297,9 +286,7 @@ class TestOnePasswordAdapterSet:
         assert secret.value == "new-value"
         mock_client.items.update.assert_called_once()
 
-    def test_set_bytes_value(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_set_bytes_value(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Handle bytes values."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -308,11 +295,13 @@ class TestOnePasswordAdapterSet:
         mock_client.items.list.return_value = []
         mock_client.items.create.return_value = MagicMock()
 
-        with patch("onepasswordconnectsdk.models.item.Item") as MockItem:
-            with patch("onepasswordconnectsdk.models.item.ItemPassword"):
-                secret = adapter.set("my-secret", b"bytes-value")
-                assert secret.key == "my-secret"
-                assert "bytes-value" in secret.value or secret.value == "b'bytes-value'"
+        with (
+            patch("onepasswordconnectsdk.models.item.Item"),
+            patch("onepasswordconnectsdk.models.item.ItemPassword"),
+        ):
+            secret = adapter.set("my-secret", b"bytes-value")
+            assert secret.key == "my-secret"
+            assert "bytes-value" in secret.value or secret.value == "b'bytes-value'"
 
     def test_set_not_connected(self) -> None:
         """ConnectionError when not connected."""
@@ -326,9 +315,7 @@ class TestOnePasswordAdapterSet:
 class TestOnePasswordAdapterDelete:
     """Test secret deletion."""
 
-    def test_delete_success(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_delete_success(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Delete an existing secret."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -342,9 +329,7 @@ class TestOnePasswordAdapterDelete:
         assert result is True
         mock_client.items.delete.assert_called_once_with("test-vault", "item-1")
 
-    def test_delete_not_found(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_delete_not_found(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Return False when secret doesn't exist."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -357,9 +342,7 @@ class TestOnePasswordAdapterDelete:
         assert result is False
         mock_client.items.delete.assert_not_called()
 
-    def test_delete_backend_error(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_delete_backend_error(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """BackendError on deletion failure."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -400,9 +383,7 @@ class TestOnePasswordAdapterList:
         assert isinstance(result, SecretList)
         assert result.keys == ["secret1", "secret2", "secret3"]
 
-    def test_list_with_prefix(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_list_with_prefix(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Filter by prefix."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -419,9 +400,7 @@ class TestOnePasswordAdapterList:
 
         assert result.keys == ["prod-db", "prod-api"]
 
-    def test_list_with_limit(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_list_with_limit(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Respect limit parameter."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -450,9 +429,7 @@ class TestOnePasswordAdapterList:
 class TestOnePasswordAdapterExists:
     """Test secret existence check."""
 
-    def test_exists_true(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_exists_true(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Return True if secret exists."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -463,9 +440,7 @@ class TestOnePasswordAdapterExists:
 
         assert adapter.exists("my-secret") is True
 
-    def test_exists_false(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_exists_false(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Return False if secret doesn't exist."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -482,9 +457,7 @@ class TestOnePasswordAdapterExists:
 
         assert adapter.exists("my-secret") is False
 
-    def test_exists_backend_error(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_exists_backend_error(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Return False on backend error."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -498,9 +471,7 @@ class TestOnePasswordAdapterExists:
 class TestOnePasswordAdapterHealthCheck:
     """Test health checking."""
 
-    def test_health_check_healthy(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_health_check_healthy(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Return True when backend is healthy."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -508,9 +479,7 @@ class TestOnePasswordAdapterHealthCheck:
 
         assert adapter.health_check() is True
 
-    def test_health_check_unhealthy(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_health_check_unhealthy(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Return False when backend is unreachable."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -529,9 +498,7 @@ class TestOnePasswordAdapterHealthCheck:
 class TestOnePasswordAdapterClose:
     """Test connection closing."""
 
-    def test_close_clears_state(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_close_clears_state(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Close releases resources."""
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
@@ -548,9 +515,7 @@ class TestOnePasswordAdapterClose:
 class TestOnePasswordAdapterContextManager:
     """Test context manager protocol."""
 
-    def test_with_statement(
-        self, config: ConnectionConfig, mock_client: MagicMock
-    ) -> None:
+    def test_with_statement(self, config: ConnectionConfig, mock_client: MagicMock) -> None:
         """Context manager cleanup."""
         with patch("penguin_sal.adapters.onepassword.Client", return_value=mock_client):
             with OnePasswordAdapter(config) as adapter:

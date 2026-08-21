@@ -9,7 +9,7 @@ from penguin_dal.query import Query, Row
 class TestQuery:
     def test_and(self, db):
         q1 = db.users.id > 1
-        q2 = db.users.active == True
+        q2 = db.users.active == True  # noqa: E712 -- FieldProxy.__eq__ builds a Query, not a truth check
         combined = q1 & q2
         assert isinstance(combined, Query)
 
@@ -20,7 +20,7 @@ class TestQuery:
         assert isinstance(combined, Query)
 
     def test_not(self, db):
-        q = db.users.active == True
+        q = db.users.active == True  # noqa: E712 -- FieldProxy.__eq__ builds a Query, not a truth check
         inverted = ~q
         assert isinstance(inverted, Query)
 
@@ -129,7 +129,7 @@ class TestAsyncQuerySet:
     async def test_count(self, async_db_for_query):
         """Test async count."""
         db = async_db_for_query
-        count = await db(db.users.active == True).count()
+        count = await db(db.users.active == True).count()  # noqa: E712 -- FieldProxy.__eq__ builds a Query, not a truth check
         assert count == 2
 
     async def test_exists(self, async_db_for_query):

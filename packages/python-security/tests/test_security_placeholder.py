@@ -4,8 +4,6 @@ Note: This test file documents expected security utility functions.
 Tests demonstrate validation patterns for functions that will be implemented.
 """
 
-import pytest
-
 
 class TestSecurityModulePlaceholder:
     """Placeholder tests documenting expected security utilities."""
@@ -273,7 +271,8 @@ class TestExpectedRateLimiting:
 
     def test_rate_limit_within_limit(self) -> None:
         """Rate limiter should allow requests within limit."""
-        # Expected: check_rate_limit('ip:1.2.3.4', limit=10, window=60) returns True for first 10 requests
+        # Expected: check_rate_limit('ip:1.2.3.4', limit=10, window=60) returns
+        # True for first 10 requests
         pass
 
     def test_rate_limit_exceeds_limit(self) -> None:
@@ -288,7 +287,8 @@ class TestExpectedRateLimiting:
 
     def test_rate_limit_different_keys(self) -> None:
         """Rate limiter should track keys independently."""
-        # Expected: check_rate_limit('ip:1.2.3.4') and check_rate_limit('ip:5.6.7.8') are independent
+        # Expected: check_rate_limit('ip:1.2.3.4') and check_rate_limit('ip:5.6.7.8')
+        # are independent
         pass
 
     def test_rate_limit_empty_key(self) -> None:

@@ -65,9 +65,7 @@ class AWSSecretsManagerAdapter(BaseAdapter):
         except self._get_client_error() as e:
             error_code = getattr(e, "response", {}).get("Error", {}).get("Code", "")  # type: ignore[union-attr]
             if error_code in ("InvalidSignatureException", "UnrecognizedClientException"):
-                raise AuthenticationError(
-                    f"Invalid AWS credentials: {e}"
-                ) from e
+                raise AuthenticationError(f"Invalid AWS credentials: {e}") from e
             raise ConnectionError(f"AWS Secrets Manager unreachable: {e}") from e
         except Exception as e:
             raise ConnectionError(f"Authentication check failed: {e}") from e
@@ -160,8 +158,7 @@ class AWSSecretsManagerAdapter(BaseAdapter):
                         Name=key,
                         SecretString=secret_value if isinstance(secret_value, str) else None,
                         SecretBinary=secret_value if isinstance(secret_value, bytes) else None,
-                        Description=metadata.get("description", "")
-                        if metadata else "",
+                        Description=metadata.get("description", "") if metadata else "",
                     )
                     return Secret(
                         key=key,
@@ -298,6 +295,7 @@ class AWSSecretsManagerAdapter(BaseAdapter):
         """Get the botocore ClientError exception type."""
         try:
             import botocore.exceptions  # type: ignore[import-not-found]
+
             return botocore.exceptions.ClientError  # type: ignore[attr-defined,return-value]
         except ImportError:
             return Exception  # type: ignore[return-value]

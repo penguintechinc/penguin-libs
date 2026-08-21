@@ -97,7 +97,7 @@ class TestOIDCProviderIssueTokenSet:
         assert token_set.access_token
         assert token_set.id_token
         assert token_set.refresh_token
-        assert token_set.token_type == "Bearer"
+        assert token_set.token_type == "Bearer"  # noqa: S105 -- RFC field name check
         assert token_set.expires_in == 3600
 
     def test_access_token_is_valid_jwt(self):
@@ -142,7 +142,7 @@ class TestOIDCProviderIssueTokenSet:
             audience=["api.example.com"],
         )
         assert payload["sub"] == "user-abc"
-        assert payload["token_use"] == "id"
+        assert payload["token_use"] == "id"  # noqa: S105 -- RFC field name check
 
     def test_refresh_token_is_opaque_string(self):
         provider, _ = _make_provider()

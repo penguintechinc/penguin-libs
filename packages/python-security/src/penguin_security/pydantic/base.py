@@ -1,5 +1,4 @@
-"""
-Elder Pydantic 2 Base Models
+"""Elder Pydantic 2 Base Models
 
 This module provides foundational Pydantic 2 models for Elder applications,
 with configuration standards for validation, serialization, and ORM integration.
@@ -22,8 +21,7 @@ T = TypeVar("T", bound="ElderBaseModel")
 
 
 class ElderBaseModel(BaseModel):
-    """
-    Base Pydantic 2 model for Elder applications with standard configuration.
+    """Base Pydantic 2 model for Elder applications with standard configuration.
 
     Configuration includes:
     - validate_assignment: Validate field values when assigned
@@ -49,8 +47,7 @@ class ElderBaseModel(BaseModel):
     def to_dict(
         self, exclude_none: bool = False, exclude_unset: bool = False, **kwargs: Any
     ) -> dict[str, Any]:
-        """
-        Convert model instance to dictionary.
+        """Convert model instance to dictionary.
 
         Args:
             exclude_none: If True, exclude fields with None values
@@ -64,8 +61,7 @@ class ElderBaseModel(BaseModel):
 
     @classmethod
     def from_row(cls: type[T], row: Any) -> T:
-        """
-        Convert a database Row object to a model instance.
+        """Convert a database Row object to a model instance.
 
         Supports multiple row types:
         - penguin_dal.query.Row (has .as_dict())
@@ -109,8 +105,7 @@ class ElderBaseModel(BaseModel):
 
     @classmethod
     def from_pydal_row(cls: type[T], row: Any) -> T:
-        """
-        Deprecated: Use from_row() instead.
+        """Deprecated: Use from_row() instead.
 
         Convert a PyDAL Row object to a model instance.
 
@@ -133,8 +128,7 @@ class ElderBaseModel(BaseModel):
 
 
 class ImmutableModel(ElderBaseModel):
-    """
-    Immutable Pydantic 2 model for data transfer objects and API responses.
+    """Immutable Pydantic 2 model for data transfer objects and API responses.
 
     Once created, instances of this model cannot be modified, ensuring data
     integrity for DTOs and response objects. Inherits all configuration from
@@ -167,8 +161,7 @@ class ImmutableModel(ElderBaseModel):
 
 
 class RequestModel(ElderBaseModel):
-    """
-    Pydantic 2 model for API request validation with security hardening.
+    """Pydantic 2 model for API request validation with security hardening.
 
     Configuration includes all ElderBaseModel settings plus:
     - extra="forbid": Rejects unknown fields to prevent injection attacks
@@ -203,8 +196,7 @@ class RequestModel(ElderBaseModel):
 
 
 class ConfigurableModel(ElderBaseModel):
-    """
-    Flexible Pydantic 2 model with dynamic field support.
+    """Flexible Pydantic 2 model with dynamic field support.
 
     Configuration includes all ElderBaseModel settings plus:
     - extra="allow": Accepts and stores additional fields beyond the schema
@@ -248,8 +240,7 @@ class ConfigurableModel(ElderBaseModel):
     def to_dict(
         self, exclude_none: bool = False, exclude_unset: bool = False, **kwargs: Any
     ) -> dict[str, Any]:
-        """
-        Convert model instance to dictionary, including extra fields.
+        """Convert model instance to dictionary, including extra fields.
 
         Overrides parent to_dict() to ensure extra fields (stored in
         __pydantic_extra__) are included in the output.

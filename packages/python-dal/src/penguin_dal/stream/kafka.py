@@ -1,9 +1,10 @@
 """Kafka producer and consumer using confluent-kafka."""
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +235,7 @@ class KafkaConsumer:
 
             # Get timestamp
             ts_type, ts_millis = msg.timestamp()
-            timestamp = datetime.fromtimestamp(ts_millis / 1000.0, tz=timezone.utc)
+            timestamp = datetime.fromtimestamp(ts_millis / 1000.0, tz=UTC)
 
             stream_msg = StreamMessage(
                 topic=msg.topic(),

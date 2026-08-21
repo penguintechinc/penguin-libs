@@ -1,4 +1,5 @@
 """iSCSI block device storage backend."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,8 +17,7 @@ class ISCSIConfig:
 
 
 class ISCSIStore:
-    """
-    File-based store over an iSCSI-mounted block device filesystem.
+    """File-based store over an iSCSI-mounted block device filesystem.
 
     Behaves identically to NFSStore—the difference is the underlying
     transport (iSCSI block device vs NFS network share). Connection

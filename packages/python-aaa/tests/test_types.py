@@ -115,7 +115,7 @@ class TestTokenSet:
                 "expires_in": 3600,
             }
         )
-        assert ts.token_type == "Bearer"
+        assert ts.token_type == "Bearer"  # noqa: S105 -- RFC field name check
         assert ts.expires_in == 3600
 
     def test_custom_token_type(self):
@@ -128,7 +128,7 @@ class TestTokenSet:
                 "token_type": "DPoP",
             }
         )
-        assert ts.token_type == "DPoP"
+        assert ts.token_type == "DPoP"  # noqa: S105 -- RFC field name check
 
     def test_missing_required_field_rejected(self):
         with pytest.raises(ValidationError):

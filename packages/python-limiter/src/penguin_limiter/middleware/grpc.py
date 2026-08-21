@@ -31,7 +31,8 @@ Set ``skip_private_ips=False`` to enforce limits regardless of source.
 from __future__ import annotations
 
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from ..algorithms.fixed_window import FixedWindow
 from ..algorithms.sliding_window import SlidingWindow
@@ -80,6 +81,7 @@ class GrpcRateLimitInterceptor:
     ) -> None:
         if storage is None:
             from ..storage.memory import MemoryStorage
+
             storage = MemoryStorage()
         self._config = config
         self._algo = _build_algorithm(config, storage)
@@ -121,11 +123,13 @@ class GrpcRateLimitInterceptor:
                 if config.fail_open:
                     return handler.unary_unary(request, context)
                 import grpc
+
                 context.abort(grpc.StatusCode.UNAVAILABLE, "Rate limit service unavailable")
                 return None
 
             if not result.allowed:
                 import grpc
+
                 context.abort(
                     grpc.StatusCode.RESOURCE_EXHAUSTED,
                     f"Rate limit exceeded. Try again in {int(result.reset_after)}s.",
@@ -136,6 +140,7 @@ class GrpcRateLimitInterceptor:
 
         try:
             import grpc
+
             return grpc.unary_unary_rpc_method_handler(
                 rate_limit_wrapper,
                 request_deserializer=getattr(handler, "request_deserializer", None),

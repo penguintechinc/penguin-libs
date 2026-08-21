@@ -8,6 +8,7 @@ Tests for:
 """
 
 import pytest
+from cryptography.exceptions import InvalidTag
 
 from penguin_crypto import (
     decrypt,
@@ -105,7 +106,7 @@ class TestEncryption:
         plaintext = b"secret data"
         ciphertext = encrypt(plaintext, key1)
 
-        with pytest.raises(Exception):  # cryptography.hazmat.primitives.ciphers.aead.InvalidTag
+        with pytest.raises(InvalidTag):
             decrypt(ciphertext, key2)
 
     def test_decrypt_tampered_ciphertext(self) -> None:
@@ -119,7 +120,7 @@ class TestEncryption:
         tampered[15] ^= 0xFF  # Flip bits in the middle
         tampered = bytes(tampered)
 
-        with pytest.raises(Exception):  # cryptography.hazmat.primitives.ciphers.aead.InvalidTag
+        with pytest.raises(InvalidTag):
             decrypt(tampered, key)
 
 
@@ -128,7 +129,7 @@ class TestKeyDerivation:
 
     def test_key_derivation_deterministic(self) -> None:
         """Test key derivation is deterministic for same inputs."""
-        password = "my_password"
+        password = "my_password"  # noqa: S105 -- dummy KDF test fixture, not a real credential
         salt = generate_salt(32)
         key1 = derive_key(password, salt)
         key2 = derive_key(password, salt)
@@ -143,14 +144,14 @@ class TestKeyDerivation:
 
     def test_key_derivation_different_salt(self) -> None:
         """Test key derivation differs for different salts."""
-        password = "my_password"
+        password = "my_password"  # noqa: S105 -- dummy KDF test fixture, not a real credential
         key1 = derive_key(password, generate_salt(32))
         key2 = derive_key(password, generate_salt(32))
         assert key1 != key2
 
     def test_key_derivation_length(self) -> None:
         """Test derived key has correct length."""
-        password = "my_password"
+        password = "my_password"  # noqa: S105 -- dummy KDF test fixture, not a real credential
         salt = generate_salt(32)
         for length in [16, 32, 64]:
             key = derive_key(password, salt, key_length=length)
@@ -158,7 +159,7 @@ class TestKeyDerivation:
 
     def test_key_derivation_bytes_password(self) -> None:
         """Test key derivation accepts bytes password."""
-        password_str = "my_password"
+        password_str = "my_password"  # noqa: S105 -- dummy KDF test fixture, not a real credential
         password_bytes = b"my_password"
         salt = generate_salt(32)
         key1 = derive_key(password_str, salt)
@@ -202,11 +203,11 @@ class TestHashing:
 
     def test_sha512_known_vector(self) -> None:
         """Test SHA-512 against known test vector."""
-        # SHA512("") = cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e
+        # SHA512("") = cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e  # noqa: E501 -- fixed-length hex digest, cannot wrap
         result = sha512(b"")
         assert (
             result
-            == "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+            == "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"  # noqa: E501 -- fixed-length hex digest, cannot wrap
         )
 
     def test_sha512_deterministic(self) -> None:
@@ -307,7 +308,7 @@ class TestAuthenticatedEncryption:
         tampered[-1] ^= 0xFF
         tampered = bytes(tampered)
 
-        with pytest.raises(Exception):  # InvalidTag
+        with pytest.raises(InvalidTag):
             decrypt(tampered, key)
 
     def test_tag_verification(self) -> None:
@@ -321,7 +322,7 @@ class TestAuthenticatedEncryption:
         tampered[20] ^= 0x01
         tampered = bytes(tampered)
 
-        with pytest.raises(Exception):  # InvalidTag
+        with pytest.raises(InvalidTag):
             decrypt(tampered, key)
 
     def test_aead_different_keys_fail(self) -> None:
@@ -331,5 +332,5 @@ class TestAuthenticatedEncryption:
         plaintext = b"authenticated data"
         ciphertext = encrypt(plaintext, key1)
 
-        with pytest.raises(Exception):  # InvalidTag
+        with pytest.raises(InvalidTag):
             decrypt(ciphertext, key2)

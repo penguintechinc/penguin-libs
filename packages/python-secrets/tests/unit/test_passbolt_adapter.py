@@ -25,7 +25,7 @@ def config() -> ConnectionConfig:
         scheme="passbolt",
         host="https://passbolt.example.com",
         username="user@example.com",
-        password="passphrase",
+        password="passphrase",  # noqa: S106 -- test fixture placeholder, not a real credential
         params={
             "private_key_path": "/path/to/key.asc",
             "fingerprint": "ABCD1234",
@@ -57,16 +57,12 @@ class TestPassboltAdapterInit:
         adapter = PassboltAdapter(config)
         assert adapter.config is config
 
-    def test_init_connected_is_false(
-        self, config: ConnectionConfig
-    ) -> None:
+    def test_init_connected_is_false(self, config: ConnectionConfig) -> None:
         """Test that _connected starts as False."""
         adapter = PassboltAdapter(config)
         assert adapter._connected is False
 
-    def test_init_client_is_none(
-        self, config: ConnectionConfig
-    ) -> None:
+    def test_init_client_is_none(self, config: ConnectionConfig) -> None:
         """Test that _client starts as None."""
         adapter = PassboltAdapter(config)
         assert adapter._client is None
@@ -92,16 +88,12 @@ class TestInitConnection:
         assert adapter._connected is True
         mock_passbolt_class.assert_called_once()
 
-    def test_init_connection_missing_sdk(
-        self, config: ConnectionConfig
-    ) -> None:
+    def test_init_connection_missing_sdk(self, config: ConnectionConfig) -> None:
         """Test error when passbolt SDK is not installed."""
         # Remove the mock module to simulate missing SDK
         sys.modules.pop("passbolt_python_api", None)
         adapter = PassboltAdapter(config)
-        with pytest.raises(
-            ImportError, match="passbolt-python-api required"
-        ):
+        with pytest.raises(ImportError, match="passbolt-python-api required"):
             adapter._init_connection()
         # Re-add the mock for other tests
         mock_module = MagicMock()
@@ -117,9 +109,7 @@ class TestInitConnection:
         mock_passbolt_class.side_effect = RuntimeError("Connection failed")
         adapter = PassboltAdapter(config)
 
-        with pytest.raises(
-            ConnectionError, match="Failed to initialize Passbolt client"
-        ):
+        with pytest.raises(ConnectionError, match="Failed to initialize Passbolt client"):
             adapter._init_connection()
 
     @patch("passbolt_python_api.PassboltAPI", create=True)
@@ -134,7 +124,7 @@ class TestInitConnection:
             scheme="passbolt",
             host="passbolt.example.com",
             username="user@example.com",
-            password="pass",
+            password="pass",  # noqa: S106 -- test fixture placeholder, not a real credential
             params={"private_key_path": "/path/to/key.asc"},
         )
         adapter = PassboltAdapter(config)
@@ -177,9 +167,7 @@ class TestAuthenticate:
         adapter = PassboltAdapter(config)
         adapter._client = mock_api
 
-        with pytest.raises(
-            AuthenticationError, match="Passbolt authentication failed"
-        ):
+        with pytest.raises(AuthenticationError, match="Passbolt authentication failed"):
             adapter.authenticate()
 
     @patch("passbolt_python_api.PassboltAPI", create=True)
@@ -245,9 +233,7 @@ class TestGet:
         adapter = PassboltAdapter(config)
         adapter._client = mock_api
 
-        with pytest.raises(
-            SecretNotFoundError, match="my-secret"
-        ):
+        with pytest.raises(SecretNotFoundError, match="my-secret"):
             adapter.get("my-secret")
 
     @patch("passbolt_python_api.PassboltAPI", create=True)
@@ -303,9 +289,7 @@ class TestSet:
     ) -> None:
         """Test updating an existing resource."""
         mock_passbolt_class.return_value = mock_api
-        mock_api.get_resources.return_value = [
-            {"id": "resource-123", "name": "existing-secret"}
-        ]
+        mock_api.get_resources.return_value = [{"id": "resource-123", "name": "existing-secret"}]
 
         adapter = PassboltAdapter(config)
         adapter._client = mock_api
@@ -398,9 +382,7 @@ class TestDelete:
     ) -> None:
         """Test successful deletion."""
         mock_passbolt_class.return_value = mock_api
-        mock_api.get_resources.return_value = [
-            {"id": "resource-123", "name": "secret-to-delete"}
-        ]
+        mock_api.get_resources.return_value = [{"id": "resource-123", "name": "secret-to-delete"}]
 
         adapter = PassboltAdapter(config)
         adapter._client = mock_api
@@ -545,9 +527,7 @@ class TestExists:
     ) -> None:
         """Test exists returns True for existing resource."""
         mock_passbolt_class.return_value = mock_api
-        mock_api.get_resources.return_value = [
-            {"id": "1", "name": "secret"}
-        ]
+        mock_api.get_resources.return_value = [{"id": "1", "name": "secret"}]
 
         adapter = PassboltAdapter(config)
         adapter._client = mock_api
@@ -659,9 +639,7 @@ class TestClose:
         assert adapter._connected is False
         assert adapter._client is None
 
-    def test_close_with_no_client(
-        self, config: ConnectionConfig
-    ) -> None:
+    def test_close_with_no_client(self, config: ConnectionConfig) -> None:
         """Test close handles missing client gracefully."""
         adapter = PassboltAdapter(config)
         adapter._connected = True

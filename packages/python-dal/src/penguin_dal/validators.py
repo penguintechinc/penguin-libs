@@ -22,7 +22,6 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # @validated_columns decorator
 # ---------------------------------------------------------------------------
@@ -67,7 +66,7 @@ def validated_columns(
 # ---------------------------------------------------------------------------
 
 
-class IS_NOT_EMPTY:
+class IS_NOT_EMPTY:  # noqa: N801 -- mirrors PyDAL's exact validator class name for drop-in compatibility
     """Reject ``None``, empty strings, empty lists, and empty dicts.
 
     Equivalent to PyDAL ``IS_NOT_EMPTY``.
@@ -97,7 +96,7 @@ class IS_NOT_EMPTY:
         return value, None
 
 
-class IS_LENGTH:
+class IS_LENGTH:  # noqa: N801 -- mirrors PyDAL's exact validator class name for drop-in compatibility
     """Validate that the length of a value (coerced to string) is within bounds.
 
     Equivalent to PyDAL ``IS_LENGTH``.
@@ -138,7 +137,7 @@ class IS_LENGTH:
         return value, None
 
 
-class IS_EMAIL:
+class IS_EMAIL:  # noqa: N801 -- mirrors PyDAL's exact validator class name for drop-in compatibility
     """Validate an e-mail address with a basic RFC-5321-like pattern.
 
     Equivalent to PyDAL ``IS_EMAIL``.
@@ -170,7 +169,7 @@ class IS_EMAIL:
         return value, None
 
 
-class IS_IN_SET:
+class IS_IN_SET:  # noqa: N801 -- mirrors PyDAL's exact validator class name for drop-in compatibility
     """Validate that a value is a member of an allowed set.
 
     Equivalent to PyDAL ``IS_IN_SET``.
@@ -210,7 +209,7 @@ class IS_IN_SET:
         return value, None
 
 
-class IS_MATCH:
+class IS_MATCH:  # noqa: N801 -- mirrors PyDAL's exact validator class name for drop-in compatibility
     """Validate that a value matches a regular-expression pattern.
 
     Equivalent to PyDAL ``IS_MATCH``.
@@ -251,7 +250,7 @@ class IS_MATCH:
         return value, None
 
 
-class IS_NOT_IN_DB:
+class IS_NOT_IN_DB:  # noqa: N801 -- mirrors PyDAL's exact validator class name for drop-in compatibility
     """Validate that a value does not already exist in a database column.
 
     Equivalent to PyDAL ``IS_NOT_IN_DB``.
@@ -292,21 +291,27 @@ class IS_NOT_IN_DB:
         """
         from sqlalchemy import select as sa_select
 
+        from penguin_dal.exceptions import TableNotFoundError
+
         try:
             table = self._db._get_table(self._table_name)
             col = table.c[self._column_name]
-            stmt = sa_select(table).where(col == value).limit(1)
-            with self._db._session_factory() as session:
-                result = session.execute(stmt)
-                if result.first() is not None:
-                    return value, self.error_message
-        except Exception:
-            # If the table/column doesn't exist yet, treat as valid.
-            pass
+        except (TableNotFoundError, KeyError):
+            # Table/column doesn't exist yet (e.g. pre-migration): treat as
+            # valid rather than failing validation on a schema that isn't
+            # there yet. Any other error (DB connectivity, query failure)
+            # must propagate rather than be silently treated as "valid".
+            return value, None
+
+        stmt = sa_select(table).where(col == value).limit(1)
+        with self._db._session_factory() as session:
+            result = session.execute(stmt)
+            if result.first() is not None:
+                return value, self.error_message
         return value, None
 
 
-class IS_IN_DB:
+class IS_IN_DB:  # noqa: N801 -- mirrors PyDAL's exact validator class name for drop-in compatibility
     """Validate that a value exists in a database column.
 
     Equivalent to PyDAL ``IS_IN_DB``.
@@ -360,7 +365,7 @@ class IS_IN_DB:
         return value, None
 
 
-class IS_INT_IN_RANGE:
+class IS_INT_IN_RANGE:  # noqa: N801 -- mirrors PyDAL's exact validator class name for drop-in compatibility
     """Validate that an integer value lies within ``[minimum, maximum)``.
 
     Equivalent to PyDAL ``IS_INT_IN_RANGE``.
@@ -408,7 +413,7 @@ class IS_INT_IN_RANGE:
         return value, None
 
 
-class IS_IPADDRESS:
+class IS_IPADDRESS:  # noqa: N801 -- mirrors PyDAL's exact validator class name for drop-in compatibility
     """Validate an IPv4 or IPv6 address using :mod:`ipaddress`.
 
     Equivalent to PyDAL ``IS_IPADDRESS``.
@@ -452,7 +457,7 @@ class IS_IPADDRESS:
         return value, None
 
 
-class IS_JSON:
+class IS_JSON:  # noqa: N801 -- mirrors PyDAL's exact validator class name for drop-in compatibility
     """Validate that a value is valid JSON (string) or a JSON-serialisable object.
 
     Equivalent to PyDAL ``IS_JSON``.
@@ -501,7 +506,7 @@ class IS_JSON:
         return value, self.error_message
 
 
-class IS_DATETIME:
+class IS_DATETIME:  # noqa: N801 -- mirrors PyDAL's exact validator class name for drop-in compatibility
     """Validate a datetime string against one or more format strings.
 
     Equivalent to PyDAL ``IS_DATETIME``.
@@ -555,13 +560,11 @@ class IS_DATETIME:
             except (ValueError, TypeError):
                 continue
 
-        msg = self.error_message or (
-            f"Enter datetime as {self._formats[0]}"
-        )
+        msg = self.error_message or (f"Enter datetime as {self._formats[0]}")
         return value, msg
 
 
-class IS_NULL_OR:
+class IS_NULL_OR:  # noqa: N801 -- mirrors PyDAL's exact validator class name for drop-in compatibility
     """Pass validation if the value is empty/null; otherwise delegate to *other*.
 
     Equivalent to PyDAL ``IS_NULL_OR``.  Useful for optional fields that, when

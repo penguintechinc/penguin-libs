@@ -40,14 +40,14 @@ class OnePasswordAdapter(BaseAdapter):
         try:
             # Try environment-based initialization first
             self._client = sdk_new_client()
-        except Exception:
+        except Exception as exc:
             # Fall back to explicit configuration
             token = self.config.password or self.config.params.get("token")
             if not token:
                 raise ConnectionError(
                     "1Password Connect token required: set config.password or "
                     "config.params['token']"
-                )
+                ) from exc
 
             # Build URL from host and port
             scheme = self.config.scheme or "https"
@@ -57,10 +57,7 @@ class OnePasswordAdapter(BaseAdapter):
             self._client = Client(url=url, token=token)
 
         # Extract vault ID from config
-        self._vault_id = (
-            self.config.params.get("vault_id")
-            or self.config.params.get("vault")
-        )
+        self._vault_id = self.config.params.get("vault_id") or self.config.params.get("vault")
         if not self._vault_id:
             raise ConnectionError(
                 "1Password vault ID required: set config.params['vault_id'] or "
@@ -77,9 +74,7 @@ class OnePasswordAdapter(BaseAdapter):
         try:
             self._client.vaults.list()
         except Exception as e:
-            raise AuthenticationError(
-                f"Failed to authenticate with 1Password: {e}"
-            ) from e
+            raise AuthenticationError(f"Failed to authenticate with 1Password: {e}") from e
 
     def get(self, key: str, version: int | None = None) -> Secret:
         """Retrieve a secret by title/key.
@@ -108,7 +103,7 @@ class OnePasswordAdapter(BaseAdapter):
                         password = item.password
                     else:
                         # Try to extract from first field
-                        for field in (item.fields or []):
+                        for field in item.fields or []:
                             if field.type == "password":
                                 password = field.value
                                 break

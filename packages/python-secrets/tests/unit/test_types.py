@@ -2,9 +2,7 @@
 
 from datetime import datetime
 
-import pytest
-
-from penguin_sal.core.types import Secret, SecretList, ConnectionConfig
+from penguin_sal.core.types import ConnectionConfig, Secret, SecretList
 
 
 class TestSecret:
@@ -57,7 +55,7 @@ class TestSecret:
 
     def test_secret_has_slots(self) -> None:
         """Secret uses slots for memory efficiency."""
-        secret = Secret(key="k", value="v")
+        Secret(key="k", value="v")  # construction must succeed under __slots__
         assert hasattr(Secret, "__slots__")
 
 
@@ -104,7 +102,7 @@ class TestConnectionConfig:
             port=8200,
             path="/v1",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S106 -- test fixture placeholder, not a real credential
             params=params,
         )
         assert config.scheme == "vault"
@@ -112,10 +110,11 @@ class TestConnectionConfig:
         assert config.port == 8200
         assert config.path == "/v1"
         assert config.username == "admin"
-        assert config.password == "secret"
+        # noqa: S105 below -- asserting against the fixture literal set above, not a real credential
+        assert config.password == "secret"  # noqa: S105
         assert config.params is params
 
     def test_connection_config_has_slots(self) -> None:
         """ConnectionConfig uses slots for memory efficiency."""
-        config = ConnectionConfig(scheme="vault", host="localhost")
+        ConnectionConfig(scheme="vault", host="localhost")  # must succeed under __slots__
         assert hasattr(ConnectionConfig, "__slots__")

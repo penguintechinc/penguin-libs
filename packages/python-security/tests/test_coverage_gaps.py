@@ -1,5 +1,4 @@
-"""
-Targeted tests for coverage gaps in penguin-security.
+"""Targeted tests for coverage gaps in penguin-security.
 
 Tests for:
 - pydantic/openapi.py (lines 13-14, 28, 35-38, 42-44, 48)
@@ -7,32 +6,32 @@ Tests for:
 - validation/network.py (lines 49, 102, 110-111, 131, 165, 186-190, 229, 244-245)
 """
 
-import asyncio
+import importlib.util
 import json
-from typing import Optional
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import BaseModel, ValidationError
 
-# Test imports for Flask/RESTX integration
+# Test imports for Flask/RESTX integration. Flask/request aren't referenced
+# at module scope -- each test that needs them does its own local
+# `from flask import Flask` (see below) -- only Response is used here.
 try:
-    from flask import Flask, Response, request
+    from flask import Response
+
     FLASK_AVAILABLE = True
 except ImportError:
     FLASK_AVAILABLE = False
 
 # Import modules under test
-from penguin_security.pydantic.openapi import (
-    generate_openapi_schema,
-    pydantic_to_restx_field,
-)
 from penguin_security.pydantic.flask_integration import (
     ValidationErrorResponse,
     model_response,
-    validate_body,
-    validate_query_params,
     validated_request,
+)
+from penguin_security.pydantic.openapi import (
+    generate_openapi_schema,
+    pydantic_to_restx_field,
 )
 from penguin_security.validation.network import (
     IsEmail,
@@ -41,10 +40,10 @@ from penguin_security.validation.network import (
     IsURL,
 )
 
-
 # ============================================================================
 # Tests for pydantic/openapi.py
 # ============================================================================
+
 
 class TestGenerateOpenAPISchema:
     """Tests for generate_openapi_schema function."""
@@ -67,7 +66,7 @@ class TestGenerateOpenAPISchema:
 
         class ModelWithOptional(BaseModel):
             name: str
-            description: Optional[str] = None
+            description: str | None = None
 
         schema = generate_openapi_schema(ModelWithOptional)
         assert "properties" in schema
@@ -81,15 +80,12 @@ class TestPydanticToRestxFieldWithMocking:
     def test_pydantic_to_restx_field_import_error_when_restx_not_available(
         self,
     ) -> None:
-        """
-        Test that pydantic_to_restx_field raises ImportError when
+        """Test that pydantic_to_restx_field raises ImportError when
         flask_restx is not available (line 28).
         """
         from penguin_security.pydantic import openapi as openapi_module
 
         with patch.object(openapi_module, "restx_fields", None):
-            field_info = BaseModel.__fields__ if hasattr(BaseModel, "__fields__") else {}
-
             with pytest.raises(ImportError, match="flask_restx is required"):
                 from pydantic.fields import FieldInfo
 
@@ -99,13 +95,10 @@ class TestPydanticToRestxFieldWithMocking:
                 pydantic_to_restx_field(mock_field_info, str)
 
     def test_pydantic_to_restx_field_optional_type(self) -> None:
-        """
-        Test pydantic_to_restx_field with Optional type handling
+        """Test pydantic_to_restx_field with Optional type handling
         (lines 35-38).
         """
-        try:
-            from flask_restx import fields as restx_fields
-        except ImportError:
+        if importlib.util.find_spec("flask_restx") is None:
             pytest.skip("flask_restx not available")
 
         from pydantic.fields import FieldInfo
@@ -114,61 +107,51 @@ class TestPydanticToRestxFieldWithMocking:
         mock_field_info.is_required.return_value = False
         mock_field_info.description = "Test field"
 
-        # Test Optional[str] type
-        result = pydantic_to_restx_field(mock_field_info, Optional[str])
+        # Test Optional[str] (str | None) type
+        result = pydantic_to_restx_field(mock_field_info, str | None)
         assert result is not None
         # Check that field was created with required=False
         assert mock_field_info.is_required.called
 
     def test_pydantic_to_restx_field_list_type(self) -> None:
-        """
-        Test pydantic_to_restx_field with List type handling
+        """Test pydantic_to_restx_field with List type handling
         (lines 42-44).
         """
-        try:
-            from flask_restx import fields as restx_fields
-        except ImportError:
+        if importlib.util.find_spec("flask_restx") is None:
             pytest.skip("flask_restx not available")
 
         from pydantic.fields import FieldInfo
-        from typing import List
 
         mock_field_info = MagicMock(spec=FieldInfo)
         mock_field_info.is_required.return_value = True
         mock_field_info.description = "Test list field"
 
         # Test List[str] type
-        result = pydantic_to_restx_field(mock_field_info, List[str])
+        result = pydantic_to_restx_field(mock_field_info, list[str])
         assert result is not None
         assert mock_field_info.is_required.called
 
     def test_pydantic_to_restx_field_dict_type(self) -> None:
-        """
-        Test pydantic_to_restx_field with Dict type handling
+        """Test pydantic_to_restx_field with Dict type handling
         (line 48).
         """
-        try:
-            from flask_restx import fields as restx_fields
-        except ImportError:
+        if importlib.util.find_spec("flask_restx") is None:
             pytest.skip("flask_restx not available")
 
         from pydantic.fields import FieldInfo
-        from typing import Dict
 
         mock_field_info = MagicMock(spec=FieldInfo)
         mock_field_info.is_required.return_value = True
         mock_field_info.description = "Test dict field"
 
         # Test Dict type
-        result = pydantic_to_restx_field(mock_field_info, Dict[str, str])
+        result = pydantic_to_restx_field(mock_field_info, dict[str, str])
         assert result is not None
         assert mock_field_info.is_required.called
 
     def test_pydantic_to_restx_field_basic_types(self) -> None:
         """Test pydantic_to_restx_field with basic Python types."""
-        try:
-            from flask_restx import fields as restx_fields
-        except ImportError:
+        if importlib.util.find_spec("flask_restx") is None:
             pytest.skip("flask_restx not available")
 
         from pydantic.fields import FieldInfo
@@ -187,14 +170,14 @@ class TestPydanticToRestxFieldWithMocking:
 # Tests for pydantic/flask_integration.py
 # ============================================================================
 
+
 class TestValidatedRequestAsync:
     """Tests for validated_request decorator with async handlers."""
 
     @pytest.mark.skipif(not FLASK_AVAILABLE, reason="Flask not available")
     @pytest.mark.asyncio
     async def test_validated_request_async_with_query_model(self) -> None:
-        """
-        Test validated_request async path with query_model parameter
+        """Test validated_request async path with query_model parameter
         (line 120).
         """
         from flask import Flask
@@ -216,8 +199,7 @@ class TestValidatedRequestAsync:
     @pytest.mark.skipif(not FLASK_AVAILABLE, reason="Flask not available")
     @pytest.mark.asyncio
     async def test_validated_request_async_validation_error_catch(self) -> None:
-        """
-        Test validated_request async path catches ValidationError
+        """Test validated_request async path catches ValidationError
         (lines 123-124).
         """
         from flask import Flask
@@ -240,9 +222,7 @@ class TestValidatedRequestAsync:
     @pytest.mark.skipif(not FLASK_AVAILABLE, reason="Flask not available")
     @pytest.mark.asyncio
     async def test_validated_request_async_body_and_query(self) -> None:
-        """
-        Test validated_request async with both body and query models.
-        """
+        """Test validated_request async with both body and query models."""
         from flask import Flask
 
         class CreateRequest(BaseModel):
@@ -256,10 +236,7 @@ class TestValidatedRequestAsync:
             return {"name": body.name, "user_id": query.user_id}
 
         app = Flask(__name__)
-        with app.test_request_context(
-            "/?user_id=123",
-            json={"name": "Test"}
-        ):
+        with app.test_request_context("/?user_id=123", json={"name": "Test"}):
             result = await handler()
             assert result["name"] == "Test"
             assert result["user_id"] == 123
@@ -270,8 +247,7 @@ class TestValidatedRequestSync:
 
     @pytest.mark.skipif(not FLASK_AVAILABLE, reason="Flask not available")
     def test_validated_request_sync_with_query_model(self) -> None:
-        """
-        Test validated_request sync path with query_model parameter
+        """Test validated_request sync path with query_model parameter
         (line 135).
         """
         from flask import Flask
@@ -292,9 +268,7 @@ class TestValidatedRequestSync:
 
     @pytest.mark.skipif(not FLASK_AVAILABLE, reason="Flask not available")
     def test_validated_request_sync_validation_error_catch(self) -> None:
-        """
-        Test validated_request sync path catches ValidationError.
-        """
+        """Test validated_request sync path catches ValidationError."""
         from flask import Flask
 
         class QueryParams(BaseModel):
@@ -316,10 +290,10 @@ class TestModelResponseNonAppContext:
     """Tests for model_response outside Flask app context."""
 
     def test_model_response_without_app_context(self) -> None:
-        """
-        Test model_response creates Response when not in Flask app context
+        """Test model_response creates Response when not in Flask app context
         (lines 175-178).
         """
+
         class UserModel(BaseModel):
             id: str
             name: str
@@ -337,21 +311,16 @@ class TestModelResponseNonAppContext:
         assert response_data["name"] == "Test User"
 
     def test_model_response_without_app_context_exclude_none(self) -> None:
-        """
-        Test model_response with exclude_none outside app context.
-        """
+        """Test model_response with exclude_none outside app context."""
+
         class UserModel(BaseModel):
             id: str
             name: str
-            email: Optional[str] = None
+            email: str | None = None
 
         user = UserModel(id="123", name="Test", email=None)
 
-        response, status_code = model_response(
-            user,
-            status_code=200,
-            exclude_none=True
-        )
+        response, status_code = model_response(user, status_code=200, exclude_none=True)
 
         assert status_code == 200
         response_data = json.loads(response.get_data(as_text=True))
@@ -363,12 +332,12 @@ class TestModelResponseNonAppContext:
 # Tests for validation/network.py
 # ============================================================================
 
+
 class TestIsEmailNonString:
     """Tests for IsEmail validator with non-string input."""
 
     def test_is_email_validate_non_string(self) -> None:
-        """
-        Test IsEmail.validate with non-string value returns failure
+        """Test IsEmail.validate with non-string value returns failure
         (line 49).
         """
         validator = IsEmail()
@@ -392,8 +361,7 @@ class TestIsURLNonString:
     """Tests for IsURL validator with non-string input."""
 
     def test_is_url_validate_non_string(self) -> None:
-        """
-        Test IsURL.validate with non-string value returns failure
+        """Test IsURL.validate with non-string value returns failure
         (line 102).
         """
         validator = IsURL()
@@ -404,8 +372,7 @@ class TestIsURLNonString:
         assert result.error == "Value must be a string"
 
     def test_is_url_validate_invalid_url_with_custom_error_message(self) -> None:
-        """
-        Test IsURL.validate with invalid URL and custom error_message
+        """Test IsURL.validate with invalid URL and custom error_message
         (lines 110-111).
         """
         custom_error = "This is not a valid web address"
@@ -418,8 +385,7 @@ class TestIsURLNonString:
         assert result.error == custom_error
 
     def test_is_url_allowed_schemes_error(self) -> None:
-        """
-        Test IsURL error message with custom allowed_schemes
+        """Test IsURL error message with custom allowed_schemes
         (line 131 area - error_message branch).
         """
         validator = IsURL(allowed_schemes=["ftp"], error_message="Custom error")
@@ -434,8 +400,7 @@ class TestIsIPAddressNonString:
     """Tests for IsIPAddress validator with non-string input."""
 
     def test_is_ip_address_validate_non_string(self) -> None:
-        """
-        Test IsIPAddress.validate with non-string value returns failure
+        """Test IsIPAddress.validate with non-string value returns failure
         (line 165).
         """
         validator = IsIPAddress()
@@ -446,8 +411,7 @@ class TestIsIPAddressNonString:
         assert result.error == "Value must be a string"
 
     def test_is_ip_address_error_message_ipv4(self) -> None:
-        """
-        Test IsIPAddress._get_error_message for IPv4
+        """Test IsIPAddress._get_error_message for IPv4
         (lines 186-190).
         """
         validator = IsIPAddress(version=4)
@@ -458,8 +422,7 @@ class TestIsIPAddressNonString:
         assert "IPv4" in result.error
 
     def test_is_ip_address_error_message_ipv6(self) -> None:
-        """
-        Test IsIPAddress._get_error_message for IPv6
+        """Test IsIPAddress._get_error_message for IPv6
         (lines 186-190).
         """
         validator = IsIPAddress(version=6)
@@ -470,8 +433,7 @@ class TestIsIPAddressNonString:
         assert "IPv6" in result.error
 
     def test_is_ip_address_error_message_any_version(self) -> None:
-        """
-        Test IsIPAddress._get_error_message with no version specified
+        """Test IsIPAddress._get_error_message with no version specified
         (lines 186-190).
         """
         validator = IsIPAddress(version=None)
@@ -506,8 +468,7 @@ class TestIsHostnameNonString:
     """Tests for IsHostname validator with non-string input."""
 
     def test_is_hostname_validate_non_string(self) -> None:
-        """
-        Test IsHostname.validate with non-string value returns failure
+        """Test IsHostname.validate with non-string value returns failure
         (line 229).
         """
         validator = IsHostname()
@@ -518,8 +479,7 @@ class TestIsHostnameNonString:
         assert result.error == "Value must be a string"
 
     def test_is_hostname_validate_ip_address_when_allowed(self) -> None:
-        """
-        Test IsHostname.validate with IP address when allow_ip=True
+        """Test IsHostname.validate with IP address when allow_ip=True
         (lines 244-245).
         """
         validator = IsHostname(allow_ip=True)
@@ -530,8 +490,7 @@ class TestIsHostnameNonString:
         assert result.value == "192.168.1.1"
 
     def test_is_hostname_validate_ipv6_when_allowed(self) -> None:
-        """
-        Test IsHostname.validate with IPv6 when allow_ip=True
+        """Test IsHostname.validate with IPv6 when allow_ip=True
         (lines 244-245).
         """
         validator = IsHostname(allow_ip=True)
@@ -542,8 +501,7 @@ class TestIsHostnameNonString:
         assert result.value == "::1"
 
     def test_is_hostname_validate_ip_when_not_allowed(self) -> None:
-        """
-        Test IsHostname.validate behavior when IP is provided with allow_ip=False.
+        """Test IsHostname.validate behavior when IP is provided with allow_ip=False.
         When allow_ip=False, IPs may be treated as hostnames if they match the pattern.
         """
         validator = IsHostname(allow_ip=False)
@@ -569,6 +527,7 @@ class TestIsHostnameNonString:
 # ============================================================================
 # Additional edge case and integration tests
 # ============================================================================
+
 
 class TestValidationIntegration:
     """Integration tests combining multiple validation components."""

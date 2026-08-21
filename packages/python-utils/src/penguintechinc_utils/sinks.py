@@ -1,5 +1,4 @@
-"""
-Log sink implementations for Penguin Tech applications.
+"""Log sink implementations for Penguin Tech applications.
 
 A Sink receives structured log events (plain dicts) and writes them to a
 destination — stdout, a rotating file, syslog, or any user-supplied callback.
@@ -46,8 +45,7 @@ class StdoutSink:
 
 
 class FileSink:
-    """
-    Writes log events as JSON lines to a size-rotating file.
+    """Writes log events as JSON lines to a size-rotating file.
 
     Args:
         path: Destination file path.
@@ -83,8 +81,7 @@ class FileSink:
 
 
 class SyslogSink:
-    """
-    Sends log events as JSON over UDP syslog.
+    """Sends log events as JSON over UDP syslog.
 
     Args:
         host: Syslog server hostname or IP address.
@@ -124,8 +121,7 @@ class SyslogSink:
 
 
 class CallbackSink:
-    """
-    Forwards each log event to a user-supplied callable.
+    """Forwards each log event to a user-supplied callable.
 
     Args:
         callback: Function that accepts a single dict argument.

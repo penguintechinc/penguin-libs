@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -13,6 +14,8 @@ from penguin_sal.core.exceptions import (
     SecretNotFoundError,
 )
 from penguin_sal.core.types import ConnectionConfig, Secret, SecretList
+
+logger = logging.getLogger(__name__)
 
 
 class PassboltAdapter(BaseAdapter):
@@ -67,9 +70,7 @@ class PassboltAdapter(BaseAdapter):
 
         try:
             resources = self._client.get_resources()
-            resource = next(
-                (res for res in resources if res.get("name") == key), None
-            )
+            resource = next((res for res in resources if res.get("name") == key), None)
             if not resource:
                 raise SecretNotFoundError(key, backend="passbolt")
 
@@ -118,9 +119,7 @@ class PassboltAdapter(BaseAdapter):
 
         try:
             resources = self._client.get_resources()
-            existing = next(
-                (res for res in resources if res.get("name") == key), None
-            )
+            existing = next((res for res in resources if res.get("name") == key), None)
 
             if existing:
                 self._client.update_secret(existing.get("id"), value)
@@ -151,9 +150,7 @@ class PassboltAdapter(BaseAdapter):
 
         try:
             resources = self._client.get_resources()
-            resource = next(
-                (res for res in resources if res.get("name") == key), None
-            )
+            resource = next((res for res in resources if res.get("name") == key), None)
             if resource:
                 self._client.delete_resource(resource.get("id"))
                 return True
@@ -215,6 +212,6 @@ class PassboltAdapter(BaseAdapter):
             try:
                 self._client.logout()
             except Exception:
-                pass
+                logger.debug("Error logging out of Passbolt session", exc_info=True)
         self._connected = False
         self._client = None

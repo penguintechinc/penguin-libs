@@ -8,16 +8,14 @@ from penguin_aaa.authn.types import Claims
 
 
 class RedisTokenStore:
-    """
-    Redis-backed token storage for refresh tokens, revocation lists, and nonces.
+    """Redis-backed token storage for refresh tokens, revocation lists, and nonces.
 
     Uses Redis SETEX for TTL management, SADD/SISMEMBER for revocation sets,
     and pipeline operations for atomicity where needed.
     """
 
     def __init__(self, client: redis.Redis, prefix: str = "penaaa:") -> None:
-        """
-        Initialize RedisTokenStore.
+        """Initialize RedisTokenStore.
 
         Args:
             client: A redis.Redis client instance.

@@ -1,5 +1,4 @@
-"""
-Sanitized logging utilities for Penguin Tech applications.
+"""Sanitized logging utilities for Penguin Tech applications.
 
 Provides logging helpers that automatically sanitize sensitive data
 to prevent accidental exposure of passwords, tokens, emails, etc.
@@ -48,8 +47,7 @@ EMAIL_REGEX = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
 
 
 def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
-    """
-    Sanitize a dictionary for safe logging.
+    """Sanitize a dictionary for safe logging.
 
     Removes or redacts sensitive values like passwords, tokens, and emails.
 
@@ -92,7 +90,7 @@ def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _sanitize_processor(logger: Any, method: str, event_dict: EventDict) -> EventDict:
-    """structlog processor that sanitizes all dict values in the event."""
+    """Structlog processor that sanitizes all dict values in the event."""
     return cast(EventDict, sanitize_log_data(cast(dict[str, Any], event_dict)))
 
 
@@ -113,8 +111,7 @@ def configure_logging(
     json_output: bool = False,
     sinks: Sequence["Sink"] | None = None,
 ) -> None:
-    """
-    Configure structlog for the application.
+    """Configure structlog for the application.
 
     Sets up a processor chain that adds log level, ISO timestamps, sanitizes
     sensitive fields, and renders output as JSON or a human-readable console
@@ -151,8 +148,7 @@ def configure_logging(
 
 
 def get_logger(name: str, level: int = logging.INFO) -> structlog.stdlib.BoundLogger:
-    """
-    Get a structlog BoundLogger with Penguin Tech standard configuration.
+    """Get a structlog BoundLogger with Penguin Tech standard configuration.
 
     Args:
         name: Logger name (usually __name__ or component name).
@@ -166,8 +162,7 @@ def get_logger(name: str, level: int = logging.INFO) -> structlog.stdlib.BoundLo
 
 
 class SanitizedLogger:
-    """
-    A logger that automatically sanitizes data before emitting log events.
+    """A logger that automatically sanitizes data before emitting log events.
 
     Delegates to a structlog BoundLogger internally while preserving the
     original (msg, data) method signature for backward compatibility.

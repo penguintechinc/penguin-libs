@@ -56,7 +56,9 @@ class TestAsyncDB:
         assert len(rows) == 3
 
     async def test_select_filter(self, async_db):
-        rows = await async_db(async_db.users.active == True).select()
+        # noqa: E712 below -- FieldProxy.__eq__ builds a Query (SQL WHERE
+        # active = true), not a Python truth check; truthiness would not work
+        rows = await async_db(async_db.users.active == True).select()  # noqa: E712
         assert len(rows) == 2
 
     async def test_select_first(self, async_db):
@@ -83,7 +85,8 @@ class TestAsyncDB:
         assert remaining == 2
 
     async def test_count(self, async_db):
-        count = await async_db(async_db.users.active == True).count()
+        # noqa: E712 below -- FieldProxy.__eq__ builds a Query, not a truth check
+        count = await async_db(async_db.users.active == True).count()  # noqa: E712
         assert count == 2
 
     async def test_exists(self, async_db):
@@ -111,13 +114,13 @@ class TestAsyncDB:
 
     async def test_getattr_private_raises(self, async_db):
         with pytest.raises(AttributeError):
-            async_db._private
+            _ = async_db._private
 
     async def test_getattr_nonexistent_raises(self, async_db):
         from penguin_dal.exceptions import TableNotFoundError
 
         with pytest.raises(TableNotFoundError):
-            async_db.nonexistent_table
+            _ = async_db.nonexistent_table
 
     async def test_extract_table_no_table(self, async_db):
         q = async_db.users.id > 0

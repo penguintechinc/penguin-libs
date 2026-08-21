@@ -7,7 +7,7 @@ from penguin_dal import DB
 
 @pytest.fixture
 def db(tmp_path):
-    d = DB(f"sqlite:///{tmp_path/'t.db'}", pool_size=1, reflect=False)
+    d = DB(f"sqlite:///{tmp_path / 't.db'}", pool_size=1, reflect=False)
     d.executesql("CREATE TABLE widget (id INTEGER PRIMARY KEY, name TEXT)")
     return d
 

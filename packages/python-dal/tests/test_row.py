@@ -18,7 +18,7 @@ class TestRow:
         import pytest
 
         with pytest.raises(AttributeError, match="no column"):
-            row.nonexistent
+            _ = row.nonexistent
 
     def test_contains(self):
         row = Row({"id": 1, "name": "Alice"})

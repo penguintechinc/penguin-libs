@@ -33,8 +33,7 @@ _BYPASS_DOMAINS = (
 
 
 def _is_bypass_domain(host: str) -> bool:
-    """
-    Return True when host is a managed PenguinTech domain that skips license checks.
+    """Return True when host is a managed PenguinTech domain that skips license checks.
 
     Matches on a dot boundary only, so ``evilpenguincloud.io`` never matches
     ``.penguincloud.io``; the bare apex (``penguincloud.io``) does match.
@@ -44,8 +43,7 @@ def _is_bypass_domain(host: str) -> bool:
 
 
 def _bypass_active() -> bool:
-    """
-    Return True when the in-flight request targets a managed bypass domain.
+    """Return True when the in-flight request targets a managed bypass domain.
 
     Reads the host from the active Flask request. Outside a Flask request
     context there is no host to trust, so this fails closed (no bypass) and
@@ -64,8 +62,7 @@ def _bypass_active() -> bool:
 
 
 def license_required(required_tier: str = "enterprise") -> Callable[[F], F]:
-    """
-    Enforce license tier requirements for enterprise features.
+    """Enforce license tier requirements for enterprise features.
 
     Tier hierarchy: community < professional < enterprise
 
@@ -150,8 +147,7 @@ def license_required(required_tier: str = "enterprise") -> Callable[[F], F]:
 
 
 def feature_required(feature_name: str) -> Callable[[F], F]:
-    """
-    Enforce specific feature entitlement.
+    """Enforce specific feature entitlement.
 
     Args:
         feature_name: Feature identifier to check

@@ -21,6 +21,7 @@ pip install penguin-libs[all]     # All extras
 ```python
 from penguin_libs.flask import success_response, error_response, paginate, get_pagination_params
 
+
 @app.route("/api/v1/users")
 def list_users():
     page, per_page = get_pagination_params()
@@ -43,10 +44,12 @@ result = validators("user@example.com")
 ```python
 from penguin_libs.http import HTTPClient, HTTPClientConfig, RetryConfig
 
-client = HTTPClient(HTTPClientConfig(
-    timeout=30.0,
-    retry=RetryConfig(max_retries=3),
-))
+client = HTTPClient(
+    HTTPClientConfig(
+        timeout=30.0,
+        retry=RetryConfig(max_retries=3),
+    )
+)
 response = client.get("https://api.example.com/users")
 ```
 

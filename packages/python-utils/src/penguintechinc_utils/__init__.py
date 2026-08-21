@@ -1,5 +1,4 @@
-"""
-Penguin Tech Python Utilities
+"""Penguin Tech Python Utilities
 
 Shared utilities for Penguin Tech Python applications.
 """

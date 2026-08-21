@@ -1,6 +1,4 @@
-"""
-Tests for log sink implementations and backward-compatible logging API.
-"""
+"""Tests for log sink implementations and backward-compatible logging API."""
 
 import json
 import logging
@@ -33,13 +31,13 @@ class TestSanitizeLogData:
     def test_redacts_sensitive_keys(self) -> None:
         data = {"password": "hunter2", "username": "alice"}
         result = sanitize_log_data(data)
-        assert result["password"] == "[REDACTED]"
+        assert result["password"] == "[REDACTED]"  # noqa: S105 -- dict key being asserted, not a real credential
         assert result["username"] == "alice"
 
     def test_redacts_partial_key_match(self) -> None:
         data = {"user_password_hash": "abc123"}
         result = sanitize_log_data(data)
-        assert result["user_password_hash"] == "[REDACTED]"
+        assert result["user_password_hash"] == "[REDACTED]"  # noqa: S105 -- dict key being asserted, not a real credential
 
     def test_redacts_email_to_domain(self) -> None:
         data = {"contact": "alice@example.com"}
@@ -54,13 +52,13 @@ class TestSanitizeLogData:
     def test_recurses_into_nested_dicts(self) -> None:
         data = {"user": {"password": "secret", "name": "bob"}}
         result = sanitize_log_data(data)
-        assert result["user"]["password"] == "[REDACTED]"
+        assert result["user"]["password"] == "[REDACTED]"  # noqa: S105 -- dict key being asserted, not a real credential
         assert result["user"]["name"] == "bob"
 
     def test_recurses_into_list_of_dicts(self) -> None:
         data = {"items": [{"token": "abc"}, {"value": 1}]}
         result = sanitize_log_data(data)
-        assert result["items"][0]["token"] == "[REDACTED]"
+        assert result["items"][0]["token"] == "[REDACTED]"  # noqa: S105 -- dict key being asserted, not a real credential
         assert result["items"][1]["value"] == 1
 
     def test_passes_through_non_dict_argument(self) -> None:
