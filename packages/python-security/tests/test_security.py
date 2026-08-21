@@ -9,6 +9,21 @@ import time
 import pytest
 
 
+class TestModuleSurface:
+    """Tests for module surface and public API."""
+
+    def test_placeholder_module_exists(self) -> None:
+        """Test that penguin_security module can be imported."""
+        import penguin_security  # noqa: F401
+
+    def test_security_module_has_all_export(self) -> None:
+        """Test that module exposes __all__ for public API."""
+        import penguin_security
+
+        assert hasattr(penguin_security, "__all__")
+        assert isinstance(penguin_security.__all__, list)
+
+
 class TestSanitizeHtml:
     """Tests for HTML sanitization function."""
 
