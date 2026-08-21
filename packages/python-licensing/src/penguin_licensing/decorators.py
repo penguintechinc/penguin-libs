@@ -31,6 +31,11 @@ _BYPASS_DOMAINS = (
     ".localhost.local",
 )
 
+# Set once a process has already logged the "no web framework" warning, so a
+# hot decorator path doesn't spam the logs on every call — the condition is a
+# static deployment fact, not something that changes call to call.
+_logged_no_web_framework = False
+
 
 def _is_bypass_domain(host: str) -> bool:
     """
@@ -43,20 +48,80 @@ def _is_bypass_domain(host: str) -> bool:
     return any(h == d.lstrip(".") or h.endswith(d) for d in _BYPASS_DOMAINS)
 
 
+def _quart_request_host() -> tuple[str | None, bool]:
+    """
+    Read ``request.host`` from Quart's active request context, if any.
+
+    Returns ``(host, installed)``. ``installed`` is False only when Quart
+    itself cannot be imported — a ``RuntimeError`` (no active request
+    context) still reports ``installed=True`` with ``host=None``, since a
+    present-but-inactive framework is not the same failure as it never being
+    there at all.
+    """
+    try:
+        from quart import request  # noqa: PLC0415
+    except ImportError:
+        return None, False
+    try:
+        return request.host, True
+    except RuntimeError:
+        return None, True
+
+
+def _flask_request_host() -> tuple[str | None, bool]:
+    """
+    Read ``request.host`` from Flask's active request context, if any.
+
+    Same ``(host, installed)`` contract as ``_quart_request_host`` — kept for
+    legacy Flask callers per ``backend-python.md`` (Flask is deprecated but
+    still supported for existing services).
+    """
+    try:
+        from flask import request  # noqa: PLC0415
+    except ImportError:
+        return None, False
+    try:
+        return request.host, True
+    except RuntimeError:
+        return None, True
+
+
 def _bypass_active() -> bool:
     """
     Return True when the in-flight request targets a managed bypass domain.
 
-    Reads the host from the active Flask request. Outside a Flask request
-    context there is no host to trust, so this fails closed (no bypass) and
-    the normal license check runs.
-    """
-    try:
-        from flask import request  # noqa: PLC0415
+    Reads the host from whichever web framework's request context is
+    actually active. Quart — the mandated PenguinTech framework — is tried
+    first; Flask is a fallback for legacy callers. Two distinct situations
+    both resolve to "no bypass", but only one of them is a request-shaped
+    decision:
 
-        host = request.host
-    except (ImportError, RuntimeError):
+    - No active request context (Quart's or Flask's): there is genuinely no
+      host to trust, so this fails closed by design — the normal license
+      check runs.
+    - Neither Quart nor Flask is importable: bypass can never activate no
+      matter the host, which is a deployment/dependency gap, not a bypass
+      decision. That gap is logged once at WARNING so a domain that should
+      be license-free doesn't silently stay gated.
+    """
+    global _logged_no_web_framework
+
+    host, installed = _quart_request_host()
+    if not host:
+        flask_host, flask_installed = _flask_request_host()
+        host = flask_host
+        installed = installed or flask_installed
+
+    if not installed:
+        if not _logged_no_web_framework:
+            logger.warning(
+                "license_bypass_no_web_framework",
+                detail="neither quart nor flask is importable; domain-based "
+                "license bypass can never activate until one is installed",
+            )
+            _logged_no_web_framework = True
         return False
+
     if not host or not _is_bypass_domain(host):
         return False
     logger.debug("license_check_domain_bypass", host=host)

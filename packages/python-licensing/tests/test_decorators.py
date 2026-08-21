@@ -1,14 +1,15 @@
 """Tests for license validation decorators — real license gating."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+from flask import Flask
+from quart import Quart
 
 import penguin_licensing.client as client_module
+import penguin_licensing.decorators as decorators_module
 from penguin_licensing.client import LicenseClient
-from flask import Flask
-
 from penguin_licensing.decorators import (
     FeatureNotAvailableError,
     LicenseRequiredError,
@@ -29,6 +30,14 @@ def reset_shared_client():
     client_module._license_client = None
     yield
     client_module._license_client = None
+
+
+@pytest.fixture(autouse=True)
+def reset_no_web_framework_warning_flag():
+    """Clear the one-time "no web framework" warning latch between tests."""
+    decorators_module._logged_no_web_framework = False
+    yield
+    decorators_module._logged_no_web_framework = False
 
 
 def _license_payload(tier="enterprise", features=None):
@@ -287,7 +296,7 @@ class TestDecoratorRevokedLicense:
         assert sync_func() == "ran"
 
         # Expire the cache so the next call re-contacts the (now rejecting) server.
-        shared._cache_expiry = datetime.now(timezone.utc) - timedelta(seconds=1)
+        shared._cache_expiry = datetime.now(UTC) - timedelta(seconds=1)
 
         with pytest.raises(LicenseRequiredError):
             sync_func()
@@ -315,7 +324,7 @@ class TestDecoratorHonorsCacheDuringOutage:
         assert mock_post.call_count == 1
 
         # Expire the cache TTL so the outage is genuinely exercised.
-        shared._cache_expiry = datetime.now(timezone.utc) - timedelta(seconds=1)
+        shared._cache_expiry = datetime.now(UTC) - timedelta(seconds=1)
 
         assert sync_func() == "ran"
         assert mock_post.call_count == 2
@@ -334,7 +343,7 @@ class TestDecoratorHonorsCacheDuringOutage:
             return "ran"
 
         assert sync_func() == "ran"
-        shared._cache_expiry = datetime.now(timezone.utc) - timedelta(seconds=1)
+        shared._cache_expiry = datetime.now(UTC) - timedelta(seconds=1)
 
         assert sync_func() == "ran"
         assert mock_post.call_count == 2
@@ -535,3 +544,126 @@ class TestDomainBypass:
 
         with pytest.raises(LicenseRequiredError):
             sync_func()
+
+
+class TestQuartDomainBypass:
+    """Quart is the mandated PenguinTech framework — bypass must work under it.
+
+    ``request.host`` is only populated by Quart when a Host header is present
+    on the synthetic request, so these use ``headers={"host": ...}`` rather
+    than the ``base_url`` kwarg Flask's ``test_request_context`` accepts.
+    """
+
+    @pytest.mark.asyncio
+    async def test_bypass_host_allows_without_client_calls(self):
+        """A bypass-domain request under Quart runs the view with zero client calls."""
+        app = Quart(__name__)
+
+        @license_required("enterprise")
+        def sync_func():
+            return "ran"
+
+        with patch("penguin_licensing.client.get_license_client") as mock_get:
+            async with app.test_request_context(
+                "/", headers={"host": "elder.penguincloud.io"}, scheme="https"
+            ):
+                assert sync_func() == "ran"
+            mock_get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_bypass_host_allows_async_without_client_calls(self):
+        """The async wrapper short-circuits on managed domains under Quart too."""
+        app = Quart(__name__)
+
+        @license_required("enterprise")
+        async def async_func():
+            return "ran"
+
+        with patch("penguin_licensing.client.get_license_client") as mock_get:
+            async with app.test_request_context(
+                "/", headers={"host": "waddlebot.penguintech.cloud"}, scheme="https"
+            ):
+                assert await async_func() == "ran"
+            mock_get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_non_bypass_host_still_enforced(self):
+        """A non-managed host under Quart still gets the normal fail-closed check."""
+        app = Quart(__name__)
+
+        with patch("penguin_licensing.client.LicenseClient") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_validation = MagicMock()
+            mock_validation.valid = True
+            mock_validation.tier = "community"
+            mock_client.validate.return_value = mock_validation
+
+            @license_required("enterprise")
+            def sync_func():
+                return "ran"
+
+            async with app.test_request_context(
+                "/", headers={"host": "customer.example.com"}, scheme="https"
+            ):
+                with pytest.raises(LicenseRequiredError):
+                    sync_func()
+
+    @patch("penguin_licensing.client.LicenseClient")
+    def test_flask_context_still_bypasses_when_quart_also_installed(self, mock_client_class):
+        """Quart being importable must not shadow an active Flask request context.
+
+        Quart is preferred, but when Quart has no active context the code
+        must still fall back and read Flask's — this is the regression case
+        for the original bug (hard dependency on Flask's globals).
+        """
+        app = Flask(__name__)
+
+        @license_required("enterprise")
+        def sync_func():
+            return "ran"
+
+        with patch("penguin_licensing.client.get_license_client") as mock_get:
+            with app.test_request_context("/", base_url="https://elder.penguincloud.io"):
+                assert sync_func() == "ran"
+            mock_get.assert_not_called()
+
+
+class TestNoWebFrameworkInstalled:
+    """Neither Quart nor Flask importable is a config gap, not a bypass signal."""
+
+    @patch("penguin_licensing.client.LicenseClient")
+    def test_fails_closed_and_warns_once(self, mock_client_class):
+        """Missing both frameworks still fails closed, and logs a warning exactly once.
+
+        structlog's default (unconfigured) logger writes via its own printer,
+        not stdlib ``logging`` handlers, so ``caplog`` can't observe it here —
+        assert on the logger call directly instead.
+        """
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_validation = MagicMock()
+        mock_validation.valid = True
+        mock_validation.tier = "community"
+        mock_client.validate.return_value = mock_validation
+
+        @license_required("enterprise")
+        def sync_func():
+            return "ran"
+
+        with (
+            patch.object(decorators_module, "_quart_request_host", return_value=(None, False)),
+            patch.object(decorators_module, "_flask_request_host", return_value=(None, False)),
+            patch.object(decorators_module, "logger") as mock_logger,
+        ):
+            with pytest.raises(LicenseRequiredError):
+                sync_func()
+            with pytest.raises(LicenseRequiredError):
+                sync_func()
+
+        warn_calls = [
+            c
+            for c in mock_logger.warning.call_args_list
+            if c.args[:1] == ("license_bypass_no_web_framework",)
+        ]
+        assert len(warn_calls) == 1

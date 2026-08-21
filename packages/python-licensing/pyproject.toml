@@ -39,9 +39,13 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0",
     "flask>=3.0",
+    "quart>=0.19",
 ]
 flask = [
     "flask>=3.0",
+]
+quart = [
+    "quart>=0.19",
 ]
 
 [project.urls]
