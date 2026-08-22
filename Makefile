@@ -28,11 +28,17 @@ lint: ## Run linters on all packages
 	cd packages/go-numa && golangci-lint run ./...
 	cd packages/go-xdp && golangci-lint run ./...
 	@echo "=== Python lint ==="
-	cd packages/python-aaa && ruff check src/ tests/ && ruff format --check src/ tests/
-	cd packages/python-utils && ruff check src/ tests/ && ruff format --check src/ tests/
-	cd packages/python-rpc && ruff check src/ tests/ && ruff format --check src/ tests/
-	cd packages/python-crypto && ruff check src/
-	cd packages/python-security && ruff check src/
+	@fail=0; count=0; \
+	for d in packages/python-*/; do \
+		pkg=$${d%/}; \
+		[ -f "$$pkg/pyproject.toml" ] || continue; \
+		count=$$((count+1)); \
+		echo "--- lint: $$pkg ---"; \
+		(cd "$$pkg" && ruff check . && ruff format --check .) || fail=1; \
+	done; \
+	echo "Python packages linted: $$count"; \
+	if [ "$$count" -eq 0 ]; then echo "ERROR: zero Python packages found to lint" >&2; exit 1; fi; \
+	[ "$$fail" -eq 0 ] || exit 1
 	@echo "=== React lint ==="
 	cd packages/react-aaa && npm run lint
 	cd packages/react-libs && npm run lint
@@ -164,9 +170,16 @@ helm-template-beta:
 .PHONY: dev test-unit test-integration test-e2e test-functional smoke-test docker-build docker-push deploy-dev deploy-prod seed-mock-data clean
 
 dev: ## Install all Python packages in editable mode for local development
-	@for p in aaa dal email libs licensing limiter pytest secrets utils crypto security http; do \
-		[ -d packages/python-$$p ] && pip3 install -e "packages/python-$$p" || true; \
-	done
+	@fail=0; count=0; \
+	for d in packages/python-*/; do \
+		pkg=$${d%/}; \
+		[ -f "$$pkg/pyproject.toml" ] || continue; \
+		count=$$((count+1)); \
+		pip3 install -e "$$pkg" || fail=1; \
+	done; \
+	echo "Python packages installed: $$count"; \
+	if [ "$$count" -eq 0 ]; then echo "ERROR: zero Python packages found to install" >&2; exit 1; fi; \
+	[ "$$fail" -eq 0 ] || exit 1
 	@npm install
 
 test-unit: test ## Unit tests (alias for the full per-package test loop)
@@ -182,8 +195,27 @@ test-functional: ## Functional tests — none defined for a library repo
 
 smoke-test: ## Fast import/build smoke check across packages
 	@echo "=== Python import smoke ==="
-	@PYTHONPATH=packages/python-dal/src python3 -c "import penguin_dal; print('penguin_dal OK')"
-	@PYTHONPATH=packages/python-licensing/src python3 -c "import penguin_licensing; print('penguin_licensing OK')"
+	@fail=0; count=0; \
+	for pair in \
+		python-aaa:penguin_aaa \
+		python-crypto:penguin_crypto \
+		python-dal:penguin_dal \
+		python-email:penguin_email \
+		python-libs:penguin_libs \
+		python-licensing:penguin_licensing \
+		python-limiter:penguin_limiter \
+		python-rpc:penguin_rpc \
+		python-secrets:penguin_sal \
+		python-security:penguin_security \
+		python-utils:penguintechinc_utils \
+	; do \
+		pkg=$${pair%%:*}; mod=$${pair#*:}; \
+		count=$$((count+1)); \
+		PYTHONPATH="packages/$$pkg/src" python3 -c "import $$mod; print('$$mod OK')" || fail=1; \
+	done; \
+	echo "Python packages import-smoked: $$count"; \
+	if [ "$$count" -eq 0 ]; then echo "ERROR: zero Python packages examined" >&2; exit 1; fi; \
+	[ "$$fail" -eq 0 ] || exit 1
 	@echo "=== Go build smoke ==="
 	@for d in packages/go-*/; do [ -f "$$d/go.mod" ] && (cd "$$d" && go build ./... && echo "$$d OK"); done
 	@echo "=== React build smoke ==="
