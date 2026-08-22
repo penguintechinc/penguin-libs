@@ -80,6 +80,13 @@ func mockOAuth2Provider(t *testing.T, tokenResp map[string]interface{}) *httptes
 	mux := http.NewServeMux()
 	server := httptest.NewTLSServer(mux)
 
+	// Encode errors below are intentionally ignored: these handlers run on the
+	// httptest server's own goroutine, not the test goroutine, so calling
+	// t.Fatal/t.Error here is unsafe per the testing package's goroutine
+	// contract; the payloads are fixed, always-marshalable Go values (maps of
+	// strings/ints, jwk.Set) so Encode cannot realistically fail, and any
+	// resulting malformed response is caught by the test's own assertions.
+
 	// Discovery endpoint
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		discovery := map[string]interface{}{
@@ -88,20 +95,20 @@ func mockOAuth2Provider(t *testing.T, tokenResp map[string]interface{}) *httptes
 			"jwks_uri":      server.URL + "/.well-known/jwks.json",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(discovery)
+		_ = json.NewEncoder(w).Encode(discovery)
 	})
 
 	// Token endpoint
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(tokenResp)
+		_ = json.NewEncoder(w).Encode(tokenResp)
 	})
 
 	// Minimal JWKS endpoint
 	mux.HandleFunc("/.well-known/jwks.json", func(w http.ResponseWriter, r *http.Request) {
 		set := jwk.NewSet()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(set)
+		_ = json.NewEncoder(w).Encode(set)
 	})
 
 	return server
@@ -226,24 +233,32 @@ func buildTestToken(t *testing.T, privKey *rsa.PrivateKey, issuerURL string, opt
 }) string {
 	t.Helper()
 	tok := jwt.New()
-	tok.Set(jwt.SubjectKey, "user-123")
-	tok.Set(jwt.IssuerKey, issuerURL)
-	tok.Set(jwt.AudienceKey, []string{"client-id"})
-	tok.Set("scope", []string{"openid", "profile"})
-	tok.Set("tenant", "tenant-123")
+	// setClaim checks jwt.Token.Set's error return (registered claim keys reject
+	// mismatched value types) and fails the test immediately on the main test
+	// goroutine, consistent with generateTestKeyPair's key.Set("kid", ...) check above.
+	setClaim := func(key string, value interface{}) {
+		if err := tok.Set(key, value); err != nil {
+			t.Fatalf("failed to set claim %q: %v", key, err)
+		}
+	}
+	setClaim(jwt.SubjectKey, "user-123")
+	setClaim(jwt.IssuerKey, issuerURL)
+	setClaim(jwt.AudienceKey, []string{"client-id"})
+	setClaim("scope", []string{"openid", "profile"})
+	setClaim("tenant", "tenant-123")
 
 	if opts.wrongAud {
-		tok.Set(jwt.AudienceKey, []string{"wrong-aud"})
+		setClaim(jwt.AudienceKey, []string{"wrong-aud"})
 	}
 	if opts.wrongIss {
-		tok.Set(jwt.IssuerKey, "https://wrong-issuer.example.com")
+		setClaim(jwt.IssuerKey, "https://wrong-issuer.example.com")
 	}
 
 	now := time.Now()
-	tok.Set(jwt.IssuedAtKey, now)
-	tok.Set(jwt.ExpirationKey, now.Add(time.Hour))
+	setClaim(jwt.IssuedAtKey, now)
+	setClaim(jwt.ExpirationKey, now.Add(time.Hour))
 	if opts.expired {
-		tok.Set(jwt.ExpirationKey, now.Add(-1*time.Hour)) // already expired
+		setClaim(jwt.ExpirationKey, now.Add(-1*time.Hour)) // already expired
 	}
 
 	var alg jwa.SignatureAlgorithm
@@ -286,6 +301,15 @@ func mockOIDCProvider(t *testing.T, privKey *rsa.PrivateKey, pubKey jwk.Key) *ht
 	mux := http.NewServeMux()
 	server := httptest.NewTLSServer(mux)
 
+	// Encode/AddKey errors below are intentionally ignored: these handlers run
+	// on the httptest server's own goroutine, not the test goroutine, so
+	// calling t.Fatal/t.Error here is unsafe per the testing package's
+	// goroutine contract. pubKey was already validated by generateTestKeyPair,
+	// so AddKey cannot fail on a duplicate/unsupported key here, and the
+	// payloads are fixed, always-marshalable Go values, so Encode cannot
+	// realistically fail either; any resulting malformed response is caught
+	// by the test's own assertions.
+
 	// Discovery endpoint - use the actual server URL in the issuer claim
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		discovery := map[string]interface{}{
@@ -295,15 +319,15 @@ func mockOIDCProvider(t *testing.T, privKey *rsa.PrivateKey, pubKey jwk.Key) *ht
 			"jwks_uri":               server.URL + "/.well-known/jwks.json",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(discovery)
+		_ = json.NewEncoder(w).Encode(discovery)
 	})
 
 	// JWKS endpoint
 	mux.HandleFunc("/.well-known/jwks.json", func(w http.ResponseWriter, r *http.Request) {
 		set := jwk.NewSet()
-		set.AddKey(pubKey)
+		_ = set.AddKey(pubKey)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(set)
+		_ = json.NewEncoder(w).Encode(set)
 	})
 
 	return server

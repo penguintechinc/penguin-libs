@@ -1,17 +1,36 @@
+version: "2"
 linters:
   enable:
-    - govet
-    - staticcheck
-    - errcheck
-    - gosimple
-    - ineffassign
-    - unused
-    - gosec
     - bodyclose
-    - noctx
     - exhaustive
-linters-settings:
-  exhaustive:
-    default-signifies-exhaustive: true
-run:
-  timeout: 5m
+    - gosec
+    - noctx
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # G402 (weak TLS config) is expected in _test.go files that deliberately
+      # construct an under-versioned/self-signed TLS config to assert the
+      # server or client under test rejects it — never in production code.
+      - path: _test\.go
+        linters:
+          - gosec
+        text: "G402"
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
