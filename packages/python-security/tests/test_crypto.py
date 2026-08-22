@@ -1,4 +1,4 @@
-"""Comprehensive tests for penguin-crypto module.
+"""Comprehensive tests for the penguin_security.crypto subpackage.
 
 Tests for:
 - encrypt/decrypt roundtrip
@@ -10,7 +10,7 @@ Tests for:
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from penguin_crypto import (
+from penguin_security.crypto import (
     decrypt,
     derive_key,
     encrypt,
@@ -23,21 +23,21 @@ from penguin_crypto import (
 
 
 class TestCryptoModule:
-    """Tests for penguin-crypto module."""
+    """Tests for the penguin_security.crypto subpackage."""
 
     def test_module_exists(self) -> None:
-        """Test that penguin_crypto module can be imported."""
-        import penguin_crypto
+        """Test that penguin_security.crypto module can be imported."""
+        from penguin_security import crypto
 
-        assert penguin_crypto is not None
-        assert isinstance(penguin_crypto.__all__, list)
+        assert crypto is not None
+        assert isinstance(crypto.__all__, list)
 
     def test_module_docstring(self) -> None:
         """Test module has documentation."""
-        import penguin_crypto
+        from penguin_security import crypto
 
-        assert penguin_crypto.__doc__ is not None
-        assert "Crypto" in penguin_crypto.__doc__
+        assert crypto.__doc__ is not None
+        assert "Crypto" in crypto.__doc__
 
 
 class TestEncryption:

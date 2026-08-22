@@ -12,14 +12,13 @@ Shared libraries for Penguin Tech applications across all languages.
 | Package | Version | Coverage | Description |
 |---------|---------|----------|-------------|
 | [penguin-aaa](./packages/python-aaa) | 0.2.0 | 99% | Authentication, authorization, and audit (OIDC, RBAC, SPIFFE, tenant isolation) |
-| [penguin-crypto](./packages/python-crypto) | 0.1.0 | — | Cryptographic primitives and key handling |
 | [penguin-dal](./packages/python-dal) | 0.3.0 | 98% | Database access layer — PyDAL-style API over SQLAlchemy, plus storage/cache/stream/document backends |
 | [penguin-email](./packages/python-email) | 0.1.0 | — | SMTP delivery helpers |
 | [penguin-libs](./packages/python-libs) | 0.3.0 | 98% | Transition meta-package — re-exports the split packages |
 | [penguin-licensing](./packages/python-licensing) | 0.1.0 | 100% | PenguinTech License Server integration |
 | [penguin-limiter](./packages/python-limiter) | 0.1.0 | — | Rate limiting middleware (HTTP + gRPC) |
 | [penguin-sal](./packages/python-secrets) | 0.2.1 | 100% | Secrets and authentication library |
-| [penguin-security](./packages/python-security) | 0.1.0 | — | Security primitives and hardening helpers |
+| [penguin-security](./packages/python-security) | 0.1.0 | — | Security primitives and hardening helpers, including crypto (penguin_security.crypto — symmetric/hybrid encryption, key derivation, ECC, hashing; formerly penguin-crypto) |
 | [penguin-utils](./packages/python-utils) | 0.2.0 | 99% | Sanitized logging and Flask utilities |
 | [penguin-rpc](./packages/python-rpc) | 0.1.0 | 100% | pRPC — Connect RPC over HTTP/3/QUIC, Python implementation (Apache-2.0) |
 
@@ -255,6 +254,10 @@ penguin-libs/
 ├── package.json             # Workspace root
 └── README.md
 ```
+
+## Merged Packages
+
+**penguin-crypto** (merged into penguin-security Aug 2026): Never published to PyPI; zero external consumers. Moved to `penguin_security.crypto` (`.ecc`, `.hashing`, `.hybrid`, `.kdf`, `.symmetric`) so the strongest available primitive (Argon2id) lives in the package developers actually reach for first. `penguin_security.password.hash_password` now hashes new passwords with Argon2id instead of 100k-iteration PBKDF2-SHA256; `verify_password` still accepts existing PBKDF2 hashes, and `needs_rehash()` flags them for lazy upgrade on next login. Legacy imports (`penguin_crypto`, `penguin_libs.crypto`) still resolve via `penguin-libs._compat`.
 
 ## Sunset Packages
 

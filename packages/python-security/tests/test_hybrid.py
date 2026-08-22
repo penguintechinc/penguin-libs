@@ -3,8 +3,8 @@
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from penguin_crypto.ecc import generate_x25519_keypair
-from penguin_crypto.hybrid import hybrid_decrypt, hybrid_encrypt
+from penguin_security.crypto.ecc import generate_x25519_keypair
+from penguin_security.crypto.hybrid import hybrid_decrypt, hybrid_encrypt
 
 
 class TestHybridEncryption:

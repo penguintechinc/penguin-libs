@@ -3,7 +3,7 @@
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from penguin_crypto.symmetric import decrypt, encrypt, generate_key
+from penguin_security.crypto.symmetric import decrypt, encrypt, generate_key
 
 
 class TestSymmetricEncryption:

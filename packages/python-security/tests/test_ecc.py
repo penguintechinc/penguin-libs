@@ -2,7 +2,7 @@
 
 import pytest
 
-from penguin_crypto.ecc import (
+from penguin_security.crypto.ecc import (
     ed25519_sign,
     ed25519_verify,
     generate_ed25519_keypair,

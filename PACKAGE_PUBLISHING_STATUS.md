@@ -5,7 +5,7 @@
 
 ## Summary
 
-All 31 published artifacts in the penguin-libs monorepo are configured for automated publishing via GitHub Actions.
+All 30 published artifacts in the penguin-libs monorepo are configured for automated publishing via GitHub Actions.
 
 ## Package Publishing Configuration
 
@@ -27,7 +27,6 @@ All 31 published artifacts in the penguin-libs monorepo are configured for autom
 | 14 | python-dal | PyPI | penguin-dal | `penguin-dal-v*` | `publish-python-dal` | ✅ Configured |
 | 15 | python-email | PyPI | penguin-email | `penguin-email-v*` | `publish-python-email` | ✅ Configured |
 | 16 | python-limiter | PyPI | penguin-limiter | `penguin-limiter-v*` | `publish-python-limiter` | ✅ Configured |
-| 17 | python-crypto | PyPI | penguin-crypto | `penguin-crypto-v*` | `publish-python-crypto.yml` | 🔜 Pending first publish |
 | 18 | python-security | PyPI | penguin-security | `penguin-security-v*` | `publish-python-security.yml` | 🔜 Pending first publish |
 | 19 | python-rpc | PyPI | penguin-rpc | `penguin-rpc-v*` | `publish-python-rpc` | 🔜 Pending first publish |
 | 21 | go-common | GitHub (go get) | github.com/.../go-common | `v*` | `validate-go-common` | ✅ Configured |
@@ -149,8 +148,7 @@ GitHub UI: **Actions → Publish Packages → Run workflow → Select package**
 - `penguin-dal` (python-dal)
 - `penguin-email` (python-email)
 - `penguin-limiter` (python-limiter)
-- `penguin-crypto` (python-crypto) ← **NEW**
-- `penguin-security` (python-security) ← **NEW**
+- `penguin-security` (python-security) ← **NEW** (includes crypto, merged from penguin-crypto)
 - `penguin-rpc` (python-rpc, Apache-2.0)
 
 ### npm (public registry)
@@ -252,6 +250,10 @@ gh workflow run publish.yml -f package=python-utils
 - **Publishing Guide**: [docs/PUBLISHING.md](./docs/PUBLISHING.md)
 - **README**: [README.md](./README.md)
 - **Workflow**: [.github/workflows/publish.yml](./.github/workflows/publish.yml)
+
+## Merged Packages
+
+**penguin-crypto** (merged into penguin-security Aug 2026): Never published to PyPI; zero external consumers. Row 17 and its `publish-python-crypto.yml` workflow are stale pending removal — package source now lives at `packages/python-security/src/penguin_security/crypto/`.
 
 ## Sunset Packages
 

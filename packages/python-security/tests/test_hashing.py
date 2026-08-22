@@ -2,7 +2,7 @@
 
 import pytest
 
-from penguin_crypto.hashing import blake2b, hmac_sha256, sha256, sha512
+from penguin_security.crypto.hashing import blake2b, hmac_sha256, sha256, sha512
 
 
 class TestSHA256:

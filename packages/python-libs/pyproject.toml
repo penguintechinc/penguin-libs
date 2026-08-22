@@ -29,11 +29,9 @@ dependencies = [
 
 [project.optional-dependencies]
 split = [
-    "penguin-crypto>=0.1.0",
     "penguin-security>=0.1.0",
 ]
 all = [
-    "penguin-crypto>=0.1.0",
     "penguin-security>=0.1.0",
 ]
 dev = [

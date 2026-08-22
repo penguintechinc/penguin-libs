@@ -2,8 +2,11 @@
 
 This conftest adds the src directory and split package directories to sys.path
 so that penguin_libs and all split packages are importable. This enables both:
-- Direct imports from split packages: from penguin_crypto import ...
-- Legacy imports via penguin_libs: from penguin_libs.crypto import ...
+- Direct imports from split packages: from penguin_security import ...
+- Legacy imports via penguin_libs: from penguin_libs.security import ...
+- Legacy crypto imports (penguin-crypto was merged into penguin-security as
+  a crypto/ subpackage): from penguin_libs.crypto import ... or
+  from penguin_crypto import ...
 
 The legacy imports work because _compat.py registers sys.modules aliases.
 
@@ -20,10 +23,11 @@ if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
 # Add all split package directories to sys.path so they're importable
-# They're sibling directories: ../python-crypto, ../python-flask, etc.
+# They're sibling directories: ../python-security, ../python-flask, etc.
+# (python-crypto was merged into python-security's penguin_security.crypto
+# subpackage; it no longer has its own package directory.)
 packages_dir = Path(__file__).parent.parent.parent
 split_packages = [
-    "python-crypto",
     "python-flask",
     "python-grpc",
     "python-h3",

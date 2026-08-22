@@ -33,7 +33,6 @@ Project requires **90%+ test coverage**. Current state has critical gaps in both
 
 | Package | Status | Coverage | Notes |
 |---------|--------|----------|-------|
-| python-crypto | NO TESTS | 0% | Split from python-libs - needs full test suite |
 | python-flask | NO TESTS | 0% | Split from python-libs - needs full test suite |
 | python-grpc | NO TESTS | 0% | Split from python-libs - needs full test suite |
 | python-h3 | NO TESTS | 0% | Split from python-libs - needs full test suite |
@@ -121,9 +120,10 @@ Project requires **90%+ test coverage**. Current state has critical gaps in both
 
 ### Coverage Gaps (New Packages)
 
-**7 Python packages (0% coverage):**
-- python-crypto, python-flask, python-grpc, python-h3, python-pydantic, python-security, python-validation
+**6 Python packages (0% coverage):**
+- python-flask, python-grpc, python-h3, python-pydantic, python-security, python-validation
 - All are splits from python-libs
+- Note: python-crypto merged into python-security (Aug 2026) and is no longer a separate row
 - Need: Create `tests/` directory with comprehensive unit/integration test suites
 
 **3 Go packages (0% coverage):**

@@ -2,7 +2,7 @@
 
 import pytest
 
-from penguin_crypto.kdf import (
+from penguin_security.crypto.kdf import (
     derive_key,
     derive_key_argon2id,
     derive_key_hkdf,

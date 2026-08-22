@@ -9,7 +9,6 @@ _logger = logging.getLogger(__name__)
 _PACKAGES = {}
 
 _package_specs = [
-    ("penguin_crypto", "penguin_libs.crypto"),
     ("penguin_security", "penguin_libs.security"),
 ]
 
@@ -38,16 +37,21 @@ __all__ = list(_PACKAGES.keys())
 _sub_aliases = [
     ("penguin_security.validation", "penguin_libs.validation"),
     ("penguin_security.pydantic", "penguin_libs.pydantic"),
+    # penguin-crypto was merged into penguin-security as a crypto/ subpackage
+    # (see PACKAGE_PUBLISHING_STATUS.md "Merged Packages"); alias both its
+    # penguin_libs-transition path and its old standalone package name.
+    ("penguin_security.crypto", "penguin_libs.crypto"),
     # Also alias old package names for backwards compatibility
     ("penguin_security.validation", "penguin_validation"),
     ("penguin_security.pydantic", "penguin_pydantic"),
+    ("penguin_security.crypto", "penguin_crypto"),
 ]
 for new_name, alias in _sub_aliases:
     if new_name in sys.modules and alias not in sys.modules:
         sys.modules[alias] = sys.modules[new_name]
 
 # Register sys.modules aliases for backwards-compatible submodule imports
-# Allows: from penguin_libs.crypto import ... (legacy) -> from penguin_crypto import ... (new)
+# Allows: from penguin_libs.security import ... (legacy) -> from penguin_security import ... (new)
 for pkg_name, legacy_name in _package_specs:
     if pkg_name in _PACKAGES:
         _module = _PACKAGES[pkg_name]

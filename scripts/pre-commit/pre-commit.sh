@@ -15,7 +15,6 @@ check_go_logging=false
 check_go_numa=false
 check_go_xdp=false
 check_python_aaa=false
-check_python_crypto=false
 check_python_security=false
 check_python_utils=false
 check_react_aaa=false
@@ -31,7 +30,6 @@ for f in $CHANGED_FILES; do
     packages/go-numa/*) check_go_numa=true ;;
     packages/go-xdp/*) check_go_xdp=true ;;
     packages/python-aaa/*) check_python_aaa=true ;;
-    packages/python-crypto/*) check_python_crypto=true ;;
     packages/python-security/*) check_python_security=true ;;
     packages/python-utils/*) check_python_utils=true ;;
     packages/react-aaa/*) check_react_aaa=true ;;
@@ -42,7 +40,7 @@ done
 # If nothing relevant changed, skip
 if ! $check_go_aaa && ! $check_go_common && ! $check_go_crypto && ! $check_go_http && \
    ! $check_go_logging && ! $check_go_numa && ! $check_go_xdp && \
-   ! $check_python_aaa && ! $check_python_crypto && \
+   ! $check_python_aaa && \
    ! $check_python_security && ! $check_python_utils && \
    ! $check_react_aaa && ! $check_react_libs; then
   echo "No relevant package changes detected, skipping pre-commit checks."
@@ -77,10 +75,6 @@ fi
 if $check_python_aaa; then
   echo "Building python-aaa..."
   cd packages/python-aaa && python3 -m py_compile src/penguin_aaa/__init__.py && cd "$REPO_ROOT"
-fi
-if $check_python_crypto; then
-  echo "Building python-crypto..."
-  cd packages/python-crypto && python3 -m py_compile src/penguin_crypto/__init__.py && cd "$REPO_ROOT"
 fi
 if $check_python_security; then
   echo "Building python-security..."
@@ -128,10 +122,6 @@ if $check_python_aaa; then
   echo "Linting python-aaa..."
   cd packages/python-aaa && ruff check src/ tests/ && ruff format --check src/ tests/ && cd "$REPO_ROOT"
 fi
-if $check_python_crypto; then
-  echo "Linting python-crypto..."
-  cd packages/python-crypto && ruff check src/ && cd "$REPO_ROOT"
-fi
 if $check_python_security; then
   echo "Linting python-security..."
   cd packages/python-security && ruff check src/ && cd "$REPO_ROOT"
@@ -166,10 +156,6 @@ if $check_python_aaa; then
   echo "Security scanning python-aaa..."
   cd packages/python-aaa && bandit -r src/ -c pyproject.toml && cd "$REPO_ROOT"
 fi
-if $check_python_crypto; then
-  echo "Security scanning python-crypto..."
-  cd packages/python-crypto && bandit -r src/ -ll && cd "$REPO_ROOT"
-fi
 if $check_python_security; then
   echo "Security scanning python-security..."
   cd packages/python-security && bandit -r src/ -ll && cd "$REPO_ROOT"
@@ -203,10 +189,6 @@ fi
 if $check_python_aaa; then
   echo "Testing python-aaa..."
   cd packages/python-aaa && pytest tests/ -v --tb=short && cd "$REPO_ROOT"
-fi
-if $check_python_crypto; then
-  echo "Testing python-crypto..."
-  cd packages/python-crypto && pytest tests/ -v --tb=short && cd "$REPO_ROOT"
 fi
 if $check_python_security; then
   echo "Testing python-security..."

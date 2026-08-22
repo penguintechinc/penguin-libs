@@ -3,14 +3,42 @@
 Provides:
 - sanitize: XSS/HTML sanitization, SQL parameter escaping
 - csrf: CSRF token generation and validation
-- password: Password hashing and verification
+- password: Password hashing and verification (Argon2id, with legacy PBKDF2
+  verification support -- see penguin_security.password module docstring)
 - ratelimit: Rate limiting (in-memory)
 - validation: PyDAL-style input validators
 - pydantic: Pydantic 2 integration with validation
+- crypto: Symmetric/hybrid encryption, key derivation, ECC, hashing
+  (formerly the standalone penguin-crypto package; also importable as
+  penguin_security.crypto.{ecc,hashing,hybrid,kdf,symmetric})
 """
 
+from .crypto import (
+    blake2b,
+    decrypt,
+    derive_key,
+    derive_key_argon2id,
+    derive_key_hkdf,
+    ed25519_sign,
+    ed25519_verify,
+    encrypt,
+    generate_ed25519_keypair,
+    generate_key,
+    generate_salt,
+    generate_x25519_keypair,
+    hmac_sha256,
+    hybrid_decrypt,
+    hybrid_encrypt,
+    load_ed25519_public_key,
+    load_x25519_public_key,
+    serialize_private_key,
+    serialize_public_key,
+    sha256,
+    sha512,
+    x25519_exchange,
+)
 from .csrf import generate_csrf_token, validate_csrf_token
-from .password import hash_password, verify_password
+from .password import hash_password, needs_rehash, verify_password
 from .pydantic import (
     ConfigurableModel,
     Description1000,
@@ -80,8 +108,36 @@ __all__ = [
     # Password
     "hash_password",
     "verify_password",
+    "needs_rehash",
     # Rate limiting
     "check_rate_limit",
+    # Crypto: symmetric (AES-256-GCM)
+    "encrypt",
+    "decrypt",
+    "generate_key",
+    # Crypto: key derivation
+    "generate_salt",
+    "derive_key",
+    "derive_key_argon2id",
+    "derive_key_hkdf",
+    # Crypto: elliptic curve (X25519, Ed25519)
+    "generate_x25519_keypair",
+    "x25519_exchange",
+    "generate_ed25519_keypair",
+    "ed25519_sign",
+    "ed25519_verify",
+    "serialize_public_key",
+    "serialize_private_key",
+    "load_x25519_public_key",
+    "load_ed25519_public_key",
+    # Crypto: hybrid encryption
+    "hybrid_encrypt",
+    "hybrid_decrypt",
+    # Crypto: hashing
+    "sha256",
+    "sha512",
+    "blake2b",
+    "hmac_sha256",
     # Validation
     "ValidationError",
     "ValidationResult",
