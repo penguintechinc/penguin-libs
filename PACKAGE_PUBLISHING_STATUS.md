@@ -29,7 +29,7 @@ All 31 published artifacts in the penguin-libs monorepo are configured for autom
 | 16 | python-limiter | PyPI | penguin-limiter | `penguin-limiter-v*` | `publish-python-limiter` | ✅ Configured |
 | 17 | python-crypto | PyPI | penguin-crypto | `penguin-crypto-v*` | `publish-python-crypto.yml` | 🔜 Pending first publish |
 | 18 | python-security | PyPI | penguin-security | `penguin-security-v*` | `publish-python-security.yml` | 🔜 Pending first publish |
-| 19 | python-rpc | PyPI | penguin-rpc | `penguin-rpc-v*` | `publish-python-rpc` | 🔜 Pending first publish |
+| 19 | python-rpc | PyPI | penguin-prpc | `penguin-prpc-v*` | `publish-python-rpc` | 🔜 Pending first publish |
 | 21 | go-common | GitHub (go get) | github.com/.../go-common | `v*` | `validate-go-common` | ✅ Configured |
 | 22 | go-h3 | GitHub (go get) | github.com/.../go-h3 | `v*` | `validate-go-common` | ✅ Configured |
 | 23 | go-aaa | GitHub (go get) | github.com/.../go-aaa | `go-aaa-v*` | `validate-go-aaa` | ✅ Configured |
@@ -151,7 +151,7 @@ GitHub UI: **Actions → Publish Packages → Run workflow → Select package**
 - `penguin-limiter` (python-limiter)
 - `penguin-crypto` (python-crypto) ← **NEW**
 - `penguin-security` (python-security) ← **NEW**
-- `penguin-rpc` (python-rpc, Apache-2.0)
+- `penguin-prpc` (python-rpc, Apache-2.0)
 
 ### npm (public registry)
 
