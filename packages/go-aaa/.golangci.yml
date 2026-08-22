@@ -13,5 +13,13 @@ linters:
   settings:
     exhaustive:
       default-signifies-exhaustive: true
+  exclusions:
+    rules:
+      # G402 (TLS InsecureSkipVerify) is expected in _test.go files that dial
+      # httptest.NewTLSServer's self-signed cert — never in production code.
+      - path: _test\.go
+        linters:
+          - gosec
+        text: "G402"
 run:
   timeout: 5m

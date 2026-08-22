@@ -67,7 +67,8 @@ func waitForAddr(t *testing.T, srv *server.Server, protocol string) string {
 // inherent, accepted TOCTOU race between release and rebind.
 func freeTCPPort(t *testing.T) int {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("allocating a free port: %v", err)
 	}
