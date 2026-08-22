@@ -7,6 +7,7 @@ from typing import Any, TypeVar
 
 import structlog
 
+from .domains import BYPASS_DOMAINS, is_bypass_domain
 from .exceptions import FeatureNotAvailableError, LicenseRequiredError
 
 logger = structlog.get_logger()
@@ -22,25 +23,20 @@ __all__ = [
     "license_required",
 ]
 
-# Managed deployment domains — license enforcement is bypassed because these
-# deployments are billed separately. Bypass is domain-driven only; there is
-# deliberately no environment variable or config flag that can disable gating.
-_BYPASS_DOMAINS = (
-    ".penguincloud.io",
-    ".penguintech.cloud",
-    ".localhost.local",
-)
+# Backwards-compatible aliases -- the canonical domain list and matcher now
+# live in penguin_licensing.domains so penguin_licensing.client can share the
+# exact same bypass decision instead of keeping a second, driftable copy.
+_BYPASS_DOMAINS = BYPASS_DOMAINS
 
 
 def _is_bypass_domain(host: str) -> bool:
     """
     Return True when host is a managed PenguinTech domain that skips license checks.
 
-    Matches on a dot boundary only, so ``evilpenguincloud.io`` never matches
-    ``.penguincloud.io``; the bare apex (``penguincloud.io``) does match.
+    Thin wrapper over ``penguin_licensing.domains.is_bypass_domain`` kept so
+    existing imports of this private name keep working.
     """
-    h = host.split(":")[0].lower()
-    return any(h == d.lstrip(".") or h.endswith(d) for d in _BYPASS_DOMAINS)
+    return is_bypass_domain(host)
 
 
 def _bypass_active() -> bool:

@@ -835,3 +835,124 @@ class TestGetLicenseClientThreadSafety:
             assert second is not first
         finally:
             client_module._license_client = None
+
+
+class TestLicenseClientDomainBypass:
+    """A managed deployment host skips license enforcement entirely.
+
+    Bypass is host-driven only — there is no env var or config flag — so
+    these tests pin both the matching behaviour and the zero-network-call
+    guarantee for every public entry point that gates on entitlement.
+    """
+
+    @patch("penguin_licensing.client.requests.Session.post")
+    def test_validate_bypassed_makes_no_request(self, mock_post):
+        """A bypass-domain deployment never calls the license server."""
+        client = LicenseClient(
+            license_key="PENG-TEST-1234", deployment_host="waddleai.penguintech.cloud"
+        )
+
+        result = client.validate()
+
+        assert result.valid is True
+        assert result.tier == "enterprise"
+        mock_post.assert_not_called()
+
+    @patch("penguin_licensing.client.requests.Session.post")
+    def test_check_feature_bypassed_returns_true_for_any_feature(self, mock_post):
+        """Bypass entitles every feature, not just ones in a features list."""
+        client = LicenseClient(
+            license_key="PENG-TEST-1234", deployment_host="elder.penguincloud.io"
+        )
+
+        assert client.check_feature("anything_at_all") is True
+        mock_post.assert_not_called()
+
+    @patch("penguin_licensing.client.requests.Session.post")
+    def test_check_tier_bypassed_returns_true_for_enterprise(self, mock_post):
+        """Bypass satisfies even the highest tier requirement."""
+        client = LicenseClient(license_key="", deployment_host="penguintech.cloud")
+
+        assert client.check_tier("enterprise") is True
+        mock_post.assert_not_called()
+
+    @patch("penguin_licensing.client.requests.Session.post")
+    def test_non_bypass_host_runs_normal_flow(self, mock_post):
+        """A look-alike host must not slip past the dot-boundary check."""
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_post.return_value = mock_response
+
+        client = LicenseClient(
+            license_key="PENG-TEST-1234", deployment_host="evil-penguintech.cloud"
+        )
+
+        result = client.validate()
+
+        assert result.valid is False
+        mock_post.assert_called_once()
+
+    @patch("penguin_licensing.client.requests.Session.post")
+    def test_lookalike_suffix_attack_host_not_bypassed(self, mock_post):
+        """A domain merely containing the managed suffix must stay gated."""
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_post.return_value = mock_response
+
+        client = LicenseClient(
+            license_key="PENG-TEST-1234",
+            deployment_host="penguintech.cloud.attacker.com",
+        )
+
+        result = client.validate()
+
+        assert result.valid is False
+        mock_post.assert_called_once()
+
+    def test_no_deployment_host_is_not_bypassed(self):
+        """No known host at all falls through to the normal license flow."""
+        client = LicenseClient(license_key="")
+
+        assert client._bypass_active() is False
+
+    @patch("penguin_licensing.client.requests.Session.post")
+    def test_set_deployment_host_updates_bypass_after_construction(self, mock_post):
+        """A host learned after construction still activates bypass."""
+        client = LicenseClient(license_key="PENG-TEST-1234")
+        assert client._bypass_active() is False
+
+        client.set_deployment_host("app.penguincloud.io")
+
+        assert client._bypass_active() is True
+        assert client.check_feature("anything") is True
+        mock_post.assert_not_called()
+
+    @patch("penguin_licensing.client.requests.Session.post")
+    def test_extra_bypass_domains_cover_product_domain(self, mock_post):
+        """A product's own domain can be added without a code change here."""
+        client = LicenseClient(
+            license_key="PENG-TEST-1234",
+            deployment_host="waddleai.app",
+            extra_bypass_domains=["waddleai.app"],
+        )
+
+        assert client.check_feature("anything") is True
+        mock_post.assert_not_called()
+
+    @patch("penguin_licensing.client.requests.Session.post")
+    def test_extra_bypass_domains_do_not_widen_lookalike_hosts(self, mock_post):
+        """A caller-supplied product domain still respects the dot boundary."""
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_post.return_value = mock_response
+
+        client = LicenseClient(
+            license_key="PENG-TEST-1234",
+            deployment_host="evil-waddleai.app",
+            extra_bypass_domains=["waddleai.app"],
+        )
+
+        result = client.validate()
+
+        assert result.valid is False
+        mock_post.assert_called_once()
