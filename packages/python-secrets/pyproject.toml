@@ -51,7 +51,6 @@ all = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "black>=23.0",
     "ruff>=0.1.0",
     "mypy>=1.0",
     "bandit>=1.7.0",
@@ -66,19 +65,25 @@ Issues = "https://github.com/penguintechinc/penguin-libs/issues"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.black]
-line-length = 100
-target-version = ['py311', 'py312', 'py313']
-
 [tool.ruff]
+target-version = "py313"
 line-length = 100
-target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
+# "D" (pydocstyle) is D staged, not dropped: enabling it surfaces ~1,893 missing
+# docstrings repo-wide, which would red the lint gate without fixing any bug.
+# Re-add "D" per package once real docstrings exist -- see general.md, which
+# already requires a 2-3 line docstring on every class and function.
+select = ["E", "W", "F", "I", "N", "UP", "B", "ASYNC", "S"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 strict = true
 
 [tool.pytest.ini_options]

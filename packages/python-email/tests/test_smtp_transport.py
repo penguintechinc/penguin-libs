@@ -133,7 +133,7 @@ class TestSmtpTransport:
             host="smtp.example.com",
             mode=SmtpMode.STARTTLS,
             username="user@x.com",
-            password="s3cr3t",
+            password="s3cr3t",  # noqa: S106 -- test fixture literal, not a real credential
         )
         mock_conn = MagicMock()
         mock_conn.__enter__ = MagicMock(return_value=mock_conn)
@@ -280,3 +280,34 @@ class TestSmtpTransportDkimSigning:
         assert result.success is False
         assert dkim_private_key not in result.error
         assert dkim_private_key not in caplog.text
+
+
+class TestSmtpTransportInlineBody:
+    """Body parts must survive alongside inline images, mirroring GmailTransport."""
+
+    @pytest.mark.parametrize("with_attachment", [False, True])
+    def test_inline_message_retains_html_and_text_body(self, with_attachment: bool) -> None:
+        msg = (
+            EmailMessage()
+            .from_addr("sender@example.com")
+            .to("recipient@example.com")
+            .subject("Test")
+            .html("<p>Hello</p>")
+            .inline_image(cid="logo", data=b"\x89PNG", filename="logo.png")
+        )
+        if with_attachment:
+            msg.attach_bytes(b"filedata", "report.pdf", "application/pdf")
+        msg.build()
+
+        transport = SmtpTransport.__new__(SmtpTransport)
+        mime = transport._build_mime(msg)
+        by_type = {
+            part.get_content_type(): part.get_payload(decode=True) or b""
+            for part in mime.walk()
+            if part.get_content_maintype() != "multipart"
+        }
+
+        assert b"Hello" in by_type["text/html"]
+        assert b"Hello" in by_type["text/plain"]
+        assert by_type["image/png"] == b"\x89PNG"
+        assert mime.get_content_type() == "multipart/related"

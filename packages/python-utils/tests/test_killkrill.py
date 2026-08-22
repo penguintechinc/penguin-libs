@@ -1,6 +1,4 @@
-"""
-Tests for the KillKrill log aggregation sink.
-"""
+"""Tests for the KillKrill log aggregation sink."""
 
 import json
 import time

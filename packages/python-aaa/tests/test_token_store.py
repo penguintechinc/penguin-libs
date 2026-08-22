@@ -27,7 +27,7 @@ class TestMemoryTokenStore:
     def test_store_and_get_refresh_token(self) -> None:
         store = MemoryTokenStore()
         claims = _make_claims()
-        token = "refresh-token-xyz"
+        token = "refresh-token-xyz"  # noqa: S105 -- dummy test value
         ttl = timedelta(hours=24)
 
         store.store_refresh(token, claims, ttl)
@@ -44,7 +44,7 @@ class TestMemoryTokenStore:
     def test_refresh_token_expiry(self) -> None:
         store = MemoryTokenStore()
         claims = _make_claims()
-        token = "short-lived-token"
+        token = "short-lived-token"  # noqa: S105 -- dummy test value
         ttl = timedelta(seconds=0)
 
         store.store_refresh(token, claims, ttl)
@@ -58,7 +58,7 @@ class TestMemoryTokenStore:
     def test_revoke_refresh_token(self) -> None:
         store = MemoryTokenStore()
         claims = _make_claims()
-        token = "token-to-revoke"
+        token = "token-to-revoke"  # noqa: S105 -- dummy test value
 
         store.store_refresh(token, claims, timedelta(hours=24))
         store.revoke_refresh(token)

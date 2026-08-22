@@ -15,9 +15,9 @@ class EventType(StrEnum):
 
     AUTH_SUCCESS = "auth.success"
     AUTH_FAILURE = "auth.failure"
-    TOKEN_ISSUED = "token.issued"
-    TOKEN_REVOKED = "token.revoked"
-    TOKEN_REFRESHED = "token.refreshed"
+    TOKEN_ISSUED = "token.issued"  # noqa: S105 -- enum member name, not a credential
+    TOKEN_REVOKED = "token.revoked"  # noqa: S105 -- enum member name, not a credential
+    TOKEN_REFRESHED = "token.refreshed"  # noqa: S105 -- enum member name, not a credential
     AUTHZ_GRANTED = "authz.granted"
     AUTHZ_DENIED = "authz.denied"
     SPIFFE_AUTH = "spiffe.auth"

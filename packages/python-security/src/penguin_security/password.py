@@ -6,8 +6,7 @@ import secrets
 
 
 def hash_password(password: str) -> str:
-    """
-    Hash a password using PBKDF2 with SHA256.
+    """Hash a password using PBKDF2 with SHA256.
 
     Args:
         password: Password to hash
@@ -39,8 +38,7 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    """
-    Verify a password against its hash.
+    """Verify a password against its hash.
 
     Args:
         password: Password to verify
@@ -70,8 +68,8 @@ def verify_password(password: str, hashed: str) -> bool:
 
     try:
         iterations = int(iterations_str)
-    except ValueError:
-        raise ValueError("Invalid iterations in hash")
+    except ValueError as e:
+        raise ValueError("Invalid iterations in hash") from e
 
     # Hash the provided password with the same salt and iterations
     hash_obj = hashlib.pbkdf2_hmac(

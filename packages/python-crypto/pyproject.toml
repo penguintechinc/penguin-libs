@@ -19,6 +19,16 @@ classifiers = [
 ]
 dependencies = ["cryptography>=42.0.0", "argon2-cffi>=23.1.0"]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4",
+    "mypy>=1.0",
+    "bandit>=1.7",
+    "pip-audit>=2.6",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
@@ -26,11 +36,21 @@ where = ["src"]
 penguin_crypto = ["py.typed"]
 
 [tool.ruff]
-line-length = 100
 target-version = "py313"
+line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
+# "D" (pydocstyle) is D staged, not dropped: enabling it surfaces ~1,893 missing
+# docstrings repo-wide, which would red the lint gate without fixing any bug.
+# Re-add "D" per package once real docstrings exist -- see general.md, which
+# already requires a 2-3 line docstring on every class and function.
+select = ["E", "W", "F", "I", "N", "UP", "B", "ASYNC", "S"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
 
 [tool.mypy]
 python_version = "3.13"

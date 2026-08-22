@@ -28,8 +28,7 @@ class KeyStore(Protocol):
     """Protocol for signing key stores used by OIDCProvider."""
 
     def get_signing_key(self) -> tuple[PrivateKey, str]:
-        """
-        Return the current active signing key and its key ID.
+        """Return the current active signing key and its key ID.
 
         Returns:
             A (private_key, kid) tuple.
@@ -37,8 +36,7 @@ class KeyStore(Protocol):
         ...
 
     def get_jwks(self) -> dict[str, Any]:
-        """
-        Return the public JWKS for all managed keys.
+        """Return the public JWKS for all managed keys.
 
         Returns:
             A dict with a "keys" list of JWK dicts.
@@ -100,8 +98,7 @@ def _load_private_key_from_pem(pem: bytes) -> PrivateKey:
 
 
 class MemoryKeyStore:
-    """
-    In-memory key store for development and testing.
+    """In-memory key store for development and testing.
 
     Generates a signing key on construction and supports key rotation.
     Keys are never persisted.
@@ -143,8 +140,7 @@ _FileStoreData = dict[str, list[dict[str, str]]]
 
 
 class FileKeyStore:
-    """
-    File-backed key store that persists PEM keys to a JSON file.
+    """File-backed key store that persists PEM keys to a JSON file.
 
     The JSON file contains a list of {"kid": "...", "pem": "..."} entries.
     Keys are loaded on construction; rotation appends a new key and saves.

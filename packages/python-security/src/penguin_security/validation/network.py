@@ -1,5 +1,4 @@
-"""
-Network validators - PyDAL-style validators for network-related inputs.
+"""Network validators - PyDAL-style validators for network-related inputs.
 
 Provides:
 - IsEmail: Validates email addresses (RFC 5322)
@@ -18,8 +17,7 @@ from .base import ValidationResult, Validator
 
 
 class IsEmail(Validator[str, str]):
-    """
-    Validates that a string is a valid email address.
+    """Validates that a string is a valid email address.
 
     Uses RFC 5322 compliant regex pattern. Optionally normalizes
     the email to lowercase.
@@ -71,8 +69,7 @@ class IsEmail(Validator[str, str]):
 
 
 class IsURL(Validator[str, str]):
-    """
-    Validates that a string is a valid URL.
+    """Validates that a string is a valid URL.
 
     Args:
         require_tld: Require a top-level domain
@@ -134,8 +131,7 @@ class IsURL(Validator[str, str]):
 
 
 class IsIPAddress(Validator[str, str]):
-    """
-    Validates that a string is a valid IP address.
+    """Validates that a string is a valid IP address.
 
     Args:
         version: IP version to accept (4, 6, or None for both)
@@ -192,8 +188,7 @@ class IsIPAddress(Validator[str, str]):
 
 
 class IsHostname(Validator[str, str]):
-    """
-    Validates that a string is a valid hostname.
+    """Validates that a string is a valid hostname.
 
     Validates according to RFC 1123 hostname rules.
 

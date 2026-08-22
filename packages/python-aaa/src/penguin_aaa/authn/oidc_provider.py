@@ -48,8 +48,7 @@ class OIDCProviderConfig:
 
 
 class OIDCProvider:
-    """
-    First-party OIDC token provider.
+    """First-party OIDC token provider.
 
     Issues signed access and id tokens using a managed key store and exposes
     a discovery document for downstream relying parties.
@@ -66,8 +65,7 @@ class OIDCProvider:
         self._token_store = token_store
 
     def issue_token_set(self, claims: Claims, nonce: str | None = None) -> TokenSet:
-        """
-        Issue a complete TokenSet for the supplied claims.
+        """Issue a complete TokenSet for the supplied claims.
 
         The access token and id token are signed JWTs.  The refresh token is
         an opaque random string; callers are responsible for persisting and
@@ -133,8 +131,7 @@ class OIDCProvider:
         )
 
     def discovery_document(self) -> dict[str, Any]:
-        """
-        Return a minimal OIDC discovery document for this provider.
+        """Return a minimal OIDC discovery document for this provider.
 
         Returns:
             Dict conforming to the OpenID Connect Discovery 1.0 specification.
@@ -165,8 +162,7 @@ class OIDCProvider:
         }
 
     def jwks(self) -> dict[str, Any]:
-        """
-        Return the JSON Web Key Set for the active signing keys.
+        """Return the JSON Web Key Set for the active signing keys.
 
         Returns:
             JWKS dict suitable for serving at the jwks_uri endpoint.
@@ -174,8 +170,7 @@ class OIDCProvider:
         return self._keystore.get_jwks()
 
     def refresh(self, refresh_token: str) -> TokenSet:
-        """
-        Exchange a valid refresh token for a new TokenSet.
+        """Exchange a valid refresh token for a new TokenSet.
 
         The refresh token is revoked and a new one is issued.
 
@@ -197,8 +192,7 @@ class OIDCProvider:
         return self.issue_token_set(claims)
 
     def revoke(self, token: str, token_type_hint: str | None = None) -> None:
-        """
-        Revoke a token (access or refresh). RFC 7009 compliant.
+        """Revoke a token (access or refresh). RFC 7009 compliant.
 
         Always returns success (200) even if token is already revoked or invalid.
 
@@ -209,7 +203,8 @@ class OIDCProvider:
         if self._token_store is None:
             return
         # If it looks like a refresh token (opaque) or is hinted as such
-        if token_type_hint == "refresh_token" or not token.startswith("eyJ"):
+        # RFC 7009 hint value ("access_token"/"refresh_token"), not a credential.
+        if token_type_hint == "refresh_token" or not token.startswith("eyJ"):  # noqa: S105
             self._token_store.revoke_refresh(token)
         else:
             # It's a JWT; extract jti and revoke
@@ -222,8 +217,7 @@ class OIDCProvider:
                 pass  # Invalid token; silently ignore per RFC 7009
 
     def introspect(self, token: str) -> dict[str, Any]:
-        """
-        Return token introspection data. RFC 7662 compliant.
+        """Return token introspection data. RFC 7662 compliant.
 
         Returns {"active": False} for invalid tokens, {"active": True, ...} for valid tokens.
 

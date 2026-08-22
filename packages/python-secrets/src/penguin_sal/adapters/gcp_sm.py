@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -15,6 +16,8 @@ from penguin_sal.core.exceptions import (
     SecretNotFoundError,
 )
 from penguin_sal.core.types import ConnectionConfig, Secret, SecretList
+
+logger = logging.getLogger(__name__)
 
 
 class GCPSecretManagerAdapter(BaseAdapter):
@@ -115,9 +118,7 @@ class GCPSecretManagerAdapter(BaseAdapter):
             version_str = str(version) if version is not None else "latest"
             secret_version_name = f"{self._project}/secrets/{key}/versions/{version_str}"
 
-            response = self._client.access_secret_version(
-                request={"name": secret_version_name}
-            )
+            response = self._client.access_secret_version(request={"name": secret_version_name})
 
             # Parse payload
             value: str | bytes | dict[str, Any]
@@ -143,8 +144,8 @@ class GCPSecretManagerAdapter(BaseAdapter):
                 created_at=response.create_time.astimezone(UTC) if response.create_time else None,
                 metadata=metadata,
             )
-        except NotFound:
-            raise SecretNotFoundError(key, backend="gcp-sm")
+        except NotFound as e:
+            raise SecretNotFoundError(key, backend="gcp-sm") from e
         except PermissionDenied as e:
             raise AuthorizationError(f"Permission denied accessing secret {key}: {e}") from e
         except Exception as e:
@@ -177,7 +178,7 @@ class GCPSecretManagerAdapter(BaseAdapter):
             self._init_connection()
 
         try:
-            from google.api_core.exceptions import AlreadyExists, PermissionDenied
+            from google.api_core.exceptions import AlreadyExists, NotFound, PermissionDenied
 
             # Encode payload
             if isinstance(value, dict):
@@ -193,7 +194,10 @@ class GCPSecretManagerAdapter(BaseAdapter):
             try:
                 self._client.get_secret(request={"name": secret_name})
                 secret_exists = True
-            except Exception:
+            except NotFound:
+                # Only "not found" means we need to create it below; anything
+                # else (permission, network) must propagate to the outer
+                # handler rather than be silently treated as "doesn't exist".
                 pass
 
             # Create secret if it doesn't exist
@@ -365,5 +369,5 @@ class GCPSecretManagerAdapter(BaseAdapter):
             try:
                 self._client.transport.close()
             except Exception:
-                pass
+                logger.debug("Error closing GCP Secret Manager client", exc_info=True)
         self._connected = False

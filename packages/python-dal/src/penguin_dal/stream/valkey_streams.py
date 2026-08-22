@@ -1,11 +1,12 @@
 """Valkey Streams producer and consumer using valkey."""
+
 from __future__ import annotations
 
 import base64
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +55,7 @@ class ValkeyStreamProducer:
         try:
             import valkey
         except ImportError as e:
-            raise ImportError(
-                "valkey is required. Install with: pip install valkey>=0.1.0"
-            ) from e
+            raise ImportError("valkey is required. Install with: pip install valkey>=0.1.0") from e
 
         self._config = config
         self._client = valkey.Valkey(
@@ -127,9 +126,7 @@ class ValkeyStreamConsumer:
         try:
             import valkey
         except ImportError as e:
-            raise ImportError(
-                "valkey is required. Install with: pip install valkey>=0.1.0"
-            ) from e
+            raise ImportError("valkey is required. Install with: pip install valkey>=0.1.0") from e
 
         self._config = config
         self._client = valkey.Valkey(
@@ -155,15 +152,11 @@ class ValkeyStreamConsumer:
         if self._config.create_groups_if_missing:
             for topic in topics:
                 try:
-                    self._client.xgroup_create(
-                        topic, self._config.group_id, id="$", mkstream=True
-                    )
+                    self._client.xgroup_create(topic, self._config.group_id, id="$", mkstream=True)
                 except Exception as e:
                     # Group might already exist
                     if "BUSYGROUP" not in str(e):
-                        logger.warning(
-                            f"Error creating consumer group for {topic}: {e}"
-                        )
+                        logger.warning(f"Error creating consumer group for {topic}: {e}")
 
     def poll(self, timeout_ms: int = 1000) -> list[StreamMessage]:
         """Poll for messages from subscribed streams.
@@ -213,9 +206,7 @@ class ValkeyStreamConsumer:
 
                     # Create timestamp from message ID (format: timestamp-sequence)
                     timestamp_str = msg_id.split("-")[0]
-                    timestamp = datetime.fromtimestamp(
-                        int(timestamp_str) / 1000.0, tz=timezone.utc
-                    )
+                    timestamp = datetime.fromtimestamp(int(timestamp_str) / 1000.0, tz=UTC)
 
                     stream_msg = StreamMessage(
                         topic=topic,

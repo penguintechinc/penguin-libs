@@ -63,7 +63,7 @@ class TestCloudWatchSink:
 
         sink(None, "info", {"event": "first"})
         # After first flush, sequence token is stored
-        assert sink._sequence_token == "token123"
+        assert sink._sequence_token == "token123"  # noqa: S105 -- dummy test fixture
 
     def test_cloudwatch_sink_returns_event_dict(self):
         """CloudWatchSink __call__ returns event_dict (structlog protocol)."""

@@ -1,5 +1,4 @@
-"""
-String validators - PyDAL-style validators for string inputs.
+"""String validators - PyDAL-style validators for string inputs.
 
 Provides:
 - IsNotEmpty: Validates non-empty strings
@@ -21,8 +20,7 @@ from .base import ValidationResult, Validator
 
 
 class IsNotEmpty(Validator[str, str]):
-    """
-    Validates that a string is not empty or whitespace-only.
+    """Validates that a string is not empty or whitespace-only.
 
     Example:
         validator = IsNotEmpty()
@@ -46,8 +44,7 @@ class IsNotEmpty(Validator[str, str]):
 
 
 class IsLength(Validator[str, str]):
-    """
-    Validates that a string length is within a range.
+    """Validates that a string length is within a range.
 
     Args:
         min_length: Minimum length (inclusive), default 0
@@ -87,8 +84,7 @@ class IsLength(Validator[str, str]):
 
 
 class IsMatch(Validator[str, str]):
-    """
-    Validates that a string matches a regex pattern.
+    """Validates that a string matches a regex pattern.
 
     Args:
         pattern: Regex pattern (string or compiled Pattern)
@@ -123,8 +119,7 @@ class IsMatch(Validator[str, str]):
 
 
 class IsAlphanumeric(Validator[str, str]):
-    """
-    Validates that a string contains only alphanumeric characters.
+    """Validates that a string contains only alphanumeric characters.
 
     Args:
         allow_underscore: Whether to allow underscores
@@ -169,8 +164,7 @@ class IsAlphanumeric(Validator[str, str]):
 
 
 class IsSlug(Validator[str, str]):
-    """
-    Validates that a string is a valid URL slug.
+    """Validates that a string is a valid URL slug.
 
     A valid slug contains only lowercase letters, numbers, and hyphens,
     starts and ends with alphanumeric, and has no consecutive hyphens.
@@ -201,8 +195,7 @@ class IsSlug(Validator[str, str]):
 
 
 class IsIn(Validator[str, str]):
-    """
-    Validates that a value is in an allowed set.
+    """Validates that a value is in an allowed set.
 
     Args:
         options: Allowed values
@@ -245,8 +238,7 @@ class IsIn(Validator[str, str]):
 
 
 class IsTrimmed(Validator[str, str]):
-    """
-    Validates and trims whitespace from a string.
+    """Validates and trims whitespace from a string.
 
     This validator always succeeds (for non-empty values) and returns
     the trimmed string.

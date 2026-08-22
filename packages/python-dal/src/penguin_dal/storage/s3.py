@@ -1,10 +1,11 @@
 """S3-compatible object storage backend."""
+
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
 
-from penguin_dal.protocols import PutOptions, StorageStore
+from penguin_dal.protocols import PutOptions
 
 
 @dataclass(slots=True)
@@ -59,9 +60,7 @@ class S3Store:
             return key[len(self._config.prefix) + 1 :]
         return key
 
-    def put(
-        self, key: str, data: bytes, opts: PutOptions | None = None
-    ) -> None:
+    def put(self, key: str, data: bytes, opts: PutOptions | None = None) -> None:
         """Store object at key."""
         opts = opts or PutOptions()
         s3_key = self._make_key(key)
@@ -92,11 +91,11 @@ class S3Store:
                 Key=s3_key,
             )
             return response["Body"].read()
-        except self._client.exceptions.NoSuchKey:
-            raise KeyError(key)
+        except self._client.exceptions.NoSuchKey as exc:
+            raise KeyError(key) from exc
         except Exception as e:
             if "NoSuchKey" in str(e) or "404" in str(e):
-                raise KeyError(key)
+                raise KeyError(key) from e
             raise
 
     def delete(self, key: str) -> None:
@@ -168,9 +167,7 @@ class AsyncS3Store:
         """Initialize async S3 store."""
         self._sync_store = S3Store(config)
 
-    async def put(
-        self, key: str, data: bytes, opts: PutOptions | None = None
-    ) -> None:
+    async def put(self, key: str, data: bytes, opts: PutOptions | None = None) -> None:
         """Store object at key."""
         await asyncio.to_thread(self._sync_store.put, key, data, opts)
 

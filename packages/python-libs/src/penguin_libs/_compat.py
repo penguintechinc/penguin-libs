@@ -1,6 +1,9 @@
 """sys.modules aliases for backwards-compatible submodule imports."""
 
+import logging
 import sys
+
+_logger = logging.getLogger(__name__)
 
 # Import split packages with graceful fallback
 _PACKAGES = {}
@@ -10,7 +13,7 @@ _package_specs = [
     ("penguin_security", "penguin_libs.security"),
 ]
 
-for pkg_name, legacy_name in _package_specs:
+for pkg_name, _legacy_name in _package_specs:
     try:
         _PACKAGES[pkg_name] = __import__(pkg_name)
         # Try to re-export everything from the submodule
@@ -20,7 +23,9 @@ for pkg_name, legacy_name in _package_specs:
                 for _name in _mod.__all__:
                     globals()[_name] = getattr(_mod, _name)
         except Exception:
-            pass  # Skip re-export if it fails
+            _logger.debug(
+                "Skipping re-export for %s; submodule attrs unavailable", pkg_name, exc_info=True
+            )
     except ImportError as _import_err:
         # Package not available; skip it
         # Note: silently skipping failed imports - this is intentional for optional split packages

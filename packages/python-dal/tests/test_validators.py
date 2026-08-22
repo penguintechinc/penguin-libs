@@ -21,7 +21,6 @@ from penguin_dal.validators import (
     validated_columns,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -520,6 +519,7 @@ class TestIsNullOr:
 
     def test_with_legacy_validator(self):
         """IS_NULL_OR should also wrap raise-style validators."""
+
         def must_be_positive(v):
             if int(v) <= 0:
                 raise ValueError("Must be positive")

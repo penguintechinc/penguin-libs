@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,7 +12,6 @@ from penguin_sal.adapters.gcp_sm import GCPSecretManagerAdapter
 from penguin_sal.core.exceptions import (
     AuthenticationError,
     AuthorizationError,
-    BackendError,
     ConnectionError,
     SecretNotFoundError,
 )
@@ -90,7 +89,9 @@ class TestInitConnection:
 
     def test_init_connection_client_error_raises_connection_error(self) -> None:
         """Client initialization errors raise ConnectionError."""
-        _mock_secretmanager.SecretManagerServiceClient.side_effect = RuntimeError("client init failed")
+        _mock_secretmanager.SecretManagerServiceClient.side_effect = RuntimeError(
+            "client init failed"
+        )
 
         config = ConnectionConfig(
             scheme="gcp-sm",
@@ -107,7 +108,7 @@ class TestAuthenticate:
     """Test authenticate method."""
 
     def test_authenticate_success(self) -> None:
-        """authenticate calls list_secrets to verify credentials."""
+        """Authenticate calls list_secrets to verify credentials."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
         mock_client.list_secrets.return_value = []
@@ -167,7 +168,7 @@ class TestGet:
     """Test get method."""
 
     def test_get_returns_secret(self) -> None:
-        """get retrieves a secret and returns Secret object."""
+        """Get retrieves a secret and returns Secret object."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
 
@@ -176,7 +177,7 @@ class TestGet:
         mock_response.name = "projects/my-project/secrets/db-password/versions/1"
         mock_response.create_time = MagicMock(
             isoformat=lambda: "2024-01-01T00:00:00Z",
-            astimezone=lambda tz: datetime(2024, 1, 1, tzinfo=timezone.utc),
+            astimezone=lambda tz: datetime(2024, 1, 1, tzinfo=UTC),
         )
         mock_client.access_secret_version.return_value = mock_response
 
@@ -196,7 +197,7 @@ class TestGet:
         assert result.version == 1
 
     def test_get_specific_version(self) -> None:
-        """get with version parameter accesses specific version."""
+        """Get with version parameter accesses specific version."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
 
@@ -244,11 +245,11 @@ class TestSet:
     """Test set method."""
 
     def test_set_creates_and_updates_secret(self) -> None:
-        """set creates secret if not exists, then adds version."""
+        """Set creates secret if not exists, then adds version."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
 
-        mock_client.get_secret.side_effect = Exception("not found")
+        mock_client.get_secret.side_effect = _mock_api_core_exceptions.NotFound("not found")
         mock_response = MagicMock()
         mock_response.name = "projects/my-project/secrets/api-key/versions/1"
         mock_client.add_secret_version.return_value = mock_response
@@ -270,7 +271,7 @@ class TestSet:
         mock_client.add_secret_version.assert_called_once()
 
     def test_set_updates_existing_secret(self) -> None:
-        """set updates existing secret without recreating."""
+        """Set updates existing secret without recreating."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
 
@@ -294,10 +295,10 @@ class TestSet:
         mock_client.add_secret_version.assert_called_once()
 
     def test_set_dict_value_json_encodes(self) -> None:
-        """set with dict value JSON encodes the payload."""
+        """Set with dict value JSON encodes the payload."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
-        mock_client.get_secret.side_effect = Exception("not found")
+        mock_client.get_secret.side_effect = _mock_api_core_exceptions.NotFound("not found")
 
         mock_response = MagicMock()
         mock_response.name = "projects/my-project/secrets/config/versions/1"
@@ -324,10 +325,8 @@ class TestSet:
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
         # Make get_secret fail so create_secret will be attempted
-        mock_client.get_secret.side_effect = Exception("not found")
-        mock_client.create_secret.side_effect = _mock_api_core_exceptions.PermissionDenied(
-            "denied"
-        )
+        mock_client.get_secret.side_effect = _mock_api_core_exceptions.NotFound("not found")
+        mock_client.create_secret.side_effect = _mock_api_core_exceptions.PermissionDenied("denied")
 
         config = ConnectionConfig(
             scheme="gcp-sm",
@@ -345,7 +344,7 @@ class TestDelete:
     """Test delete method."""
 
     def test_delete_success(self) -> None:
-        """delete removes a secret and returns True."""
+        """Delete removes a secret and returns True."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
 
@@ -363,7 +362,7 @@ class TestDelete:
         mock_client.delete_secret.assert_called_once()
 
     def test_delete_not_found_returns_false(self) -> None:
-        """delete returns False if secret doesn't exist."""
+        """Delete returns False if secret doesn't exist."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
         mock_client.delete_secret.side_effect = _mock_api_core_exceptions.NotFound("not found")
@@ -385,7 +384,7 @@ class TestList:
     """Test list method."""
 
     def test_list_returns_secret_names(self) -> None:
-        """list returns all secret names in project."""
+        """List returns all secret names in project."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
 
@@ -410,7 +409,7 @@ class TestList:
         assert "api-key" in result.keys
 
     def test_list_with_prefix_filters(self) -> None:
-        """list with prefix applies GCP filter."""
+        """List with prefix applies GCP filter."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
 
@@ -433,7 +432,7 @@ class TestList:
         assert "db-*" in call_args[1]["request"]["filter"]
 
     def test_list_with_limit(self) -> None:
-        """list with limit restricts returned keys."""
+        """List with limit restricts returned keys."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
 
@@ -457,7 +456,7 @@ class TestExists:
     """Test exists method."""
 
     def test_exists_returns_true_when_secret_exists(self) -> None:
-        """exists returns True if secret found."""
+        """Exists returns True if secret found."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
         mock_client.get_secret.return_value = MagicMock()
@@ -475,7 +474,7 @@ class TestExists:
         assert result is True
 
     def test_exists_returns_false_when_not_found(self) -> None:
-        """exists returns False if secret not found."""
+        """Exists returns False if secret not found."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
         mock_client.get_secret.side_effect = _mock_api_core_exceptions.NotFound("not found")
@@ -493,7 +492,7 @@ class TestExists:
         assert result is False
 
     def test_exists_returns_false_on_other_errors(self) -> None:
-        """exists returns False on unexpected errors."""
+        """Exists returns False on unexpected errors."""
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
         mock_client.get_secret.side_effect = RuntimeError("unexpected error")
@@ -575,7 +574,7 @@ class TestClose:
     """Test close method."""
 
     def test_close_closes_client_transport(self) -> None:
-        """close calls transport.close() on the client."""
+        """Close calls transport.close() on the client."""
         mock_client = MagicMock()
         mock_transport = MagicMock()
         mock_client.transport = mock_transport
@@ -594,7 +593,7 @@ class TestClose:
         assert not adapter._connected
 
     def test_close_handles_errors_gracefully(self) -> None:
-        """close doesn't raise even if transport.close() fails."""
+        """Close doesn't raise even if transport.close() fails."""
         mock_client = MagicMock()
         mock_transport = MagicMock()
         mock_transport.close.side_effect = RuntimeError("error")

@@ -36,6 +36,7 @@ limiter = FlaskRateLimiter(
 )
 limiter.init_app(app)
 
+
 @app.route("/api/endpoint")
 @limiter.limit()
 def my_endpoint():
@@ -52,6 +53,7 @@ config = RateLimitConfig.from_string("100/hour")
 
 # Or create directly
 from penguin_limiter import RateLimitConfig
+
 config = RateLimitConfig(rate=100, unit="hour")
 ```
 
@@ -81,7 +83,7 @@ storage = RedisStorage(url="redis://localhost:6379/0")
 limiter = FlaskRateLimiter(
     config=RateLimitConfig.from_string("100/hour"),
     storage=MemoryStorage(),
-    key_func=lambda: request.remote_addr  # Optional custom key function
+    key_func=lambda: request.remote_addr,  # Optional custom key function
 )
 ```
 
@@ -93,6 +95,7 @@ limiter = FlaskRateLimiter(
 @limiter.limit()
 def get_users():
     return []
+
 
 # Override limit for specific route
 @app.route("/api/expensive")

@@ -1,14 +1,13 @@
 """Tests for license validation decorators — real license gating."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+from flask import Flask
 
 import penguin_licensing.client as client_module
 from penguin_licensing.client import LicenseClient
-from flask import Flask
-
 from penguin_licensing.decorators import (
     FeatureNotAvailableError,
     LicenseRequiredError,
@@ -287,7 +286,7 @@ class TestDecoratorRevokedLicense:
         assert sync_func() == "ran"
 
         # Expire the cache so the next call re-contacts the (now rejecting) server.
-        shared._cache_expiry = datetime.now(timezone.utc) - timedelta(seconds=1)
+        shared._cache_expiry = datetime.now(UTC) - timedelta(seconds=1)
 
         with pytest.raises(LicenseRequiredError):
             sync_func()
@@ -315,7 +314,7 @@ class TestDecoratorHonorsCacheDuringOutage:
         assert mock_post.call_count == 1
 
         # Expire the cache TTL so the outage is genuinely exercised.
-        shared._cache_expiry = datetime.now(timezone.utc) - timedelta(seconds=1)
+        shared._cache_expiry = datetime.now(UTC) - timedelta(seconds=1)
 
         assert sync_func() == "ran"
         assert mock_post.call_count == 2
@@ -334,7 +333,7 @@ class TestDecoratorHonorsCacheDuringOutage:
             return "ran"
 
         assert sync_func() == "ran"
-        shared._cache_expiry = datetime.now(timezone.utc) - timedelta(seconds=1)
+        shared._cache_expiry = datetime.now(UTC) - timedelta(seconds=1)
 
         assert sync_func() == "ran"
         assert mock_post.call_count == 2

@@ -1,3 +1,4 @@
+LICENSE
 README.md
 pyproject.toml
 src/penguin_utils.egg-info/PKG-INFO
@@ -9,6 +10,7 @@ src/penguintechinc_utils/__init__.py
 src/penguintechinc_utils/decorators.py
 src/penguintechinc_utils/killkrill.py
 src/penguintechinc_utils/logging.py
+src/penguintechinc_utils/py.typed
 src/penguintechinc_utils/sinks.py
 tests/test_cloud_sinks.py
 tests/test_decorators.py

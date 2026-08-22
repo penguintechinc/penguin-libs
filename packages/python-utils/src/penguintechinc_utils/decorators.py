@@ -187,12 +187,8 @@ class DynamicDecorator:
 
             wrapper = sync_wrapper
 
-        setattr(wrapper, "__decorator_name__", dec_name)
-        setattr(
-            wrapper,
-            "__decorator_config__",
-            {"args": dec_args, "kwargs": dec_kwargs},
-        )
+        wrapper.__decorator_name__ = dec_name
+        wrapper.__decorator_config__ = {"args": dec_args, "kwargs": dec_kwargs}
         return wrapper
 
 

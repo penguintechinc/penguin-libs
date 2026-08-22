@@ -19,10 +19,7 @@ pip install penguin-licensing[flask]
 from penguin_licensing import LicenseClient
 
 # Initialize client
-client = LicenseClient(
-    license_key="PENG-XXXX-XXXX-XXXX-XXXX-ABCD",
-    product="elder"
-)
+client = LicenseClient(license_key="PENG-XXXX-XXXX-XXXX-XXXX-ABCD", product="elder")
 
 # Validate license
 info = client.validate()
@@ -112,14 +109,14 @@ def handle_feature_not_available(err):
     )
 
 
-@app.route('/api/v1/enterprise-feature')
-@license_required('enterprise')
+@app.route("/api/v1/enterprise-feature")
+@license_required("enterprise")
 def enterprise_endpoint():
     return {"message": "Enterprise feature"}
 
 
-@app.route('/api/v1/analytics')
-@feature_required('advanced_analytics')
+@app.route("/api/v1/analytics")
+@feature_required("advanced_analytics")
 def analytics_endpoint():
     return {"data": "analytics"}
 ```

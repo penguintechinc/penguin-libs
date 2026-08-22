@@ -43,12 +43,12 @@ def _shape_result(
     field_list = fields or colnames
 
     if as_ordered_dict:
-        return [OrderedDict(zip(col_names, row)) for row in rows]
+        return [OrderedDict(zip(col_names, row, strict=True)) for row in rows]
     if as_dict:
-        return [dict(zip(col_names, row)) for row in rows]
+        return [dict(zip(col_names, row, strict=True)) for row in rows]
     if field_list:
         col_names_custom = [getattr(f, "name", None) or str(f) for f in field_list]
-        row_objs = [Row(dict(zip(col_names_custom, row))) for row in rows]
+        row_objs = [Row(dict(zip(col_names_custom, row, strict=True))) for row in rows]
         return Rows(row_objs)
     return [tuple(row) for row in rows]
 
@@ -249,8 +249,10 @@ class DB:
         # Import Field here to avoid circular imports
         try:
             from penguin_dal.field import Field
-        except ImportError:
-            raise ImportError("Field class not available; ensure penguin_dal.field is installed")
+        except ImportError as e:
+            raise ImportError(
+                "Field class not available; ensure penguin_dal.field is installed"
+            ) from e
 
         # Build SQLAlchemy columns from Field objects
         columns: list[Any] = []
@@ -381,7 +383,8 @@ class DB:
                 warnings.warn(
                     "Potential SQL injection: query contains quoted string literals "
                     "in WHERE/VALUES/IN clause but no placeholders provided. "
-                    "Pass values via the placeholders parameter, or disable with check_injection=False.",
+                    "Pass values via the placeholders parameter, or disable with "
+                    "check_injection=False.",
                     DALSecurityWarning,
                     stacklevel=2,
                 )
@@ -585,8 +588,10 @@ class AsyncDB:
         # Import Field here to avoid circular imports
         try:
             from penguin_dal.field import Field
-        except ImportError:
-            raise ImportError("Field class not available; ensure penguin_dal.field is installed")
+        except ImportError as e:
+            raise ImportError(
+                "Field class not available; ensure penguin_dal.field is installed"
+            ) from e
 
         # Build SQLAlchemy columns from Field objects
         columns: list[Any] = []
@@ -695,8 +700,8 @@ class AsyncDB:
                     return_rowcount=True
                 )
         """
-        from collections import OrderedDict
         import warnings
+        from collections import OrderedDict
 
         from penguin_dal.exceptions import DALSecurityWarning
         from penguin_dal.query import Row, Rows
@@ -713,7 +718,8 @@ class AsyncDB:
                 warnings.warn(
                     "Potential SQL injection: query contains quoted string literals "
                     "in WHERE/VALUES/IN clause but no placeholders provided. "
-                    "Pass values via the placeholders parameter, or disable with check_injection=False.",
+                    "Pass values via the placeholders parameter, or disable with "
+                    "check_injection=False.",
                     DALSecurityWarning,
                     stacklevel=2,
                 )
@@ -741,15 +747,15 @@ class AsyncDB:
 
             # Apply return format
             if as_ordered_dict:
-                return [OrderedDict(zip(col_names, row)) for row in rows]
+                return [OrderedDict(zip(col_names, row, strict=True)) for row in rows]
             elif as_dict:
-                return [dict(zip(col_names, row)) for row in rows]
+                return [dict(zip(col_names, row, strict=True)) for row in rows]
             elif field_list:
                 # Build Rows with custom field names
                 # Accept plain column names or PyDAL-style Field objects; Field
                 # instances carry the column name on .name, strings are used as-is.
                 col_names_custom = [getattr(f, "name", None) or str(f) for f in field_list]
-                row_objs = [Row(dict(zip(col_names_custom, row))) for row in rows]
+                row_objs = [Row(dict(zip(col_names_custom, row, strict=True))) for row in rows]
                 return Rows(row_objs)
             else:
                 # Default: return raw tuples (convert from SQLAlchemy Row)

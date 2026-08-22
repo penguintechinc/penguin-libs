@@ -8,8 +8,6 @@ from unittest.mock import MagicMock
 
 import pytest
 from flask import Flask
-from pydantic import BaseModel, ValidationError
-
 from penguin_libs.pydantic.async_utils import (
     AsyncValidator,
     run_in_threadpool,
@@ -46,6 +44,7 @@ from penguin_libs.pydantic.types import (
     bounded_str,
     strong_password,
 )
+from pydantic import BaseModel, ValidationError
 
 # ──────────────────────── base.py ────────────────────────
 
@@ -328,7 +327,7 @@ class TestPydanticTypes:
             M(text="x" * 101)
 
     def test_strong_password_factory(self):
-        CustomPw = strong_password(min_length=12)
+        CustomPw = strong_password(min_length=12)  # noqa: N806 -- type alias, PascalCase is correct
 
         class M(BaseModel):
             pw: CustomPw
@@ -337,7 +336,7 @@ class TestPydanticTypes:
             M(pw="Short1!")
 
     def test_bounded_str_factory(self):
-        Short = bounded_str(0, 5)
+        Short = bounded_str(0, 5)  # noqa: N806 -- type alias, PascalCase is correct
 
         class M(BaseModel):
             val: Short
@@ -692,7 +691,7 @@ class TestOpenAPI:
                 score: float
                 active: bool
 
-            for field_name, field_info in TestModel.model_fields.items():
+            for _field_name, field_info in TestModel.model_fields.items():
                 result = pydantic_to_restx_field(field_info, field_info.annotation)
                 assert result is not None
         except ImportError:
@@ -701,7 +700,6 @@ class TestOpenAPI:
     def test_pydantic_to_restx_field_list(self):
         try:
             from flask_restx import fields as restx_fields
-
             from penguin_libs.pydantic.openapi import pydantic_to_restx_field
 
             class TestModel(BaseModel):
@@ -716,7 +714,6 @@ class TestOpenAPI:
     def test_pydantic_to_restx_field_dict(self):
         try:
             from flask_restx import fields as restx_fields
-
             from penguin_libs.pydantic.openapi import pydantic_to_restx_field
 
             class TestModel(BaseModel):
@@ -731,7 +728,6 @@ class TestOpenAPI:
     def test_pydantic_to_restx_model(self):
         try:
             from flask_restx import Api
-
             from penguin_libs.pydantic.openapi import pydantic_to_restx_model
 
             app = Flask(__name__)

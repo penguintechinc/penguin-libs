@@ -2,7 +2,7 @@
 
 import pytest
 
-from penguin_crypto.hashing import sha256, sha512, blake2b, hmac_sha256
+from penguin_crypto.hashing import blake2b, hmac_sha256, sha256, sha512
 
 
 class TestSHA256:
@@ -58,7 +58,7 @@ class TestSHA512:
         result = sha512(b"")
         assert (
             result
-            == "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+            == "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"  # noqa: E501 -- fixed-length hex digest, cannot wrap
         )
 
     def test_sha512_known_vector_string(self) -> None:
@@ -66,7 +66,7 @@ class TestSHA512:
         result = sha512("")
         assert (
             result
-            == "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+            == "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"  # noqa: E501 -- fixed-length hex digest, cannot wrap
         )
 
     def test_sha512_deterministic(self) -> None:

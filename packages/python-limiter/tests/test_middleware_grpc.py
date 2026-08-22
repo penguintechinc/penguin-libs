@@ -12,12 +12,15 @@ from penguin_limiter.storage.memory import MemoryStorage
 
 
 class TestPeerToIp:
-    @pytest.mark.parametrize("peer,expected", [
-        ("ipv4:1.2.3.4:50051", "1.2.3.4"),
-        ("ipv6:[::1]:50051", "::1"),
-        ("1.2.3.4:50051", "1.2.3.4"),
-        ("1.2.3.4", "1.2.3.4"),
-    ])
+    @pytest.mark.parametrize(
+        "peer,expected",
+        [
+            ("ipv4:1.2.3.4:50051", "1.2.3.4"),
+            ("ipv6:[::1]:50051", "::1"),
+            ("1.2.3.4:50051", "1.2.3.4"),
+            ("1.2.3.4", "1.2.3.4"),
+        ],
+    )
     def test_extracts_ip(self, peer: str, expected: str) -> None:
         assert _peer_to_ip(peer) == expected
 
@@ -50,7 +53,8 @@ class TestGrpcRateLimitInterceptor:
         ctx = self._make_context()
 
         try:
-            import grpc
+            import grpc  # noqa: F401 -- import success is the availability check
+
             wrapped = interceptor.intercept_service(lambda _: handler, MagicMock())
             wrapped.unary_unary(MagicMock(), ctx)
             handler.unary_unary.assert_called_once()
@@ -67,7 +71,8 @@ class TestGrpcRateLimitInterceptor:
         ctx = self._make_context(peer="ipv4:192.168.1.1:50051")
 
         try:
-            import grpc
+            import grpc  # noqa: F401 -- import success is the availability check
+
             wrapped = interceptor.intercept_service(lambda _: handler, MagicMock())
             # Call 5 times — private IP should always pass
             for _ in range(5):
@@ -86,6 +91,7 @@ class TestGrpcRateLimitInterceptor:
 
         try:
             import grpc
+
             wrapped = interceptor.intercept_service(lambda _: handler, MagicMock())
 
             ctx = self._make_context("ipv4:5.5.5.5:50051")
@@ -110,7 +116,8 @@ class TestGrpcRateLimitInterceptor:
         handler = self._make_handler()
 
         try:
-            import grpc
+            import grpc  # noqa: F401 -- import success is the availability check
+
             wrapped = interceptor.intercept_service(lambda _: handler, MagicMock())
             ctx = self._make_context(
                 peer="ipv4:10.0.0.1:50051",  # internal peer
@@ -133,7 +140,8 @@ class TestGrpcRateLimitInterceptor:
         handler = self._make_handler()
 
         try:
-            import grpc
+            import grpc  # noqa: F401 -- import success is the availability check
+
             wrapped = interceptor.intercept_service(lambda _: handler, MagicMock())
             ctx = self._make_context("ipv4:192.168.1.1:50051")
             wrapped.unary_unary(MagicMock(), ctx)  # first ok

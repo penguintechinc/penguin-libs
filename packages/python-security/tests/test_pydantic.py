@@ -1,26 +1,11 @@
 """Comprehensive tests for penguin-pydantic module."""
 
-import asyncio
-import json
+import importlib.util
 import warnings
-from typing import Optional
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel, ValidationError
-
-# Flask is optional, only import if needed for tests
-try:
-    from flask import Flask, request
-    FLASK_AVAILABLE = True
-except ImportError:
-    FLASK_AVAILABLE = False
-
-try:
-    from flask_restx import Api
-    FLASK_RESTX_AVAILABLE = True
-except ImportError:
-    FLASK_RESTX_AVAILABLE = False
 
 from penguin_security.pydantic import (
     ConfigurableModel,
@@ -28,10 +13,10 @@ from penguin_security.pydantic import (
     ElderBaseModel,
     EmailStr,
     HostnameStr,
+    ImmutableModel,
     IPAddressStr,
     IPv4Str,
     IPv6Str,
-    ImmutableModel,
     ModeratePassword,
     Name255,
     NonEmptyStr,
@@ -48,6 +33,13 @@ from penguin_security.pydantic import (
     validate_query_params,
     validated_request,
 )
+
+# Flask is optional. Neither module is referenced at module scope -- each
+# test that needs them does its own local `from flask import Flask` /
+# `from flask_restx import Api` (see below) -- these are pure availability
+# probes, so use find_spec rather than a real (and unused) import.
+FLASK_AVAILABLE = importlib.util.find_spec("flask") is not None
+FLASK_RESTX_AVAILABLE = importlib.util.find_spec("flask_restx") is not None
 
 
 class TestElderBaseModel:
@@ -90,9 +82,9 @@ class TestElderBaseModel:
 
     def test_use_enum_values(self) -> None:
         """Test that enum values are serialized."""
-        from enum import Enum
+        from enum import StrEnum
 
-        class Status(str, Enum):
+        class Status(StrEnum):
             ACTIVE = "active"
             INACTIVE = "inactive"
 
@@ -137,7 +129,7 @@ class TestElderBaseModel:
         class User(ElderBaseModel):
             id: str
             name: str
-            email: Optional[str] = None
+            email: str | None = None
 
         user = User(id="123", name="John", email=None)
         result = user.to_dict(exclude_none=True)
@@ -150,7 +142,7 @@ class TestElderBaseModel:
         class User(ElderBaseModel):
             id: str
             name: str
-            email: Optional[str] = None
+            email: str | None = None
 
         user = User(id="123", name="John")
         result = user.to_dict(exclude_unset=True)
@@ -231,7 +223,7 @@ class TestElderBaseModel:
         class User(ElderBaseModel):
             id: str
             name: str
-            email: Optional[str] = None
+            email: str | None = None
 
         row_dict = {"id": "123", "name": "John", "email": None}
         user = User.from_row(row_dict)
@@ -279,8 +271,8 @@ class TestElderBaseModel:
         class User(ElderBaseModel):
             id: str
             name: str
-            email: Optional[str] = None
-            phone: Optional[str] = None
+            email: str | None = None
+            phone: str | None = None
 
         # Required fields must be provided
         with pytest.raises(ValidationError):
@@ -426,7 +418,7 @@ class TestConfigurableModel:
 
         class Config(ConfigurableModel):
             name: str
-            value: Optional[str] = None
+            value: str | None = None
 
         config = Config(name="app", value=None, extra="data")
         result = config.to_dict(exclude_none=True)
@@ -709,8 +701,8 @@ class TestStrongPassword:
         class User(BaseModel):
             password: StrongPassword
 
-        user = User(password="SecureP@ss123")
-        assert user.password == "SecureP@ss123"
+        user = User(password="SecureP@ss123")  # noqa: S106 -- test fixture placeholder, not a real credential
+        assert user.password == "SecureP@ss123"  # noqa: S105 -- test fixture placeholder, not a real credential
 
     def test_password_too_short(self) -> None:
         """Test password shorter than minimum."""
@@ -719,7 +711,7 @@ class TestStrongPassword:
             password: StrongPassword
 
         with pytest.raises(ValidationError):
-            User(password="Pass@1")
+            User(password="Pass@1")  # noqa: S106 -- test fixture placeholder, not a real credential
 
     def test_password_missing_uppercase(self) -> None:
         """Test password missing uppercase letter."""
@@ -728,7 +720,7 @@ class TestStrongPassword:
             password: StrongPassword
 
         with pytest.raises(ValidationError):
-            User(password="securepass@123")
+            User(password="securepass@123")  # noqa: S106 -- test fixture placeholder, not a real credential
 
     def test_password_missing_lowercase(self) -> None:
         """Test password missing lowercase letter."""
@@ -737,7 +729,7 @@ class TestStrongPassword:
             password: StrongPassword
 
         with pytest.raises(ValidationError):
-            User(password="SECUREPASS@123")
+            User(password="SECUREPASS@123")  # noqa: S106 -- test fixture placeholder, not a real credential
 
     def test_password_missing_digit(self) -> None:
         """Test password missing digit."""
@@ -746,7 +738,7 @@ class TestStrongPassword:
             password: StrongPassword
 
         with pytest.raises(ValidationError):
-            User(password="SecurePass@")
+            User(password="SecurePass@")  # noqa: S106 -- test fixture placeholder, not a real credential
 
     def test_password_missing_special_char(self) -> None:
         """Test password missing special character."""
@@ -755,7 +747,7 @@ class TestStrongPassword:
             password: StrongPassword
 
         with pytest.raises(ValidationError):
-            User(password="SecurePass123")
+            User(password="SecurePass123")  # noqa: S106 -- test fixture placeholder, not a real credential
 
     def test_password_with_space_rejected(self) -> None:
         """Test password with spaces is rejected."""
@@ -764,7 +756,7 @@ class TestStrongPassword:
             password: StrongPassword
 
         with pytest.raises(ValidationError):
-            User(password="Secure Pass@123")
+            User(password="Secure Pass@123")  # noqa: S106 -- test fixture placeholder, not a real credential
 
 
 class TestModeratePassword:
@@ -776,8 +768,8 @@ class TestModeratePassword:
         class User(BaseModel):
             password: ModeratePassword
 
-        user = User(password="SecurePass123")
-        assert user.password == "SecurePass123"
+        user = User(password="SecurePass123")  # noqa: S106 -- test fixture placeholder, not a real credential
+        assert user.password == "SecurePass123"  # noqa: S105 -- test fixture placeholder, not a real credential
 
     def test_moderate_password_no_special_char_required(self) -> None:
         """Test moderate password doesn't require special characters."""
@@ -785,8 +777,8 @@ class TestModeratePassword:
         class User(BaseModel):
             password: ModeratePassword
 
-        user = User(password="SecurePass123")
-        assert user.password == "SecurePass123"
+        user = User(password="SecurePass123")  # noqa: S106 -- test fixture placeholder, not a real credential
+        assert user.password == "SecurePass123"  # noqa: S105 -- test fixture placeholder, not a real credential
 
     def test_moderate_password_too_short(self) -> None:
         """Test password shorter than minimum."""
@@ -795,7 +787,7 @@ class TestModeratePassword:
             password: ModeratePassword
 
         with pytest.raises(ValidationError):
-            User(password="Pass1")
+            User(password="Pass1")  # noqa: S106 -- test fixture placeholder, not a real credential
 
 
 class TestName255:
@@ -929,36 +921,41 @@ class TestStrongPasswordFactory:
 
     def test_custom_strong_password(self) -> None:
         """Test creating custom strong password type."""
-        CustomPassword = strong_password(min_length=12, require_special=True)
+        # noqa: N806 below -- used as a type annotation (`password: CustomPassword`), PascalCase is correct for a type alias
+        CustomPassword = strong_password(min_length=12, require_special=True)  # noqa: N806
 
         class User(BaseModel):
             password: CustomPassword
 
-        user = User(password="VerySecureP@ss123")
-        assert user.password == "VerySecureP@ss123"
+        user = User(password="VerySecureP@ss123")  # noqa: S106 -- test fixture placeholder, not a real credential
+        assert user.password == "VerySecureP@ss123"  # noqa: S105 -- test fixture placeholder, not a real credential
 
     def test_custom_password_min_length(self) -> None:
         """Test custom password minimum length."""
-        CustomPassword = strong_password(min_length=12)
+        # noqa: N806 below -- used as a type annotation (`password: CustomPassword`), PascalCase is correct for a type alias
+        CustomPassword = strong_password(min_length=12)  # noqa: N806
 
         class User(BaseModel):
             password: CustomPassword
 
         with pytest.raises(ValidationError):
-            User(password="ShortP@ss1")
+            User(password="ShortP@ss1")  # noqa: S106 -- test fixture placeholder, not a real credential
 
     def test_custom_password_no_special_required(self) -> None:
         """Test custom password without special char requirement."""
-        CustomPassword = strong_password(
-            min_length=8, require_special=False, require_uppercase=True,
-            require_lowercase=True, require_digit=True
+        CustomPassword = strong_password(  # noqa: N806 -- used as a type annotation below (`password: CustomPassword`), PascalCase is correct for a type alias
+            min_length=8,
+            require_special=False,
+            require_uppercase=True,
+            require_lowercase=True,
+            require_digit=True,
         )
 
         class User(BaseModel):
             password: CustomPassword
 
-        user = User(password="NoSpecial123")
-        assert user.password == "NoSpecial123"
+        user = User(password="NoSpecial123")  # noqa: S106 -- test fixture placeholder, not a real credential
+        assert user.password == "NoSpecial123"  # noqa: S105 -- test fixture placeholder, not a real credential
 
 
 class TestBoundedStrFactory:
@@ -966,7 +963,7 @@ class TestBoundedStrFactory:
 
     def test_bounded_str_creation(self) -> None:
         """Test creating bounded string type."""
-        BoundedString = bounded_str(min_length=5, max_length=10)
+        BoundedString = bounded_str(min_length=5, max_length=10)  # noqa: N806 -- used as a type annotation below (`value: BoundedString`), PascalCase is correct for a type alias
 
         class Data(BaseModel):
             value: BoundedString
@@ -976,7 +973,7 @@ class TestBoundedStrFactory:
 
     def test_bounded_str_too_short(self) -> None:
         """Test bounded string too short."""
-        BoundedString = bounded_str(min_length=5, max_length=10)
+        BoundedString = bounded_str(min_length=5, max_length=10)  # noqa: N806 -- used as a type annotation below (`value: BoundedString`), PascalCase is correct for a type alias
 
         class Data(BaseModel):
             value: BoundedString
@@ -986,7 +983,7 @@ class TestBoundedStrFactory:
 
     def test_bounded_str_too_long(self) -> None:
         """Test bounded string too long."""
-        BoundedString = bounded_str(min_length=5, max_length=10)
+        BoundedString = bounded_str(min_length=5, max_length=10)  # noqa: N806 -- used as a type annotation below (`value: BoundedString`), PascalCase is correct for a type alias
 
         class Data(BaseModel):
             value: BoundedString
@@ -996,7 +993,7 @@ class TestBoundedStrFactory:
 
     def test_bounded_str_unlimited_max(self) -> None:
         """Test bounded string with unlimited max length."""
-        BoundedString = bounded_str(min_length=1, max_length=None)
+        BoundedString = bounded_str(min_length=1, max_length=None)  # noqa: N806 -- used as a type annotation below (`value: BoundedString`), PascalCase is correct for a type alias
 
         class Data(BaseModel):
             value: BoundedString
@@ -1160,7 +1157,7 @@ def test_model_response_exclude_none() -> None:
     class UserResponse(BaseModel):
         id: str
         name: str
-        email: Optional[str] = None
+        email: str | None = None
 
     app = Flask(__name__)
     user = UserResponse(id="123", name="John", email=None)
@@ -1214,7 +1211,7 @@ class TestOpenAPI:
 
         class Config(BaseModel):
             name: str
-            description: Optional[str] = None
+            description: str | None = None
 
         schema = generate_openapi_schema(Config)
         assert "properties" in schema
@@ -1225,9 +1222,10 @@ class TestOpenAPI:
     def test_pydantic_to_restx_model(self) -> None:
         """Test converting Pydantic model to Flask-RESTX model."""
         try:
-            from flask_restx import Api, Resource, fields as restx_fields
-            from penguin_security.pydantic.openapi import pydantic_to_restx_model
             from flask import Flask
+            from flask_restx import Api
+
+            from penguin_security.pydantic.openapi import pydantic_to_restx_model
 
             app = Flask(__name__)
             api = Api(app)

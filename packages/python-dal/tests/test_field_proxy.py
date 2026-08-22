@@ -30,11 +30,11 @@ class TestFieldProxy:
         assert isinstance(q, Query)
 
     def test_eq_none(self, db):
-        q = db.users.name == None
+        q = db.users.name == None  # noqa: E711 -- FieldProxy.__eq__ builds a Query (SQL IS NULL), not a Python identity check; `is None` would not work here
         assert isinstance(q, Query)
 
     def test_ne_none(self, db):
-        q = db.users.name != None
+        q = db.users.name != None  # noqa: E711 -- FieldProxy.__ne__ builds a Query (SQL IS NOT NULL), not a Python identity check
         assert isinstance(q, Query)
 
     def test_like(self, db):

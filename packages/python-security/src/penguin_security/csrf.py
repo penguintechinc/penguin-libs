@@ -5,8 +5,7 @@ import secrets
 
 
 def generate_csrf_token() -> str:
-    """
-    Generate a cryptographically secure CSRF token.
+    """Generate a cryptographically secure CSRF token.
 
     Returns:
         str: A random token suitable for CSRF protection (hex-encoded)
@@ -16,8 +15,7 @@ def generate_csrf_token() -> str:
 
 
 def validate_csrf_token(token: str, session_token: str) -> bool:
-    """
-    Validate CSRF token using constant-time comparison.
+    """Validate CSRF token using constant-time comparison.
 
     Args:
         token: Token from request (form/header)

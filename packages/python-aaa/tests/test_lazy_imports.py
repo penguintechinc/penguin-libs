@@ -43,7 +43,8 @@ def test_create_oidc_blueprint_missing_flask() -> None:
             ImportError,
             match=r"create_oidc_blueprint requires the 'flask' extra",
         ):
-            penguin_aaa.create_oidc_blueprint
+            # Attribute access triggers lazy __getattr__, which raises.
+            penguin_aaa.create_oidc_blueprint  # noqa: B018
 
 
 def test_create_oidc_blueprint_with_flask() -> None:

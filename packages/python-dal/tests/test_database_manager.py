@@ -20,11 +20,11 @@ class TestDatabaseManagerSameURL:
 
     def test_init_single_url(self):
         """DatabaseManager with one URL sets read == write."""
-        with patch("penguin_dal.db.DB") as MockDB:
-            instance = MockDB.return_value
+        with patch("penguin_dal.db.DB") as mock_db_cls:
+            instance = mock_db_cls.return_value
             dm = DatabaseManager(write_url="sqlite://:memory:")
             # Only one DB instance created
-            MockDB.assert_called_once_with("sqlite://:memory:")
+            mock_db_cls.assert_called_once_with("sqlite://:memory:")
             assert dm.write is instance
             assert dm.read is instance
 
@@ -43,10 +43,10 @@ class TestDatabaseManagerWithReplica:
 
     def test_init_two_urls(self):
         """Two DB instances created when read_url differs from write_url."""
-        with patch("penguin_dal.db.DB") as MockDB:
+        with patch("penguin_dal.db.DB") as mock_db_cls:
             write_instance = MagicMock(spec=DB)
             read_instance = MagicMock(spec=DB)
-            MockDB.side_effect = [write_instance, read_instance]
+            mock_db_cls.side_effect = [write_instance, read_instance]
 
             dm = DatabaseManager(
                 write_url="sqlite://:memory:",
@@ -94,14 +94,14 @@ class TestDatabaseManagerFlaskExt:
             pytest.skip("Flask not installed")
 
         app = Flask(__name__)
-        with patch("penguin_dal.flask_ext.DatabaseManager") as MockDM:
+        with patch("penguin_dal.flask_ext.DatabaseManager") as mock_dm_cls:
             with patch("penguin_dal.flask_ext.DB"):
                 init_dal(
                     app,
                     uri="sqlite://:memory:",
                     read_uri="sqlite:///replica.db",
                 )
-                MockDM.assert_called_once()
+                mock_dm_cls.assert_called_once()
 
     def test_init_dal_without_read_uri_creates_db(self):
         """init_dal without read_uri returns plain DB."""
@@ -113,11 +113,11 @@ class TestDatabaseManagerFlaskExt:
             pytest.skip("Flask not installed")
 
         app = Flask(__name__)
-        with patch("penguin_dal.flask_ext.DB") as MockDB:
-            with patch("penguin_dal.flask_ext.DatabaseManager") as MockDM:
+        with patch("penguin_dal.flask_ext.DB") as mock_db_cls:
+            with patch("penguin_dal.flask_ext.DatabaseManager") as mock_dm_cls:
                 init_dal(app, uri="sqlite://:memory:")
-                MockDB.assert_called_once()
-                MockDM.assert_not_called()
+                mock_db_cls.assert_called_once()
+                mock_dm_cls.assert_not_called()
 
     def test_init_dal_reads_env_var(self, monkeypatch):
         """DATABASE_READ_URL env var used when read_uri not provided."""
@@ -131,7 +131,7 @@ class TestDatabaseManagerFlaskExt:
         monkeypatch.setenv("DATABASE_URL", "sqlite://:memory:")
         monkeypatch.setenv("DATABASE_READ_URL", "sqlite:///replica.db")
         app = Flask(__name__)
-        with patch("penguin_dal.flask_ext.DatabaseManager") as MockDM:
+        with patch("penguin_dal.flask_ext.DatabaseManager") as mock_dm_cls:
             with patch("penguin_dal.flask_ext.DB"):
                 init_dal(app)
-                MockDM.assert_called_once()
+                mock_dm_cls.assert_called_once()

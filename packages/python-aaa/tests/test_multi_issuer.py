@@ -56,7 +56,7 @@ class TestUpstreamProvider:
         config = OIDCRPConfig(
             issuer_url="https://okta.example.com",
             client_id="client-id",
-            client_secret="secret",
+            client_secret="secret",  # noqa: S106 -- dummy test fixture, not a real credential
             redirect_url="https://app.example.com/callback",
         )
         provider = UpstreamProvider(
@@ -77,13 +77,13 @@ class TestMultiIssuerRelyingParty:
         okta_cfg = OIDCRPConfig(
             issuer_url="https://okta.example.com",
             client_id="okta-id",
-            client_secret="okta-secret",
+            client_secret="okta-secret",  # noqa: S106 -- dummy test fixture, not a real credential
             redirect_url="https://app.example.com/callback",
         )
         skauswatch_cfg = OIDCRPConfig(
             issuer_url="https://skauswatch.example.com",
             client_id="skauswatch-id",
-            client_secret="skauswatch-secret",
+            client_secret="skauswatch-secret",  # noqa: S106 -- dummy test fixture
             redirect_url="https://app.example.com/callback",
         )
         providers = [
@@ -98,7 +98,7 @@ class TestMultiIssuerRelyingParty:
         config = OIDCRPConfig(
             issuer_url="https://okta.example.com",
             client_id="client-id",
-            client_secret="secret",
+            client_secret="secret",  # noqa: S106 -- dummy test fixture, not a real credential
             redirect_url="https://app.example.com/callback",
         )
         provider = UpstreamProvider("okta", config)
@@ -130,7 +130,7 @@ class TestMultiIssuerRelyingParty:
         config = OIDCRPConfig(
             issuer_url="https://okta.example.com",
             client_id="client-id",
-            client_secret="secret",
+            client_secret="secret",  # noqa: S106 -- dummy test fixture, not a real credential
             redirect_url="https://app.example.com/callback",
         )
         provider = UpstreamProvider("okta", config)
@@ -158,7 +158,7 @@ class TestMultiIssuerRelyingParty:
         config = OIDCRPConfig(
             issuer_url="https://okta.example.com",
             client_id="client-id",
-            client_secret="secret",
+            client_secret="secret",  # noqa: S106 -- dummy test fixture, not a real credential
             redirect_url="https://app.example.com/callback",
         )
         provider = UpstreamProvider("okta", config)
@@ -173,7 +173,7 @@ class TestPresetsOkta:
         provider = okta_provider(
             issuer_url="https://tenant.okta.com",
             client_id="0oa123",
-            client_secret="secret",
+            client_secret="secret",  # noqa: S106 -- dummy test fixture, not a real credential
             redirect_url="https://app.example.com/callback",
         )
         assert provider.name == "okta"
@@ -189,7 +189,7 @@ class TestPresetsSkausWatch:
         provider = skauswatch_provider(
             issuer_url="https://auth.skauswatch.example.com",
             client_id="skw-client",
-            client_secret="skw-secret",
+            client_secret="skw-secret",  # noqa: S106 -- dummy test fixture, not a real credential
             redirect_url="https://app.example.com/callback",
         )
         assert provider.name == "skauswatch"

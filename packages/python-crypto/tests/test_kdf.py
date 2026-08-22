@@ -3,10 +3,10 @@
 import pytest
 
 from penguin_crypto.kdf import (
-    generate_salt,
+    derive_key,
     derive_key_argon2id,
     derive_key_hkdf,
-    derive_key,
+    generate_salt,
 )
 
 
@@ -41,7 +41,7 @@ class TestArgon2id:
 
     def test_argon2id_deterministic(self) -> None:
         """Test Argon2id is deterministic for same inputs."""
-        password = "my_password"
+        password = "my_password"  # noqa: S105 -- dummy KDF test fixture, not a real credential
         salt = generate_salt(32)
         key1 = derive_key_argon2id(password, salt)
         key2 = derive_key_argon2id(password, salt)
@@ -56,14 +56,14 @@ class TestArgon2id:
 
     def test_argon2id_different_salt(self) -> None:
         """Test Argon2id differs for different salts."""
-        password = "my_password"
+        password = "my_password"  # noqa: S105 -- dummy KDF test fixture, not a real credential
         key1 = derive_key_argon2id(password, generate_salt(32))
         key2 = derive_key_argon2id(password, generate_salt(32))
         assert key1 != key2
 
     def test_argon2id_key_length(self) -> None:
         """Test Argon2id derived key has correct length."""
-        password = "my_password"
+        password = "my_password"  # noqa: S105 -- dummy KDF test fixture, not a real credential
         salt = generate_salt(32)
         for length in [16, 32, 64]:
             key = derive_key_argon2id(password, salt, key_length=length)
@@ -71,7 +71,7 @@ class TestArgon2id:
 
     def test_argon2id_bytes_password(self) -> None:
         """Test Argon2id accepts bytes password."""
-        password_str = "my_password"
+        password_str = "my_password"  # noqa: S105 -- dummy KDF test fixture, not a real credential
         password_bytes = b"my_password"
         salt = generate_salt(32)
         key1 = derive_key_argon2id(password_str, salt)
@@ -80,7 +80,7 @@ class TestArgon2id:
 
     def test_argon2id_short_salt_fails(self) -> None:
         """Test Argon2id fails with salt < 8 bytes."""
-        password = "password"
+        password = "password"  # noqa: S105 -- dummy KDF test fixture, not a real credential
         salt = b"short"
 
         with pytest.raises(ValueError, match="Salt must be at least 8 bytes"):
@@ -88,7 +88,7 @@ class TestArgon2id:
 
     def test_argon2id_custom_parameters(self) -> None:
         """Test Argon2id with custom parameters."""
-        password = "password"
+        password = "password"  # noqa: S105 -- dummy KDF test fixture, not a real credential
         salt = generate_salt(32)
         key = derive_key_argon2id(
             password,
@@ -102,7 +102,7 @@ class TestArgon2id:
 
     def test_argon2id_invalid_parameters(self) -> None:
         """Test Argon2id rejects invalid parameters."""
-        password = "password"
+        password = "password"  # noqa: S105 -- dummy KDF test fixture, not a real credential
         salt = generate_salt(32)
 
         with pytest.raises(ValueError, match="Invalid KDF parameters"):
@@ -180,7 +180,7 @@ class TestBackwardsCompatibilityAlias:
 
     def test_derive_key_alias_is_argon2id(self) -> None:
         """Test derive_key is alias for derive_key_argon2id."""
-        password = "password"
+        password = "password"  # noqa: S105 -- dummy KDF test fixture, not a real credential
         salt = generate_salt(32)
         key1 = derive_key(password, salt)
         key2 = derive_key_argon2id(password, salt)
@@ -188,7 +188,7 @@ class TestBackwardsCompatibilityAlias:
 
     def test_derive_key_alias_works(self) -> None:
         """Test derive_key alias works as expected."""
-        password = "test_password"
+        password = "test_password"  # noqa: S105 -- dummy KDF test fixture, not a real credential
         salt = generate_salt(32)
         key = derive_key(password, salt)
         assert len(key) == 32

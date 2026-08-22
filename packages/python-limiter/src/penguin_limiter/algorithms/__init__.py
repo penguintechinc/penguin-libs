@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 class RateLimitResult:
     """Outcome of a single rate-limit check.
 
-    Attributes
+    Attributes:
     ----------
     allowed:
         ``True`` if the request is within quota.

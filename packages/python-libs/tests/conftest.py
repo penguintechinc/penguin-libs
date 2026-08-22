@@ -88,7 +88,6 @@ if "grpc" not in sys.modules:
 # This enables legacy imports like: from penguin_libs.grpc import ...
 # test_grpc.py will delete and reimport these modules, so conftest must import
 # them first to ensure they're available in sys.modules.
-import penguin_libs  # noqa: F401
-
+import penguin_libs  # noqa: E402, F401 -- must import after sys.path/mock setup above
 
 __all__ = []

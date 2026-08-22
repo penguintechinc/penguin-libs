@@ -63,12 +63,8 @@ class VaultAdapter(BaseAdapter):
                 role_id = self.config.params.get("role_id")
                 secret_id = self.config.params.get("secret_id")
                 if not (role_id and secret_id):
-                    raise AuthenticationError(
-                        "No token or AppRole credentials provided"
-                    )
-                auth_data = self.client.auth.approle.login(
-                    role_id=role_id, secret_id=secret_id
-                )
+                    raise AuthenticationError("No token or AppRole credentials provided")
+                auth_data = self.client.auth.approle.login(role_id=role_id, secret_id=secret_id)
                 self.client.token = auth_data["auth"]["client_token"]
         except (Unauthorized, VaultError) as e:
             raise AuthenticationError(f"Vault authentication failed: {e}") from e
@@ -153,9 +149,7 @@ class VaultAdapter(BaseAdapter):
                     path=path, mount_point=mount_point
                 )
             else:
-                self.client.secrets.kv.v1.delete_secret_version(
-                    path=path, mount_point=mount_point
-                )
+                self.client.secrets.kv.v1.delete_secret_version(path=path, mount_point=mount_point)
             return True
         except InvalidPath:
             return False
@@ -198,10 +192,7 @@ class VaultAdapter(BaseAdapter):
         if not self.client:
             return False
         try:
-            return (
-                self.client.sys.is_initialized()
-                and not self.client.sys.is_sealed()
-            )
+            return self.client.sys.is_initialized() and not self.client.sys.is_sealed()
         except (VaultDown, VaultError, Exception):
             return False
 

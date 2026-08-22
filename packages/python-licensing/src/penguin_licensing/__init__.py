@@ -2,7 +2,6 @@
 
 # flake8: noqa: E501
 
-
 from .client import LicenseClient, get_license_client
 from .decorators import feature_required, license_required
 from .exceptions import (

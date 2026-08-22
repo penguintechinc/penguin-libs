@@ -3,15 +3,15 @@
 import pytest
 
 from penguin_crypto.ecc import (
-    generate_x25519_keypair,
-    x25519_exchange,
-    generate_ed25519_keypair,
     ed25519_sign,
     ed25519_verify,
-    serialize_public_key,
-    serialize_private_key,
-    load_x25519_public_key,
+    generate_ed25519_keypair,
+    generate_x25519_keypair,
     load_ed25519_public_key,
+    load_x25519_public_key,
+    serialize_private_key,
+    serialize_public_key,
+    x25519_exchange,
 )
 
 

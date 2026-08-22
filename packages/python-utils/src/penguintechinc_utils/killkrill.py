@@ -1,5 +1,4 @@
-"""
-KillKrill sink — ships structured log events to the KillKrill log aggregation service.
+"""KillKrill sink — ships structured log events to the KillKrill log aggregation service.
 
 Events are buffered in memory and flushed by a background thread either when
 the batch fills up or the flush interval elapses. Failed flushes are retried
@@ -20,8 +19,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class KillKrillConfig:
-    """
-    Configuration for the KillKrill log aggregation sink.
+    """Configuration for the KillKrill log aggregation sink.
 
     Attributes:
         endpoint: Base URL of the KillKrill service (e.g. "https://logs.example.io").
@@ -51,8 +49,7 @@ class _Buffer:
 
 
 class KillKrillSink:
-    """
-    Buffers log events and ships them in batches to the KillKrill service.
+    """Buffers log events and ships them in batches to the KillKrill service.
 
     A background daemon thread wakes every flush_interval seconds and sends
     any buffered events. The buffer is also flushed eagerly when it reaches

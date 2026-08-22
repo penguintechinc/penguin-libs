@@ -21,11 +21,14 @@ from penguintechinc_utils.sinks import StdoutSink
 
 logger = SanitizedLogger("MyComponent", sinks=[StdoutSink()])
 
-logger.info("User login attempt", {
-    "email": "user@example.com",  # Logged as: [email]@example.com
-    "password": "secret123",       # Logged as: [REDACTED]
-    "remember_me": True,           # Logged as-is
-})
+logger.info(
+    "User login attempt",
+    {
+        "email": "user@example.com",  # Logged as: [email]@example.com
+        "password": "secret123",  # Logged as: [REDACTED]
+        "remember_me": True,  # Logged as-is
+    },
+)
 ```
 
 ## Auto-Configure from Environment
@@ -44,11 +47,13 @@ Eliminates traditional 3-tier function boilerplate for Python decorators.
 ```python
 from penguintechinc_utils import add_decorator
 
+
 @add_decorator(name="my-cool-decorator")
 def my_cool_decorator(ctx):
     print(f"Calling {ctx.func.__name__} with decorator args: {ctx.dec_kwargs}")
     ctx.execution_time = 0
     return ctx.proceed()
+
 
 # Use with or without parameters on sync or async functions:
 @my_cool_decorator(tag="v1")

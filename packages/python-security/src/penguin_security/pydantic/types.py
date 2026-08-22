@@ -1,5 +1,4 @@
-"""
-Custom Pydantic 2 Annotated types for string validation.
+"""Custom Pydantic 2 Annotated types for string validation.
 
 Provides a collection of pre-built Annotated types and factory functions
 that integrate with the penguin_security.validation module's IS_* validators.
@@ -42,8 +41,7 @@ from penguin_security.validation import (
 
 
 def _validate_with_is_validator(validator_instance) -> callable:
-    """
-    Create a Pydantic validator function from an IS_* validator.
+    """Create a Pydantic validator function from an IS_* validator.
 
     Args:
         validator_instance: An instance of an IS_* validator class
@@ -176,8 +174,7 @@ def strong_password(
     special_chars: str | None = None,
     disallow_spaces: bool = True,
 ) -> type:
-    """
-    Create a custom strong password Annotated type.
+    """Create a custom strong password Annotated type.
 
     All parameters correspond to PasswordOptions configuration.
 
@@ -222,8 +219,7 @@ def bounded_str(
     min_length: int = 0,
     max_length: int | None = None,
 ) -> type:
-    """
-    Create a custom bounded string Annotated type.
+    """Create a custom bounded string Annotated type.
 
     Args:
         min_length: Minimum string length (default: 0)

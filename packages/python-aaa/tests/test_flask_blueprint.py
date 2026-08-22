@@ -50,7 +50,7 @@ def flask_app():
     rp_config = OIDCRPConfig(
         issuer_url="https://auth.example.com",
         client_id="client-123",
-        client_secret="secret-xyz",
+        client_secret="secret-xyz",  # noqa: S106 -- dummy test fixture, not a real credential
         redirect_url="https://app.example.com/callback",
     )
     rp = OIDCRelyingParty(rp_config)

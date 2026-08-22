@@ -22,15 +22,7 @@ def _make_message(with_attachment: bool = False, with_inline: bool = False) -> E
     if with_attachment:
         msg.attach_bytes(b"filedata", "report.pdf", "application/pdf")
     if with_inline:
-        msg.inline_image.__doc__  # just reference it to avoid unused import
-        msg._attachments.append(  # type: ignore[attr-defined]
-            __import__("penguin_email.message", fromlist=["Attachment"]).Attachment(
-                filename="logo.png",
-                content_type="image/png",
-                data=b"\x89PNG",
-                cid="logo",
-            )
-        )
+        msg.inline_image(cid="logo", data=b"\x89PNG", filename="logo.png")
     msg.build()
     return msg
 
@@ -172,7 +164,7 @@ class TestGmailTransportFromFiles:
 
         mock_creds = MagicMock()
         mock_creds.expired = True
-        mock_creds.refresh_token = "rt"
+        mock_creds.refresh_token = "rt"  # noqa: S105 -- test fixture literal, not a real credential
         mock_creds.to_json.return_value = json.dumps({"token": "new_tok"})
         mock_service = MagicMock()
 
@@ -230,3 +222,49 @@ class TestGmailTransportFromConfig:
                 )
         finally:
             gm_mod.Credentials = original
+
+
+def _decoded_parts(mime) -> list[tuple[str, bytes]]:
+    """Flatten a MIME tree into (content_type, decoded payload) leaf pairs."""
+    return [
+        (part.get_content_type(), part.get_payload(decode=True) or b"")
+        for part in mime.walk()
+        if part.get_content_maintype() != "multipart"
+    ]
+
+
+class TestGmailTransportInlineBody:
+    """The message body must survive alongside inline images.
+
+    Regression: with inline images and no regular attachments, the
+    ``multipart/alternative`` part carrying the text and HTML bodies was never
+    attached to the ``multipart/related`` root, so recipients got an empty
+    email containing only the floating image.
+    """
+
+    @pytest.mark.parametrize("with_attachment", [False, True])
+    def test_inline_message_retains_html_and_text_body(self, with_attachment: bool) -> None:
+        from penguin_email.transports.gmail import GmailTransport
+
+        msg = _make_message(with_attachment=with_attachment, with_inline=True)
+        transport = GmailTransport.__new__(GmailTransport)
+
+        parts = _decoded_parts(transport._build_mime(msg))
+        by_type = {ctype: payload for ctype, payload in parts}
+
+        assert b"Hello" in by_type["text/html"]
+        assert b"Hello" in by_type["text/plain"]
+        assert by_type["image/png"] == b"\x89PNG"
+
+    def test_inline_image_is_related_to_body(self) -> None:
+        from penguin_email.transports.gmail import GmailTransport
+
+        msg = _make_message(with_inline=True)
+        transport = GmailTransport.__new__(GmailTransport)
+        mime = transport._build_mime(msg)
+
+        assert mime.get_content_type() == "multipart/related"
+        assert "multipart/alternative" in [p.get_content_type() for p in mime.walk()]
+
+        image = next(p for p in mime.walk() if p.get_content_type() == "image/png")
+        assert image["Content-ID"] == "<logo>"

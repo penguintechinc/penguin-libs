@@ -37,7 +37,7 @@ def test_create_decorator_basic_sync():
     assert greet.__name__ == "greet"
     assert greet.__doc__ == "Greet a user."
     assert greet("Alice") == "wrapped_Hello, Alice"
-    assert getattr(greet, "__decorator_name__") == "my_logger"
+    assert greet.__decorator_name__ == "my_logger"
 
 
 def test_decorator_with_arguments():

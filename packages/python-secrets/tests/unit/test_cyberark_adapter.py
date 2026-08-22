@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -23,8 +22,10 @@ _mock_conjur_api = MagicMock()
 sys.modules["conjur"] = MagicMock()
 sys.modules["conjur"].api = _mock_conjur_api
 
-# Now we can safely import the adapter
-from penguin_sal.adapters.cyberark import CyberArkAdapter
+# Now we can safely import the adapter.
+# noqa: E402 below -- must follow the sys.modules mock above so the adapter's
+# top-level import picks up the fake conjur SDK
+from penguin_sal.adapters.cyberark import CyberArkAdapter  # noqa: E402
 
 
 @pytest.fixture
@@ -35,7 +36,7 @@ def valid_config() -> ConnectionConfig:
         host="conjur.example.com",
         port=8443,
         username="admin",
-        password="api-key-123",
+        password="api-key-123",  # noqa: S106 -- test fixture placeholder, not a real credential
         params={"account": "default"},
     )
 
@@ -72,7 +73,7 @@ class TestCyberArkAdapterInit:
             host="conjur.example.com",
             port=8443,
             username="admin",
-            password="api-key-123",
+            password="api-key-123",  # noqa: S106 -- test fixture placeholder, not a real credential
             params={},
         )
 
@@ -87,7 +88,7 @@ class TestCyberArkAdapterInit:
             host="conjur.example.com",
             port=8443,
             username="admin",
-            password="api-key-123",
+            password="api-key-123",  # noqa: S106 -- test fixture placeholder, not a real credential
             params={"account": "default"},
         )
 
@@ -112,7 +113,9 @@ class TestAdapterNotInstalledError:
 class TestAuthenticate:
     """Test authentication."""
 
-    def test_authenticate_success(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_authenticate_success(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Successful authentication calls login."""
         mock_client = Mock()
         mock_conjur_api.ConjurClient.return_value = mock_client
@@ -133,7 +136,7 @@ class TestAuthenticate:
             host="conjur.example.com",
             port=8443,
             username=None,
-            password="api-key",
+            password="api-key",  # noqa: S106 -- test fixture placeholder, not a real credential
             params={"account": "default"},
         )
 
@@ -155,7 +158,9 @@ class TestAuthenticate:
         with pytest.raises(AuthenticationError, match="Failed to authenticate"):
             adapter.authenticate()
 
-    def test_authenticate_not_initialized_raises_error(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_authenticate_not_initialized_raises_error(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Calling authenticate when not initialized raises error."""
         mock_client = Mock()
         mock_conjur_api.ConjurClient.return_value = mock_client
@@ -171,7 +176,9 @@ class TestAuthenticate:
 class TestGet:
     """Test secret retrieval."""
 
-    def test_get_success_string_value(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_get_success_string_value(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Get returns Secret with string value."""
         mock_client = Mock()
         mock_client.get_secret.return_value = "secret-value"
@@ -185,7 +192,9 @@ class TestGet:
         assert secret.version is None
         mock_client.get_secret.assert_called_once_with("prod/db/password")
 
-    def test_get_success_bytes_value(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_get_success_bytes_value(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Get decodes bytes value."""
         mock_client = Mock()
         mock_client.get_secret.return_value = b"secret-bytes"
@@ -196,7 +205,9 @@ class TestGet:
 
         assert secret.value == "secret-bytes"
 
-    def test_get_not_found_raises_error(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_get_not_found_raises_error(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Get non-existent key raises SecretNotFoundError."""
         mock_client = Mock()
         mock_client.get_secret.side_effect = Exception("404 Not Found")
@@ -210,7 +221,9 @@ class TestGet:
         assert exc_info.value.key == "nonexistent/key"
         assert exc_info.value.backend == "cyberark"
 
-    def test_get_none_value_raises_error(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_get_none_value_raises_error(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Get with None return value raises SecretNotFoundError."""
         mock_client = Mock()
         mock_client.get_secret.return_value = None
@@ -243,7 +256,9 @@ class TestGet:
 class TestSet:
     """Test secret creation and updates."""
 
-    def test_set_success_string_value(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_set_success_string_value(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Set with string value succeeds."""
         mock_client = Mock()
         mock_conjur_api.ConjurClient.return_value = mock_client
@@ -256,7 +271,9 @@ class TestSet:
         assert secret.created_at is not None
         mock_client.set_secret.assert_called_once_with("prod/db/password", "new-password")
 
-    def test_set_success_bytes_value(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_set_success_bytes_value(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Set with bytes value is converted to string."""
         mock_client = Mock()
         mock_conjur_api.ConjurClient.return_value = mock_client
@@ -267,7 +284,9 @@ class TestSet:
         assert secret.value == "binary-secret"
         mock_client.set_secret.assert_called_once_with("prod/db/password", "binary-secret")
 
-    def test_set_success_dict_value(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_set_success_dict_value(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Set with dict value is JSON serialized."""
         mock_client = Mock()
         mock_conjur_api.ConjurClient.return_value = mock_client
@@ -281,7 +300,9 @@ class TestSet:
         call_args = mock_client.set_secret.call_args
         assert "prod/db/creds" in call_args[0]
 
-    def test_set_metadata_ignored(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_set_metadata_ignored(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Set metadata is accepted but ignored."""
         mock_client = Mock()
         mock_conjur_api.ConjurClient.return_value = mock_client
@@ -317,7 +338,9 @@ class TestSet:
 class TestDelete:
     """Test secret deletion."""
 
-    def test_delete_raises_backend_error(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_delete_raises_backend_error(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Delete raises BackendError (not supported)."""
         mock_client = Mock()
         mock_conjur_api.ConjurClient.return_value = mock_client
@@ -410,7 +433,9 @@ class TestList:
         assert "key1" in result.keys
         assert "key2" in result.keys
 
-    def test_list_failure_raises_backend_error(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_list_failure_raises_backend_error(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """List failure raises BackendError."""
         mock_client = Mock()
         original_error = Exception("API error")
@@ -451,7 +476,9 @@ class TestExists:
 
         assert result is False
 
-    def test_exists_false_not_found(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_exists_false_not_found(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Exists returns False on 'not found' error."""
         mock_client = Mock()
         mock_client.get_secret.side_effect = Exception("not found")
@@ -462,7 +489,9 @@ class TestExists:
 
         assert result is False
 
-    def test_exists_false_other_error(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_exists_false_other_error(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Exists returns False on other errors (cannot determine)."""
         mock_client = Mock()
         mock_client.get_secret.side_effect = Exception("Connection error")
@@ -478,7 +507,9 @@ class TestExists:
 class TestHealthCheck:
     """Test health checking."""
 
-    def test_health_check_success(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_health_check_success(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Health check returns True when healthy."""
         mock_client = Mock()
         mock_client.info.return_value = {"status": "ok"}
@@ -490,7 +521,9 @@ class TestHealthCheck:
         assert result is True
         mock_client.info.assert_called_once()
 
-    def test_health_check_failure(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_health_check_failure(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Health check returns False on error."""
         mock_client = Mock()
         mock_client.info.side_effect = Exception("Connection failed")
@@ -506,7 +539,9 @@ class TestHealthCheck:
 class TestClose:
     """Test closing connections."""
 
-    def test_close_clears_client(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_close_clears_client(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Close clears the client reference."""
         mock_client = Mock()
         mock_conjur_api.ConjurClient.return_value = mock_client
@@ -520,7 +555,9 @@ class TestClose:
         assert adapter.client is None
         assert adapter._connected is False
 
-    def test_close_called_multiple_times(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_close_called_multiple_times(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Close can be called multiple times safely."""
         mock_client = Mock()
         mock_conjur_api.ConjurClient.return_value = mock_client
@@ -536,7 +573,9 @@ class TestClose:
 class TestContextManager:
     """Test context manager protocol."""
 
-    def test_context_manager_closes_on_exit(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_context_manager_closes_on_exit(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Context manager closes adapter on exit."""
         mock_client = Mock()
         mock_conjur_api.ConjurClient.return_value = mock_client
@@ -548,7 +587,9 @@ class TestContextManager:
         assert adapter.client is None
         assert adapter._connected is False
 
-    def test_context_manager_closes_on_exception(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+    def test_context_manager_closes_on_exception(
+        self, mock_conjur_api: Mock, valid_config: ConnectionConfig
+    ) -> None:
         """Context manager closes adapter even on exception."""
         mock_client = Mock()
         mock_conjur_api.ConjurClient.return_value = mock_client

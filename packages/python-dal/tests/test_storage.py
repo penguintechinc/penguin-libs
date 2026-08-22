@@ -1,7 +1,7 @@
 """Tests for storage layer backends."""
+
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -325,13 +325,15 @@ class TestS3Store:
             config = S3Config(
                 bucket="test-bucket",
                 access_key="AKIAIOSFODNN7EXAMPLE",
-                secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+                secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",  # noqa: S106 -- AWS's own published EXAMPLE secret key from their docs, not a real credential
             )
-            store = S3Store(config)
+            S3Store(config)  # construction is the thing under test; side effect asserted below
 
             call_kwargs = mock_session_cls.call_args[1]
             assert call_kwargs["aws_access_key_id"] == "AKIAIOSFODNN7EXAMPLE"
-            assert call_kwargs["aws_secret_access_key"] == "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+            assert (
+                call_kwargs["aws_secret_access_key"] == "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"  # noqa: S105 -- AWS's own published EXAMPLE secret key, not a real credential
+            )
 
     def test_put(self) -> None:
         """Test put operation."""
@@ -611,6 +613,8 @@ class TestAsyncS3Store:
             config = S3Config(bucket="test-bucket")
             store = AsyncS3Store(config)
 
-            with patch.object(store._sync_store, "get_url", return_value="https://s3.amazonaws.com/url"):
+            with patch.object(
+                store._sync_store, "get_url", return_value="https://s3.amazonaws.com/url"
+            ):
                 result = await store.get_url("key.txt", 7200)
                 assert result == "https://s3.amazonaws.com/url"

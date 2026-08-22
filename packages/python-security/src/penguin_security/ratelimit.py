@@ -9,8 +9,7 @@ _rate_limit_lock = threading.Lock()
 
 
 def check_rate_limit(key: str, limit: int, window: int) -> bool:
-    """
-    Check if a request is within rate limit.
+    """Check if a request is within rate limit.
 
     Uses an in-memory sliding window counter. Tracks timestamps of requests
     and enforces the limit within the given time window.

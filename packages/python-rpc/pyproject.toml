@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "penguin-rpc"
+name = "penguin-prpc"
 version = "0.1.0"
 description = "pRPC: Connect RPC over HTTP/3/QUIC with zero-trust defaults and MCP/A2A mounting"
 readme = "README.md"
@@ -33,7 +33,7 @@ h3 = []
 mcp = []
 a2a = []
 ziti = []
-all = ["penguin-rpc[h3,mcp,a2a,ziti]"]
+all = ["penguin-prpc[h3,mcp,a2a,ziti]"]
 dev = ["pytest==8.4.1", "pytest-cov==6.2.1", "mypy==1.16.1", "ruff==0.12.3", "bandit==1.8.5"]
 
 [project.urls]
@@ -45,14 +45,24 @@ Issues = "https://github.com/penguintechinc/penguin-libs/issues"
 where = ["src"]
 
 [tool.ruff]
+target-version = "py313"
 line-length = 100
-target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
+# "D" (pydocstyle) is D staged, not dropped: enabling it surfaces ~1,893 missing
+# docstrings repo-wide, which would red the lint gate without fixing any bug.
+# Re-add "D" per package once real docstrings exist -- see general.md, which
+# already requires a 2-3 line docstring on every class and function.
+select = ["E", "W", "F", "I", "N", "UP", "B", "ASYNC", "S"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 strict = true
 warn_return_any = true
 warn_unused_configs = true

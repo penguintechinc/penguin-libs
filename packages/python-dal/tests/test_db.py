@@ -21,10 +21,10 @@ class TestDB:
 
     def test_getattr_nonexistent_raises(self, db):
         with pytest.raises(TableNotFoundError, match="nonexistent"):
-            db.nonexistent
+            _ = db.nonexistent
 
     def test_call_returns_queryset(self, db):
-        qs = db(db.users.active == True)
+        qs = db(db.users.active == True)  # noqa: E712 -- FieldProxy.__eq__ builds a Query, not a truth check
         assert isinstance(qs, QuerySet)
 
     def test_select_all(self, db):
@@ -33,7 +33,7 @@ class TestDB:
         assert len(rows) == 3
 
     def test_select_with_filter(self, db):
-        rows = db(db.users.active == True).select()
+        rows = db(db.users.active == True).select()  # noqa: E712 -- FieldProxy.__eq__ builds a Query, not a truth check
         assert len(rows) == 2
 
     def test_select_first(self, db):
@@ -76,8 +76,9 @@ class TestDB:
         assert db(db.users.email == "charlie@example.com").count() == 0
 
     def test_count(self, db):
-        assert db(db.users.active == True).count() == 2
-        assert db(db.users.active == False).count() == 1
+        # noqa: E712 below -- FieldProxy.__eq__ builds a Query, not a truth check
+        assert db(db.users.active == True).count() == 2  # noqa: E712
+        assert db(db.users.active == False).count() == 1  # noqa: E712
 
     def test_exists(self, db):
         assert db(db.users.email == "alice@example.com").exists() is True
@@ -93,7 +94,7 @@ class TestDB:
         assert row is None
 
     def test_and_query(self, db):
-        q = (db.users.active == True) & (db.users.name == "Alice")
+        q = (db.users.active == True) & (db.users.name == "Alice")  # noqa: E712 -- FieldProxy.__eq__ builds a Query, not a truth check
         rows = db(q).select()
         assert len(rows) == 1
         assert rows[0].name == "Alice"
@@ -104,7 +105,7 @@ class TestDB:
         assert len(rows) == 2
 
     def test_not_query(self, db):
-        q = ~(db.users.active == True)
+        q = ~(db.users.active == True)  # noqa: E712 -- FieldProxy.__eq__ builds a Query, not a truth check
         rows = db(q).select()
         assert len(rows) == 1
         assert rows[0].name == "Charlie"
@@ -142,7 +143,7 @@ class TestDB:
 
     def test_getattr_private_raises(self, db):
         with pytest.raises(AttributeError):
-            db._private
+            _ = db._private
 
     def test_extract_table_no_table(self, db):
         q = db.users.id > 0

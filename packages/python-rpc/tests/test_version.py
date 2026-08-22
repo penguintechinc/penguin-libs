@@ -1,6 +1,6 @@
-"""Version metadata tests for penguin-rpc."""
+"""Version metadata tests for penguin-prpc."""
 
-from penguin_rpc import __version__
+from penguin_prpc import __version__
 
 
 def test_version() -> None:

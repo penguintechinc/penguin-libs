@@ -8,8 +8,7 @@ from penguin_aaa.authn.oidc_rp import OIDCRelyingParty
 
 
 def create_oidc_blueprint(provider: OIDCProvider, rp: OIDCRelyingParty) -> Blueprint:
-    """
-    Create a Flask blueprint with OIDC/OAuth2 endpoints.
+    """Create a Flask blueprint with OIDC/OAuth2 endpoints.
 
     Args:
         provider: The OIDCProvider instance for token operations.

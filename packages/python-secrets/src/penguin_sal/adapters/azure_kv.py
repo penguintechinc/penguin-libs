@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from penguin_sal.core.base_adapter import BaseAdapter
@@ -12,6 +13,8 @@ from penguin_sal.core.exceptions import (
     SecretNotFoundError,
 )
 from penguin_sal.core.types import ConnectionConfig, Secret, SecretList
+
+logger = logging.getLogger(__name__)
 
 
 class AzureKeyVaultAdapter(BaseAdapter):
@@ -68,11 +71,7 @@ class AzureKeyVaultAdapter(BaseAdapter):
                 vault_url = f"https://{vault_url}"
 
             # Choose credential type based on config
-            if (
-                self.config.username
-                and self.config.password
-                and "tenant_id" in self.config.params
-            ):
+            if self.config.username and self.config.password and "tenant_id" in self.config.params:
                 # Service principal authentication
                 credential = ClientSecretCredential(
                     tenant_id=self.config.params["tenant_id"],
@@ -86,9 +85,7 @@ class AzureKeyVaultAdapter(BaseAdapter):
             self._client = SecretClient(vault_url=vault_url, credential=credential)
             self._connected = True
         except Exception as e:
-            raise ConnectionError(
-                f"Failed to initialize Azure Key Vault client: {e}"
-            ) from e
+            raise ConnectionError(f"Failed to initialize Azure Key Vault client: {e}") from e
 
     def authenticate(self) -> None:
         """Verify authentication with Azure Key Vault.
@@ -175,14 +172,13 @@ class AzureKeyVaultAdapter(BaseAdapter):
                 str_value = value.decode("utf-8")
             elif isinstance(value, dict):
                 import json
+
                 str_value = json.dumps(value)
             else:
                 str_value = str(value)
 
             # Set secret with metadata as tags
-            secret_properties = self._client.set_secret(
-                key, str_value, tags=metadata or {}
-            )
+            secret_properties = self._client.set_secret(key, str_value, tags=metadata or {})
 
             return Secret(
                 key=key,
@@ -323,6 +319,6 @@ class AzureKeyVaultAdapter(BaseAdapter):
             try:
                 self._client.close()
             except Exception:
-                pass
+                logger.debug("Error closing Azure Key Vault client", exc_info=True)
         self._client = None
         self._connected = False

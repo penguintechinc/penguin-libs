@@ -1,4 +1,5 @@
 """Valkey cache backend for penguin-dal."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -28,9 +29,7 @@ class ValkeyCache:
         try:
             import valkey
         except ImportError as e:
-            raise ImportError(
-                "Install valkey: pip install penguin-dal[valkey]"
-            ) from e
+            raise ImportError("Install valkey: pip install penguin-dal[valkey]") from e
 
         self.config = config
         self.client = valkey.Valkey(
@@ -84,9 +83,7 @@ class ValkeyCache:
             cursor = 0
             batch_size = 100
             while True:
-                cursor, keys = self.client.scan(
-                    cursor, match=scan_pattern, count=batch_size
-                )
+                cursor, keys = self.client.scan(cursor, match=scan_pattern, count=batch_size)
                 if keys:
                     self.client.delete(*keys)
                 if cursor == 0:
@@ -101,14 +98,12 @@ class ValkeyCache:
         values = self.client.mget(full_keys)
 
         result = {}
-        for original_key, value in zip(keys, values):
+        for original_key, value in zip(keys, values, strict=True):
             result[original_key] = value
 
         return result
 
-    def set_many(
-        self, mapping: dict[str, bytes], ttl: int | None = None
-    ) -> None:
+    def set_many(self, mapping: dict[str, bytes], ttl: int | None = None) -> None:
         """Set multiple key-value pairs using pipeline."""
         if not mapping:
             return
@@ -135,9 +130,7 @@ class AsyncValkeyCache:
         try:
             import valkey.asyncio
         except ImportError as e:
-            raise ImportError(
-                "Install valkey: pip install penguin-dal[valkey]"
-            ) from e
+            raise ImportError("Install valkey: pip install penguin-dal[valkey]") from e
 
         self.config = config
         self.client: Any = valkey.asyncio.Valkey(
@@ -191,9 +184,7 @@ class AsyncValkeyCache:
             cursor = 0
             batch_size = 100
             while True:
-                cursor, keys = await self.client.scan(
-                    cursor, match=scan_pattern, count=batch_size
-                )
+                cursor, keys = await self.client.scan(cursor, match=scan_pattern, count=batch_size)
                 if keys:
                     await self.client.delete(*keys)
                 if cursor == 0:
@@ -208,14 +199,12 @@ class AsyncValkeyCache:
         values = await self.client.mget(full_keys)
 
         result = {}
-        for original_key, value in zip(keys, values):
+        for original_key, value in zip(keys, values, strict=True):
             result[original_key] = value
 
         return result
 
-    async def set_many(
-        self, mapping: dict[str, bytes], ttl: int | None = None
-    ) -> None:
+    async def set_many(self, mapping: dict[str, bytes], ttl: int | None = None) -> None:
         """Set multiple key-value pairs using pipeline."""
         if not mapping:
             return

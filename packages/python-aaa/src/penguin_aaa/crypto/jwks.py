@@ -17,8 +17,7 @@ def public_key_to_jwk(
     kid: str,
     alg: str,
 ) -> dict[str, Any]:
-    """
-    Serialise a public key to a JSON Web Key (JWK) dict.
+    """Serialise a public key to a JSON Web Key (JWK) dict.
 
     Supports RSA and EC (P-256, P-384, P-521) key types.  All binary fields
     use base64url encoding without padding as required by RFC 7517.

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 
 class PySecretsError(Exception):
     """Base exception for all penguin-sal errors."""

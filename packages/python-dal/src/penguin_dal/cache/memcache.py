@@ -1,4 +1,5 @@
 """Memcache cache backend for penguin-dal."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -26,9 +27,7 @@ class MemcacheCache:
         try:
             from pymemcache.client.pool import ObjectPooledClient
         except ImportError as e:
-            raise ImportError(
-                "Install pymemcache: pip install penguin-dal[memcache]"
-            ) from e
+            raise ImportError("Install pymemcache: pip install penguin-dal[memcache]") from e
 
         self.config = config
         # Parse servers list and create pool
@@ -94,14 +93,12 @@ class MemcacheCache:
         values = self.client.get_many(full_keys)
 
         result = {}
-        for original_key, full_key in zip(keys, full_keys):
+        for original_key, full_key in zip(keys, full_keys, strict=True):
             result[original_key] = values.get(full_key)
 
         return result
 
-    def set_many(
-        self, mapping: dict[str, bytes], ttl: int | None = None
-    ) -> None:
+    def set_many(self, mapping: dict[str, bytes], ttl: int | None = None) -> None:
         """Set multiple key-value pairs."""
         if not mapping:
             return

@@ -47,8 +47,7 @@ class InfisicalAdapter(BaseAdapter):
         # Build site URL from host and port
         scheme = "https"
         port_suffix = (
-            "" if not self.config.port or self.config.port == 443
-            else f":{self.config.port}"
+            "" if not self.config.port or self.config.port == 443 else f":{self.config.port}"
         )
         site_url = f"{scheme}://{self.config.host}{port_suffix}"
 
@@ -56,9 +55,7 @@ class InfisicalAdapter(BaseAdapter):
             self._client = InfisicalClient(site_url=site_url)
             self._connected = True
         except Exception as e:
-            raise ConnectionError(
-                f"Failed to initialize Infisical client for {site_url}"
-            ) from e
+            raise ConnectionError(f"Failed to initialize Infisical client for {site_url}") from e
 
     def authenticate(self) -> None:
         """Authenticate with Infisical using token or universal auth.

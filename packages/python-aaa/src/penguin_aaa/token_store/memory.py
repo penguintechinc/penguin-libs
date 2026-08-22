@@ -7,8 +7,7 @@ from penguin_aaa.authn.types import Claims
 
 
 class MemoryTokenStore:
-    """
-    Thread-safe in-memory token storage.
+    """Thread-safe in-memory token storage.
 
     Stores refresh tokens, revoked JTIs, and nonces with TTL-based expiry.
     Implements lazy cleanup on read.

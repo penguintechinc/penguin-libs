@@ -1,5 +1,4 @@
-"""
-Comprehensive pytest tests for penguin-validation package.
+"""Comprehensive pytest tests for penguin-validation package.
 
 Tests all validators with:
 - Happy path (valid input)
@@ -11,7 +10,6 @@ Target: 95%+ line and branch coverage.
 """
 
 from datetime import date, datetime, time
-from re import Pattern
 
 import pytest
 
@@ -36,14 +34,13 @@ from penguin_security.validation import (
     IsSlug,
     IsStrongPassword,
     IsTime,
-    IsURL,
     IsTrimmed,
+    IsURL,
     PasswordOptions,
     ValidationError,
     ValidationResult,
     chain,
 )
-
 
 # ============================================================================
 # BASE VALIDATOR TESTS
@@ -966,7 +963,7 @@ class TestIsIPAddress:
 
     def test_valid_ipv4_zeros(self) -> None:
         validator = IsIPAddress()
-        result = validator("0.0.0.0")
+        result = validator("0.0.0.0")  # noqa: S104 -- validating IP-address-string syntax, not binding a socket
         assert result.is_valid is True
 
     def test_valid_ipv4_broadcast(self) -> None:

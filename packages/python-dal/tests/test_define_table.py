@@ -1,10 +1,9 @@
 """Test define_table() method for DB and AsyncDB."""
 
 import pytest
-from sqlalchemy import MetaData, create_engine, text
-from sqlalchemy.orm import sessionmaker
 
-from penguin_dal import DB, AsyncDB, DAL, Field
+from penguin_dal import DAL, DB, AsyncDB, Field
+from penguin_dal.table_proxy import TableProxy
 
 
 @pytest.fixture
@@ -36,6 +35,10 @@ class TestDefineTableSync:
             Field("email", "string", length=255, notnull=True, unique=True),
         )
 
+        # define_table returns a usable TableProxy for the new table
+        assert isinstance(table_proxy, TableProxy)
+        assert table_proxy.table_name == "users"
+
         # Check table exists in metadata
         assert "users" in sync_db.metadata.tables
         table = sync_db.metadata.tables["users"]
@@ -65,7 +68,6 @@ class TestDefineTableSync:
         )
 
         table = sync_db.metadata.tables["articles"]
-        id_col = table.columns["id"]
         # Should have only one id column
         id_cols = [col for col in table.columns.values() if col.primary_key]
         assert len(id_cols) == 1
@@ -110,9 +112,7 @@ class TestDefineTableSync:
         # Insert
         table = sync_db.metadata.tables["users"]
         with sync_db._session_factory() as session:
-            session.execute(
-                table.insert().values(name="Alice", email="alice@example.com")
-            )
+            session.execute(table.insert().values(name="Alice", email="alice@example.com"))
             session.commit()
 
         # Select using PyDAL-style syntax
@@ -148,6 +148,10 @@ class TestDefineTableAsync:
             Field("email", "string", length=255, notnull=True, unique=True),
         )
 
+        # define_table returns a usable TableProxy for the new table
+        assert isinstance(table_proxy, TableProxy)
+        assert table_proxy.table_name == "users"
+
         # Check table exists in metadata
         assert "users" in async_db.metadata.tables
         table = async_db.metadata.tables["users"]
@@ -179,7 +183,6 @@ class TestDefineTableAsync:
         )
 
         table = async_db.metadata.tables["articles"]
-        id_col = table.columns["id"]
         # Should have only one id column
         id_cols = [col for col in table.columns.values() if col.primary_key]
         assert len(id_cols) == 1
@@ -213,12 +216,9 @@ class TestDefineTableAsync:
 
         # Insert
         table = async_db.metadata.tables["users"]
-        from sqlalchemy.ext.asyncio import AsyncSession
 
         async with async_db._session_factory() as session:
-            await session.execute(
-                table.insert().values(name="Alice", email="alice@example.com")
-            )
+            await session.execute(table.insert().values(name="Alice", email="alice@example.com"))
             await session.commit()
 
         # Select using PyDAL-style syntax

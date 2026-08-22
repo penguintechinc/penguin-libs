@@ -10,8 +10,7 @@ def okta_provider(
     client_secret: str,
     redirect_url: str,
 ) -> UpstreamProvider:
-    """
-    Pre-configured UpstreamProvider for Okta.
+    """Pre-configured UpstreamProvider for Okta.
 
     Maps Okta's 'groups' claim to 'roles' and 'tid' to 'tenant'.
 
@@ -46,8 +45,7 @@ def skauswatch_provider(
     client_secret: str,
     redirect_url: str,
 ) -> UpstreamProvider:
-    """
-    Pre-configured UpstreamProvider for SkausWatch.
+    """Pre-configured UpstreamProvider for SkausWatch.
 
     Uses standard OIDC claim names (no custom mappings needed).
 

@@ -60,4 +60,4 @@ class TokenSet(BaseModel, strict=True):
     id_token: str
     refresh_token: str
     expires_in: int
-    token_type: str = "Bearer"
+    token_type: str = "Bearer"  # noqa: S105 -- RFC 6749 field name, not a credential

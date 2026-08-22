@@ -1,4 +1,5 @@
 """MongoDB document store backend for penguin-dal."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -34,9 +35,7 @@ class MongoDAL:
         try:
             from pymongo import MongoClient
         except ImportError as e:
-            raise ImportError(
-                "Install pymongo: pip install penguin-dal[mongodb]"
-            ) from e
+            raise ImportError("Install pymongo: pip install penguin-dal[mongodb]") from e
 
         self.config = config
         self.client = MongoClient(
@@ -64,9 +63,7 @@ class MongoDAL:
         result = coll.insert_one(document)
         return str(result.inserted_id)
 
-    def find_one(
-        self, collection: str, filter: dict[str, Any]
-    ) -> dict[str, Any] | None:
+    def find_one(self, collection: str, filter: dict[str, Any]) -> dict[str, Any] | None:
         """Find single document matching filter."""
         coll = self.db[collection]
         doc = coll.find_one(filter)
@@ -112,9 +109,7 @@ class MongoDAL:
         result = coll.delete_one(filter)
         return result.deleted_count
 
-    def count(
-        self, collection: str, filter: dict[str, Any] | None = None
-    ) -> int:
+    def count(self, collection: str, filter: dict[str, Any] | None = None) -> int:
         """Count documents matching filter."""
         coll = self.db[collection]
         filter = filter or {}
@@ -143,9 +138,7 @@ class AsyncMongoDAL:
         try:
             import motor.motor_asyncio
         except ImportError as e:
-            raise ImportError(
-                "Install motor: pip install penguin-dal[motor]"
-            ) from e
+            raise ImportError("Install motor: pip install penguin-dal[motor]") from e
 
         self.config = config
         self.client = motor.motor_asyncio.AsyncMongoClient(
@@ -173,9 +166,7 @@ class AsyncMongoDAL:
         result = await coll.insert_one(document)
         return str(result.inserted_id)
 
-    async def find_one(
-        self, collection: str, filter: dict[str, Any]
-    ) -> dict[str, Any] | None:
+    async def find_one(self, collection: str, filter: dict[str, Any]) -> dict[str, Any] | None:
         """Find single document matching filter."""
         coll = self.db[collection]
         doc = await coll.find_one(filter)
@@ -222,9 +213,7 @@ class AsyncMongoDAL:
         result = await coll.delete_one(filter)
         return result.deleted_count
 
-    async def count(
-        self, collection: str, filter: dict[str, Any] | None = None
-    ) -> int:
+    async def count(self, collection: str, filter: dict[str, Any] | None = None) -> int:
         """Count documents matching filter."""
         coll = self.db[collection]
         filter = filter or {}

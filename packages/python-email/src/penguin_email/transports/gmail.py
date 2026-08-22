@@ -80,7 +80,7 @@ class GmailTransport:
             client_id=client_id,
             client_secret=client_secret,
             # Google's public OAuth token endpoint URL, not a credential.
-            token_uri="https://oauth2.googleapis.com/token",  # nosec B106
+            token_uri="https://oauth2.googleapis.com/token",  # nosec B106 # noqa: S106
         )
         service = build("gmail", "v1", credentials=creds)
         return cls(service=service, sender_email=sender_email)
@@ -141,7 +141,7 @@ class GmailTransport:
             client_id=config["client_id"],
             client_secret=config["client_secret"],
             # Google's public OAuth token endpoint URL, not a credential.
-            token_uri="https://oauth2.googleapis.com/token",  # nosec B106
+            token_uri="https://oauth2.googleapis.com/token",  # nosec B106 # noqa: S106
         )
         service = build("gmail", "v1", credentials=creds)
         return cls(service=service, sender_email=config["sender_email"])
@@ -186,12 +186,18 @@ class GmailTransport:
         inline = [a for a in message.attachments if a.cid is not None]
         regular = [a for a in message.attachments if a.cid is None]
 
+        outer: MIMEMultipart
         if inline:
             outer = MIMEMultipart("related")
             alt = MIMEMultipart("alternative")
+            outer.attach(alt)
+        elif regular:
+            outer = MIMEMultipart("mixed")
+            alt = MIMEMultipart("alternative")
+            outer.attach(alt)
         else:
-            outer = MIMEMultipart("mixed") if regular else MIMEMultipart("alternative")
-            alt = outer if not regular else MIMEMultipart("alternative")
+            outer = MIMEMultipart("alternative")
+            alt = outer
 
         # Headers
         if message.sender:
@@ -216,20 +222,12 @@ class GmailTransport:
         if message.html_body:
             alt.attach(MIMEText(message.html_body, "html", "utf-8"))
 
-        if regular and alt is not outer:
-            outer.attach(alt)
-
-        if inline:
-            if alt is not outer:
-                pass  # alt already attached to outer above
-            else:
-                outer.attach(alt)
-            for att in inline:
-                data = att.data or Path(att.path or "").read_bytes()
-                img = MIMEImage(data, _subtype=att.content_type.split("/")[-1])
-                img.add_header("Content-ID", f"<{att.cid}>")
-                img.add_header("Content-Disposition", "inline", filename=att.filename)
-                outer.attach(img)
+        for att in inline:
+            data = att.data or Path(att.path or "").read_bytes()
+            img = MIMEImage(data, _subtype=att.content_type.split("/")[-1])
+            img.add_header("Content-ID", f"<{att.cid}>")
+            img.add_header("Content-Disposition", "inline", filename=att.filename)
+            outer.attach(img)
 
         # Regular attachments
         for att in regular:

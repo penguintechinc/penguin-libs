@@ -49,12 +49,10 @@ class MockSecret:
         self.name = name
         self.value = value
         self.version = version or "v1"
-        self.properties = MockSecretProperties(
-            name=name, version=version, tags=tags
-        )
+        self.properties = MockSecretProperties(name=name, version=version, tags=tags)
 
 
-class ResourceNotFoundErrorMock(Exception):
+class MockResourceNotFoundError(Exception):
     """Mock for Azure ResourceNotFoundError."""
 
     pass
@@ -86,7 +84,7 @@ def mock_azure_imports(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
             return module
         elif "azure.core.exceptions" in name:
             module = Mock()
-            module.ResourceNotFoundError = ResourceNotFoundErrorMock
+            module.ResourceNotFoundError = MockResourceNotFoundError
             return module
         return original_import(name, globals, locals, fromlist, level)
 
@@ -100,13 +98,9 @@ def mock_azure_imports(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 class TestAzureKeyVaultAdapterInit:
     """Test adapter initialization."""
 
-    def test_init_with_managed_identity(
-        self, mock_azure_imports: dict[str, Any]
-    ) -> None:
+    def test_init_with_managed_identity(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test initialization with managed identity (DefaultAzureCredential)."""
-        config = ConnectionConfig(
-            scheme="azure-kv", host="my-vault.vault.azure.net"
-        )
+        config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
 
         adapter = AzureKeyVaultAdapter(config)
 
@@ -114,15 +108,13 @@ class TestAzureKeyVaultAdapterInit:
         assert adapter._connected is True
         assert adapter._client is mock_azure_imports["client"]
 
-    def test_init_with_service_principal(
-        self, mock_azure_imports: dict[str, Any]
-    ) -> None:
+    def test_init_with_service_principal(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test initialization with service principal credentials."""
         config = ConnectionConfig(
             scheme="azure-kv",
             host="my-vault.vault.azure.net",
             username="client-id",
-            password="client-secret",
+            password="client-secret",  # noqa: S106 -- test fixture placeholder, not a real credential
             params={"tenant_id": "my-tenant-id"},
         )
 
@@ -131,9 +123,7 @@ class TestAzureKeyVaultAdapterInit:
         assert adapter._connected is True
         assert adapter._client is mock_azure_imports["client"]
 
-    def test_init_with_vault_url_param(
-        self, mock_azure_imports: dict[str, Any]
-    ) -> None:
+    def test_init_with_vault_url_param(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test initialization with explicit vault_url parameter."""
         config = ConnectionConfig(
             scheme="azure-kv",
@@ -167,9 +157,7 @@ class TestAzureKeyVaultAdapterInit:
         with pytest.raises(BackendError, match="Azure SDK not installed"):
             AzureKeyVaultAdapter(config)
 
-    def test_init_connection_failure(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_init_connection_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test initialization fails when client initialization raises."""
         original_import = __import__
 
@@ -192,7 +180,7 @@ class TestAzureKeyVaultAdapterInit:
                 return module
             elif "azure.core.exceptions" in name:
                 module = Mock()
-                module.ResourceNotFoundError = ResourceNotFoundErrorMock
+                module.ResourceNotFoundError = MockResourceNotFoundError
                 return module
             return original_import(name, globals, locals, fromlist, level)
 
@@ -207,9 +195,7 @@ class TestAzureKeyVaultAdapterInit:
 class TestAzureKeyVaultAdapterAuthenticate:
     """Test authentication verification."""
 
-    def test_authenticate_success(
-        self, mock_azure_imports: dict[str, Any]
-    ) -> None:
+    def test_authenticate_success(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test successful authentication."""
         mock_azure_imports["client"].list_properties_of_secrets = Mock(return_value=[])
 
@@ -219,9 +205,7 @@ class TestAzureKeyVaultAdapterAuthenticate:
         # Should not raise
         adapter.authenticate()
 
-    def test_authenticate_authentication_error(
-        self, mock_azure_imports: dict[str, Any]
-    ) -> None:
+    def test_authenticate_authentication_error(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test authentication fails with 401-like error."""
 
         def mock_failing_list(*args: Any, **kwargs: Any) -> None:
@@ -235,9 +219,7 @@ class TestAzureKeyVaultAdapterAuthenticate:
         with pytest.raises(AuthenticationError):
             adapter.authenticate()
 
-    def test_authenticate_connection_error(
-        self, mock_azure_imports: dict[str, Any]
-    ) -> None:
+    def test_authenticate_connection_error(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test authentication fails with connection error."""
 
         def mock_failing_list(*args: Any, **kwargs: Any) -> None:
@@ -253,9 +235,7 @@ class TestAzureKeyVaultAdapterAuthenticate:
 
     def test_authenticate_no_client(self) -> None:
         """Test authentication fails if client is None."""
-        with patch.object(
-            AzureKeyVaultAdapter, "_init_connection", return_value=None
-        ):
+        with patch.object(AzureKeyVaultAdapter, "_init_connection", return_value=None):
             config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
             adapter = AzureKeyVaultAdapter.__new__(AzureKeyVaultAdapter)
             adapter.config = config
@@ -291,25 +271,19 @@ class TestAzureKeyVaultAdapterGet:
 
     def test_get_with_version(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test secret retrieval with specific version."""
-        mock_secret = MockSecret(
-            name="my-secret", value="old-value", version="v2"
-        )
+        mock_secret = MockSecret(name="my-secret", value="old-value", version="v2")
         mock_azure_imports["client"].get_secret = Mock(return_value=mock_secret)
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
         result = adapter.get("my-secret", version="v2")
 
-        mock_azure_imports["client"].get_secret.assert_called_with(
-            "my-secret", version="v2"
-        )
+        mock_azure_imports["client"].get_secret.assert_called_with("my-secret", version="v2")
         assert result.value == "old-value"
 
     def test_get_not_found(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test retrieval of non-existent secret."""
-        mock_azure_imports["client"].get_secret = Mock(
-            side_effect=ResourceNotFoundErrorMock()
-        )
+        mock_azure_imports["client"].get_secret = Mock(side_effect=MockResourceNotFoundError())
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
@@ -319,9 +293,7 @@ class TestAzureKeyVaultAdapterGet:
 
     def test_get_backend_error(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test retrieval fails with backend error."""
-        mock_azure_imports["client"].get_secret = Mock(
-            side_effect=RuntimeError("Vault error")
-        )
+        mock_azure_imports["client"].get_secret = Mock(side_effect=RuntimeError("Vault error"))
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
@@ -335,26 +307,20 @@ class TestAzureKeyVaultAdapterSet:
 
     def test_set_string_value(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test setting a string secret."""
-        mock_secret = MockSecret(
-            name="my-secret", value="my-value", version="v1"
-        )
+        mock_secret = MockSecret(name="my-secret", value="my-value", version="v1")
         mock_azure_imports["client"].set_secret = Mock(return_value=mock_secret)
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
         result = adapter.set("my-secret", "my-value")
 
-        mock_azure_imports["client"].set_secret.assert_called_with(
-            "my-secret", "my-value", tags={}
-        )
+        mock_azure_imports["client"].set_secret.assert_called_with("my-secret", "my-value", tags={})
         assert result.key == "my-secret"
         assert result.value == "my-value"
 
     def test_set_bytes_value(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test setting a bytes secret."""
-        mock_secret = MockSecret(
-            name="my-secret", value="byte-value", version="v1"
-        )
+        mock_secret = MockSecret(name="my-secret", value="byte-value", version="v1")
         mock_azure_imports["client"].set_secret = Mock(return_value=mock_secret)
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
@@ -383,6 +349,7 @@ class TestAzureKeyVaultAdapterSet:
         assert call_args[0][0] == "my-secret"
         assert '"key"' in call_args[0][1]
         assert '"value"' in call_args[0][1]
+        assert result.value == '{"key": "value"}'
 
     def test_set_with_metadata(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test setting a secret with metadata."""
@@ -396,9 +363,7 @@ class TestAzureKeyVaultAdapterSet:
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
-        result = adapter.set(
-            "my-secret", "my-value", metadata={"env": "prod", "app": "myapp"}
-        )
+        result = adapter.set("my-secret", "my-value", metadata={"env": "prod", "app": "myapp"})
 
         mock_azure_imports["client"].set_secret.assert_called_with(
             "my-secret",
@@ -409,9 +374,7 @@ class TestAzureKeyVaultAdapterSet:
 
     def test_set_backend_error(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test set fails with backend error."""
-        mock_azure_imports["client"].set_secret = Mock(
-            side_effect=RuntimeError("Vault error")
-        )
+        mock_azure_imports["client"].set_secret = Mock(side_effect=RuntimeError("Vault error"))
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
@@ -433,17 +396,13 @@ class TestAzureKeyVaultAdapterDelete:
         result = adapter.delete("my-secret")
 
         assert result is True
-        mock_azure_imports["client"].begin_delete_secret.assert_called_with(
-            "my-secret"
-        )
-        mock_azure_imports["client"].purge_deleted_secret.assert_called_with(
-            "my-secret"
-        )
+        mock_azure_imports["client"].begin_delete_secret.assert_called_with("my-secret")
+        mock_azure_imports["client"].purge_deleted_secret.assert_called_with("my-secret")
 
     def test_delete_not_found(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test deletion of non-existent secret returns False."""
         mock_azure_imports["client"].begin_delete_secret = Mock(
-            side_effect=ResourceNotFoundErrorMock()
+            side_effect=MockResourceNotFoundError()
         )
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
@@ -475,9 +434,7 @@ class TestAzureKeyVaultAdapterList:
             MockSecretProperties(name="secret2"),
             MockSecretProperties(name="secret3"),
         ]
-        mock_azure_imports["client"].list_properties_of_secrets = Mock(
-            return_value=mock_properties
-        )
+        mock_azure_imports["client"].list_properties_of_secrets = Mock(return_value=mock_properties)
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
@@ -493,9 +450,7 @@ class TestAzureKeyVaultAdapterList:
             MockSecretProperties(name="app-secret2"),
             MockSecretProperties(name="db-secret1"),
         ]
-        mock_azure_imports["client"].list_properties_of_secrets = Mock(
-            return_value=mock_properties
-        )
+        mock_azure_imports["client"].list_properties_of_secrets = Mock(return_value=mock_properties)
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
@@ -510,9 +465,7 @@ class TestAzureKeyVaultAdapterList:
             MockSecretProperties(name="secret2"),
             MockSecretProperties(name="secret3"),
         ]
-        mock_azure_imports["client"].list_properties_of_secrets = Mock(
-            return_value=mock_properties
-        )
+        mock_azure_imports["client"].list_properties_of_secrets = Mock(return_value=mock_properties)
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
@@ -522,9 +475,7 @@ class TestAzureKeyVaultAdapterList:
 
     def test_list_empty(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test listing when vault is empty."""
-        mock_azure_imports["client"].list_properties_of_secrets = Mock(
-            return_value=[]
-        )
+        mock_azure_imports["client"].list_properties_of_secrets = Mock(return_value=[])
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
@@ -561,9 +512,7 @@ class TestAzureKeyVaultAdapterExists:
 
     def test_exists_false(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test exists returns False for non-existent secret."""
-        mock_azure_imports["client"].get_secret = Mock(
-            side_effect=ResourceNotFoundErrorMock()
-        )
+        mock_azure_imports["client"].get_secret = Mock(side_effect=MockResourceNotFoundError())
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
@@ -571,13 +520,9 @@ class TestAzureKeyVaultAdapterExists:
 
         assert result is False
 
-    def test_exists_error_returns_false(
-        self, mock_azure_imports: dict[str, Any]
-    ) -> None:
+    def test_exists_error_returns_false(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test exists returns False on unexpected error."""
-        mock_azure_imports["client"].get_secret = Mock(
-            side_effect=RuntimeError("Unexpected error")
-        )
+        mock_azure_imports["client"].get_secret = Mock(side_effect=RuntimeError("Unexpected error"))
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
@@ -591,9 +536,7 @@ class TestAzureKeyVaultAdapterHealthCheck:
 
     def test_health_check_success(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test successful health check."""
-        mock_azure_imports["client"].list_properties_of_secrets = Mock(
-            return_value=[]
-        )
+        mock_azure_imports["client"].list_properties_of_secrets = Mock(return_value=[])
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
@@ -615,9 +558,7 @@ class TestAzureKeyVaultAdapterHealthCheck:
 
     def test_health_check_no_client(self) -> None:
         """Test health check returns False if client is None."""
-        with patch.object(
-            AzureKeyVaultAdapter, "_init_connection", return_value=None
-        ):
+        with patch.object(AzureKeyVaultAdapter, "_init_connection", return_value=None):
             config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
             adapter = AzureKeyVaultAdapter.__new__(AzureKeyVaultAdapter)
             adapter.config = config
@@ -655,9 +596,7 @@ class TestAzureKeyVaultAdapterClose:
 
     def test_close_error_handling(self, mock_azure_imports: dict[str, Any]) -> None:
         """Test close handles client errors gracefully."""
-        mock_azure_imports["client"].close = Mock(
-            side_effect=RuntimeError("Close failed")
-        )
+        mock_azure_imports["client"].close = Mock(side_effect=RuntimeError("Close failed"))
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)

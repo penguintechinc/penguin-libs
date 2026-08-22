@@ -12,11 +12,10 @@ import pytest
 from penguin_sal.adapters.k8s_secrets import KubernetesSecretsAdapter
 from penguin_sal.core.exceptions import (
     AuthenticationError,
-    BackendError,
     ConnectionError,
     SecretNotFoundError,
 )
-from penguin_sal.core.types import ConnectionConfig, Secret, SecretList
+from penguin_sal.core.types import ConnectionConfig, SecretList
 
 
 @pytest.fixture
@@ -25,7 +24,7 @@ def mock_k8s_module() -> Any:
     mock_config = MagicMock()
     mock_client = MagicMock()
 
-    class ConfigException(Exception):
+    class ConfigException(Exception):  # noqa: N818 -- mirrors real kubernetes.config.config_exception.ConfigException name so the except-clause match in k8s_secrets.py works against the mock
         pass
 
     mock_config.config_exception.ConfigException = ConfigException
@@ -131,23 +130,17 @@ class TestInitConnection:
         mock_load.assert_called_once()
         assert adapter._connected is True
 
-    def test_init_connection_raises_import_error(
-        self, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_init_connection_raises_import_error(self, k8s_config: ConnectionConfig) -> None:
         with patch.dict(sys.modules, {"kubernetes": None}):
             adapter = KubernetesSecretsAdapter(k8s_config)
-            with pytest.raises(
-                ConnectionError, match="kubernetes client not installed"
-            ):
+            with pytest.raises(ConnectionError, match="kubernetes client not installed"):
                 adapter._init_connection()
 
 
 class TestAuthenticate:
     """Test authentication."""
 
-    def test_authenticate_success(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_authenticate_success(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         mock_api = MagicMock()
         mock_api.list_namespace.return_value = MagicMock()
         sys.modules["kubernetes"].config.load_incluster_config = MagicMock()
@@ -201,9 +194,7 @@ class TestGet:
         assert secret.value == "secret123"
         assert secret.version == 1000
 
-    def test_get_dict_secret(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_get_dict_secret(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         import base64
 
         mock_api = MagicMock()
@@ -253,9 +244,7 @@ class TestGet:
 
         assert secret.metadata == {"env": "prod", "owner": "app"}
 
-    def test_get_not_found(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_get_not_found(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         mock_api = MagicMock()
         api_err = Exception("Not found")
         api_err.status = 404  # type: ignore[attr-defined]
@@ -297,9 +286,7 @@ class TestSet:
         assert secret.key == "my-secret"
         assert secret.value == "my-value"
 
-    def test_set_dict_value_patch(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_set_dict_value_patch(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         mock_api = MagicMock()
         mock_api.read_namespaced_secret.return_value = MagicMock()
         mock_result = MagicMock()
@@ -325,9 +312,7 @@ class TestSet:
 class TestDelete:
     """Test deleting secrets."""
 
-    def test_delete_success(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_delete_success(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         mock_api = MagicMock()
         mock_api.delete_namespaced_secret.return_value = MagicMock()
 
@@ -338,13 +323,9 @@ class TestDelete:
         result = adapter.delete("my-secret")
 
         assert result is True
-        mock_api.delete_namespaced_secret.assert_called_once_with(
-            "my-secret", "default"
-        )
+        mock_api.delete_namespaced_secret.assert_called_once_with("my-secret", "default")
 
-    def test_delete_not_found(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_delete_not_found(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         mock_api = MagicMock()
         api_err = Exception("Not found")
         api_err.status = 404  # type: ignore[attr-defined]
@@ -362,9 +343,7 @@ class TestDelete:
 class TestList:
     """Test listing secrets."""
 
-    def test_list_all_secrets(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_list_all_secrets(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         mock_api = MagicMock()
         item1 = MagicMock()
         item1.metadata = MagicMock()
@@ -386,9 +365,7 @@ class TestList:
         assert isinstance(result, SecretList)
         assert result.keys == ["secret1", "secret2"]
 
-    def test_list_with_prefix(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_list_with_prefix(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         mock_api = MagicMock()
         item1 = MagicMock()
         item1.metadata = MagicMock()
@@ -409,9 +386,7 @@ class TestList:
 
         assert result.keys == ["app-secret"]
 
-    def test_list_with_limit(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_list_with_limit(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         mock_api = MagicMock()
         items = [MagicMock(metadata=MagicMock(name=f"secret{i}")) for i in range(5)]
         secret_list = MagicMock()
@@ -430,9 +405,7 @@ class TestList:
 class TestExists:
     """Test checking if secret exists."""
 
-    def test_exists_true(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_exists_true(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         mock_api = MagicMock()
         mock_api.read_namespaced_secret.return_value = MagicMock()
 
@@ -444,9 +417,7 @@ class TestExists:
 
         assert result is True
 
-    def test_exists_false(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_exists_false(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         mock_api = MagicMock()
         api_err = Exception("Not found")
         api_err.status = 404  # type: ignore[attr-defined]
@@ -464,9 +435,7 @@ class TestExists:
 class TestHealthCheck:
     """Test health check."""
 
-    def test_health_check_success(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_health_check_success(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         mock_api = MagicMock()
         mock_api.list_namespace.return_value = MagicMock()
 
@@ -478,9 +447,7 @@ class TestHealthCheck:
 
         assert result is True
 
-    def test_health_check_failure(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_health_check_failure(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         mock_api = MagicMock()
         mock_api.list_namespace.side_effect = Exception("Connection failed")
 
@@ -512,9 +479,7 @@ class TestClose:
 class TestContextManager:
     """Test context manager support."""
 
-    def test_with_statement(
-        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
-    ) -> None:
+    def test_with_statement(self, mock_k8s_module: Any, k8s_config: ConnectionConfig) -> None:
         sys.modules["kubernetes"].config.load_incluster_config = MagicMock()
         sys.modules["kubernetes"].client.CoreV1Api = lambda: MagicMock()
 

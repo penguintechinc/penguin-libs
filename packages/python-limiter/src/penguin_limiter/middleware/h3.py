@@ -35,7 +35,8 @@ Private-IP bypass is controlled by ``skip_private_ips`` on the config
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from ..algorithms.fixed_window import FixedWindow
 from ..algorithms.sliding_window import SlidingWindow
@@ -78,6 +79,7 @@ class H3RateLimitMiddleware:
     ) -> None:
         if storage is None:
             from ..storage.memory import MemoryStorage
+
             storage = MemoryStorage()
         self._app = app
         self._config = config

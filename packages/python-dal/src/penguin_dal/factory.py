@@ -1,12 +1,12 @@
 """Unified factory for all penguin-dal backends."""
+
 from __future__ import annotations
 
 from typing import Any
 
 
 def create_dal(backend: str, **config: Any) -> Any:
-    """
-    Factory for all penguin-dal backends.
+    """Factory for all penguin-dal backends.
 
     Database backends (existing):
       "postgresql", "mysql", "sqlite", "mssql", "firebird"
@@ -139,6 +139,4 @@ def create_dal(backend: str, **config: Any) -> Any:
         "valkey-streams",
         "mongodb",
     ]
-    raise ValueError(
-        f"Unknown backend: {backend!r}. Valid backends: {', '.join(valid_backends)}"
-    )
+    raise ValueError(f"Unknown backend: {backend!r}. Valid backends: {', '.join(valid_backends)}")

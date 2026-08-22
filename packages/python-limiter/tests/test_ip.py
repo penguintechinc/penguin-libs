@@ -9,28 +9,38 @@ from penguin_limiter.ip import extract_client_ip, is_private_ip, should_rate_lim
 
 class TestIsPrivateIp:
     # RFC 1918
-    @pytest.mark.parametrize("ip", [
-        "10.0.0.1", "10.255.255.255",
-        "172.16.0.1", "172.31.255.255",
-        "192.168.0.1", "192.168.255.254",
-        "127.0.0.1", "127.1.2.3",
-        "169.254.0.1",  # link-local
-        "100.64.0.1",   # carrier-grade NAT
-        "::1",          # IPv6 loopback
-        "fc00::1",      # ULA
-        "fe80::1",      # IPv6 link-local
-        "::ffff:192.168.1.1",  # IPv4-mapped
-    ])
+    @pytest.mark.parametrize(
+        "ip",
+        [
+            "10.0.0.1",
+            "10.255.255.255",
+            "172.16.0.1",
+            "172.31.255.255",
+            "192.168.0.1",
+            "192.168.255.254",
+            "127.0.0.1",
+            "127.1.2.3",
+            "169.254.0.1",  # link-local
+            "100.64.0.1",  # carrier-grade NAT
+            "::1",  # IPv6 loopback
+            "fc00::1",  # ULA
+            "fe80::1",  # IPv6 link-local
+            "::ffff:192.168.1.1",  # IPv4-mapped
+        ],
+    )
     def test_private_addresses(self, ip: str) -> None:
         assert is_private_ip(ip) is True
 
-    @pytest.mark.parametrize("ip", [
-        "1.2.3.4",
-        "8.8.8.8",
-        "203.0.113.5",
-        "2001:db8::1",
-        "2606:4700::1",
-    ])
+    @pytest.mark.parametrize(
+        "ip",
+        [
+            "1.2.3.4",
+            "8.8.8.8",
+            "203.0.113.5",
+            "2001:db8::1",
+            "2606:4700::1",
+        ],
+    )
     def test_public_addresses(self, ip: str) -> None:
         assert is_private_ip(ip) is False
 

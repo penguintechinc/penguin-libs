@@ -4,7 +4,6 @@ import re
 from datetime import date, datetime, time
 
 import pytest
-
 from penguin_libs.validation import (
     IsAlphanumeric,
     IsDate,

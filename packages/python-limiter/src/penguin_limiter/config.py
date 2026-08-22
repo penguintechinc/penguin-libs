@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import ClassVar
 
 
-class Algorithm(str, Enum):
+class Algorithm(StrEnum):
     """Rate-limiting algorithm selection."""
 
     FIXED_WINDOW = "fixed_window"
@@ -24,7 +24,7 @@ class Algorithm(str, Enum):
     SLIDING_WINDOW = "sliding_window"
     """Per-key timestamp log. Precise but uses more storage for high-traffic keys."""
 
-    TOKEN_BUCKET = "token_bucket"
+    TOKEN_BUCKET = "token_bucket"  # noqa: S105 -- enum member name, not a credential
     """Smooth burst handling. Tokens accumulate at *limit/window* per second."""
 
 
@@ -112,7 +112,7 @@ class RateLimitConfig:
         spec: str,
         algorithm: Algorithm = Algorithm.SLIDING_WINDOW,
         **kwargs: object,
-    ) -> "RateLimitConfig":
+    ) -> RateLimitConfig:
         """Build from a limit string, e.g. ``RateLimitConfig.from_string('100/minute')``."""
         tiers = parse_multi_tier(spec)
         # Use the tightest tier as primary limit/window

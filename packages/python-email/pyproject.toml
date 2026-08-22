@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "penguin-email"
-version = "0.1.0"
+version = "0.1.1"
 description = "Pluggable email sending library for Penguin Tech applications"
 readme = "README.md"
 license = {text = "MIT"}
@@ -65,18 +65,39 @@ where = ["src"]
 penguin_email = ["templates/builtin/*.j2"]
 
 [tool.ruff]
+target-version = "py313"
 line-length = 100
-target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
-ignore = ["N802"]
+# "D" (pydocstyle) is D staged, not dropped: enabling it surfaces ~1,893 missing
+# docstrings repo-wide, which would red the lint gate without fixing any bug.
+# Re-add "D" per package once real docstrings exist -- see general.md, which
+# already requires a 2-3 line docstring on every class and function.
+select = ["E", "W", "F", "I", "N", "UP", "B", "ASYNC", "S"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+# The Google client libraries ship no py.typed marker and no stubs exist on
+# PyPI, so mypy cannot resolve them. Scoped to these modules only -- errors in
+# penguin_email's own code are still reported.
+[[tool.mypy.overrides]]
+module = [
+    "google.auth.transport.requests",
+    "google.oauth2.credentials",
+    "google_auth_oauthlib.flow",
+    "googleapiclient.discovery",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -25,7 +25,7 @@ class TestParseURI:
         )
         assert result.scheme == "vault"
         assert result.params["approle_id"] == "xxx"
-        assert result.params["approle_secret"] == "yyy"
+        assert result.params["approle_secret"] == "yyy"  # noqa: S105 -- parsed from the synthetic test URI above, not a real credential
 
     def test_aws_sm_with_profile(self) -> None:
         result = parse_uri("aws-sm://us-east-1?profile=prod")
@@ -38,7 +38,7 @@ class TestParseURI:
         result = parse_uri("aws-sm://us-east-1?access_key=xxx&secret_key=yyy")
         assert result.scheme == "aws-sm"
         assert result.params["access_key"] == "xxx"
-        assert result.params["secret_key"] == "yyy"
+        assert result.params["secret_key"] == "yyy"  # noqa: S105 -- parsed from the synthetic test URI above, not a real credential
 
     def test_gcp_sm(self) -> None:
         result = parse_uri("gcp-sm://my-project?credentials_path=/keys/gcp.json")
@@ -47,9 +47,7 @@ class TestParseURI:
         assert result.params["credentials_path"] == "/keys/gcp.json"
 
     def test_azure_kv(self) -> None:
-        result = parse_uri(
-            "azure-kv://my-vault-name?tenant_id=xxx&client_id=yyy&client_secret=zzz"
-        )
+        result = parse_uri("azure-kv://my-vault-name?tenant_id=xxx&client_id=yyy&client_secret=zzz")
         assert result.scheme == "azure-kv"
         assert result.host == "my-vault-name"
         assert result.params["tenant_id"] == "xxx"
@@ -80,7 +78,7 @@ class TestParseURI:
         assert result.host == "connect-server"
         assert result.port == 8080
         assert result.path == "vault-name"
-        assert result.params["token"] == "xxx"
+        assert result.params["token"] == "xxx"  # noqa: S105 -- parsed from the synthetic test URI above, not a real credential
 
     def test_infisical(self) -> None:
         result = parse_uri("infisical://app.infisical.com/project-id?token=xxx&env=production")
@@ -110,12 +108,12 @@ class TestParseURI:
         assert result.scheme == "doppler"
         assert result.host == "my-project"
         assert result.path == "production"
-        assert result.params["token"] == "dp.xxx"
+        assert result.params["token"] == "dp.xxx"  # noqa: S105 -- parsed from the synthetic test URI above, not a real credential
 
     def test_with_username_password(self) -> None:
         result = parse_uri("vault://admin:secret@vault.example.com:8200/secret")
         assert result.username == "admin"
-        assert result.password == "secret"
+        assert result.password == "secret"  # noqa: S105 -- parsed from the synthetic test URI above, not a real credential
         assert result.host == "vault.example.com"
 
     def test_returns_named_tuple(self) -> None:
@@ -191,8 +189,17 @@ class TestSupportedSchemes:
 
     def test_contains_all_backends(self) -> None:
         expected = {
-            "vault", "infisical", "cyberark", "aws-sm", "gcp-sm",
-            "azure-kv", "oci-vault", "k8s", "1password", "passbolt", "doppler",
+            "vault",
+            "infisical",
+            "cyberark",
+            "aws-sm",
+            "gcp-sm",
+            "azure-kv",
+            "oci-vault",
+            "k8s",
+            "1password",
+            "passbolt",
+            "doppler",
         }
         assert SUPPORTED_SCHEMES == expected
 

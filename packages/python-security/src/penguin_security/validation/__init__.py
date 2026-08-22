@@ -1,5 +1,4 @@
-"""
-Validation module - PyDAL-style input validators.
+"""Validation module - PyDAL-style input validators.
 
 Provides validators compatible with PyDAL's IS_* pattern:
 - String validators: IsNotEmpty, IsLength, IsMatch, IsAlphanumeric, IsSlug, IsIn
