@@ -31,7 +31,14 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pytest-asyncio>=0.23",
-    "fakeredis>=2.20",
+    "fakeredis[lua]>=2.20",
+    # Exact pin: fakeredis's EVAL/EVALSHA/SCRIPT emulation (used by
+    # RedisStorage's atomic Lua scripts) is gated behind the optional `lua`
+    # extra, which pulls in lupa (Lua-in-Python bindings) unpinned
+    # (lupa>=2.1). Without it, fakeredis raises
+    # "unknown command 'evalsha'" for every scripted call. Pinned exactly
+    # per dependency-pinning policy for a newly-added dependency.
+    "lupa==2.8",
     "ruff>=0.4",
     "mypy>=1.9",
     "bandit>=1.7",
