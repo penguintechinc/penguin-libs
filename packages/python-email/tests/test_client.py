@@ -24,12 +24,7 @@ def _make_transport(name: str = "mock", success: bool = True, raises: bool = Fal
 
 
 def _make_message() -> EmailMessage:
-    return (
-        EmailMessage()
-        .to("r@example.com")
-        .subject("Hi")
-        .html("<p>Hi</p>")
-    )
+    return EmailMessage().to("r@example.com").subject("Hi").html("<p>Hi</p>")
 
 
 class TestEmailClient:

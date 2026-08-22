@@ -32,6 +32,12 @@ gmail = [
     "google-auth-oauthlib>=1.0",
     "google-api-python-client>=2.0",
 ]
+sendgrid = [
+    "requests>=2.31",
+]
+dkim = [
+    "dkimpy>=1.1.5",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
@@ -41,6 +47,8 @@ dev = [
     "google-auth>=2.0",
     "google-auth-oauthlib>=1.0",
     "google-api-python-client>=2.0",
+    "requests>=2.31",
+    "dkimpy>=1.1.5",
 ]
 
 [project.scripts]

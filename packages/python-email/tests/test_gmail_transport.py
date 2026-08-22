@@ -127,7 +127,6 @@ class TestGmailTransportSend:
 class TestGmailTransportFromFiles:
     def test_from_files_happy_path(self, tmp_path) -> None:
         """from_files() builds a transport from credentials + token JSON files."""
-        import json
 
         token_data = {
             "token": "access_tok",
@@ -163,7 +162,6 @@ class TestGmailTransportFromFiles:
 
     def test_from_files_refreshes_expired_token(self, tmp_path) -> None:
         """from_files() calls creds.refresh() when the token is expired."""
-        import json
 
         token_data = {"token": "old", "refresh_token": "rt", "client_id": "c", "client_secret": "s"}
         cred_data = {"installed": {}}
@@ -223,7 +221,12 @@ class TestGmailTransportFromConfig:
 
             with pytest.raises(ImportError, match="gmail"):
                 GmailTransport.from_config(
-                    {"client_id": "x", "client_secret": "x", "refresh_token": "x", "sender_email": "x"}
+                    {
+                        "client_id": "x",
+                        "client_secret": "x",
+                        "refresh_token": "x",
+                        "sender_email": "x",
+                    }
                 )
         finally:
             gm_mod.Credentials = original

@@ -7,8 +7,8 @@ _SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 # Module-level imports so that unittest.mock.patch can target them.
 # Both are None when the [gmail] extra is not installed.
 try:
-    from google_auth_oauthlib.flow import InstalledAppFlow
     from google.auth.transport.requests import Request
+    from google_auth_oauthlib.flow import InstalledAppFlow
 except ImportError:
     InstalledAppFlow = None  # type: ignore[assignment, misc]
     Request = None  # type: ignore[assignment, misc]
@@ -66,8 +66,7 @@ def refresh_credentials(creds: object) -> object:
     """
     if Request is None:
         raise ImportError(
-            "Gmail support requires 'google-auth'. "
-            "Install with: pip install 'penguin-email[gmail]'"
+            "Gmail support requires 'google-auth'. Install with: pip install 'penguin-email[gmail]'"
         )
 
     creds.refresh(Request())  # type: ignore[union-attr]
