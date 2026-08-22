@@ -1,4 +1,11 @@
-"""Email transport protocol and shared result type."""
+"""Email transport protocol and shared result type.
+
+DKIM signing (:mod:`penguin_email.dkim_signing`) is available on
+:class:`~penguin_email.transports.smtp.SmtpTransport` only. Gmail and
+SendGrid DKIM-sign outgoing mail on the sending domain's behalf as part of
+their own delivery pipeline, so configuring DKIM signing for those
+transports is unnecessary and risks double-signing.
+"""
 
 from __future__ import annotations
 
@@ -32,7 +39,7 @@ class EmailTransport(Protocol):
     transport_name: str
     """Human-readable name used in :class:`SendResult.transport_used`."""
 
-    def send(self, message: "EmailMessage") -> SendResult:
+    def send(self, message: EmailMessage) -> SendResult:
         """Send *message* and return a :class:`SendResult`."""
         ...
 

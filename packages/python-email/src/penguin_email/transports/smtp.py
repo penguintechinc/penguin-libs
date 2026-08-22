@@ -13,6 +13,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from ..dkim_signing import DkimConfig, DkimSigner
 from . import SendResult
 
 if TYPE_CHECKING:
@@ -57,6 +58,16 @@ class SmtpTransport:
     """Send email via SMTP.
 
     Supports SSL, STARTTLS, and plain (unencrypted) connections.
+
+    Pass *dkim* to DKIM-sign every outgoing message. DKIM signing here is
+    opt-in and applies to this SMTP path only --
+    :class:`~penguin_email.transports.gmail.GmailTransport` and
+    :class:`~penguin_email.transports.sendgrid.SendGridTransport` already
+    DKIM-sign on the sending domain's behalf; configuring
+    :class:`~penguin_email.dkim_signing.DkimConfig` on those transports is
+    unnecessary and risks double-signing. See
+    :mod:`penguin_email.dkim_signing` for details. Requires the ``[dkim]``
+    extra.
     """
 
     transport_name: str = "smtp"
@@ -67,8 +78,10 @@ class SmtpTransport:
         port: int | None = None,
         mode: SmtpMode = SmtpMode.STARTTLS,
         username: str = "",
-        password: str = "",
+        # Empty default means "no password supplied" (plain/unauthenticated relay).
+        password: str = "",  # nosec B107
         timeout: int = 30,
+        dkim: DkimConfig | None = None,
     ) -> None:
         self._host = host
         self._port = port if port is not None else _DEFAULT_PORTS[mode.value]
@@ -76,16 +89,28 @@ class SmtpTransport:
         self._username = username
         self._password = password
         self._timeout = timeout
+        # Constructing the signer here (rather than lazily on first send)
+        # fails fast: a missing [dkim] extra raises ImportError immediately
+        # instead of on the first call to send().
+        self._dkim_signer: DkimSigner | None = DkimSigner(dkim) if dkim is not None else None
 
     # ------------------------------------------------------------------
     # Transport interface
     # ------------------------------------------------------------------
 
-    def send(self, message: "EmailMessage") -> SendResult:
+    def send(self, message: EmailMessage) -> SendResult:
         """Send *message* via SMTP.
 
         Emits :class:`InsecureConnectionWarning` on every call when
         :attr:`SmtpMode.PLAIN` is in use.
+
+        When a :class:`~penguin_email.dkim_signing.DkimConfig` was supplied
+        at construction, the assembled MIME message is DKIM-signed
+        immediately before handoff to :mod:`smtplib`, and the exact signed
+        bytes are what gets sent. If signing fails, the send fails loudly --
+        this method returns ``SendResult(success=False, ...)`` and no
+        connection is opened; it never falls back to delivering the message
+        unsigned.
         """
         if self._mode == SmtpMode.PLAIN:
             warnings.warn(
@@ -97,9 +122,16 @@ class SmtpTransport:
 
         try:
             mime = self._build_mime(message)
-            all_recipients = (
-                message.recipients + message.cc_recipients + message.bcc_recipients
-            )
+            all_recipients = message.recipients + message.cc_recipients + message.bcc_recipients
+
+            # DKIM signs a specific byte sequence -- once signed, that exact
+            # sequence must reach smtplib unmodified, so the signed path
+            # switches to bytes rather than re-serializing via as_string().
+            raw_message: str | bytes
+            if self._dkim_signer is not None:
+                raw_message = self._dkim_signer.sign(mime.as_bytes())
+            else:
+                raw_message = mime.as_string()
 
             with self._connect() as conn:
                 if self._username and self._password:
@@ -107,7 +139,7 @@ class SmtpTransport:
                 conn.sendmail(
                     message.sender or self._username,
                     all_recipients,
-                    mime.as_string(),
+                    raw_message,
                 )
 
             return SendResult(
@@ -115,6 +147,9 @@ class SmtpTransport:
                 transport_used=self.transport_name,
             )
         except Exception as exc:
+            # DkimSigningError's message is a fixed, key-free summary (see
+            # dkim_signing.py), so it is always safe to log/surface here
+            # alongside every other transport failure.
             logger.error("SmtpTransport send error: %s", exc)
             return SendResult(
                 success=False,
@@ -137,16 +172,14 @@ class SmtpTransport:
 
     def _connect(self) -> smtplib.SMTP:
         if self._mode == SmtpMode.SSL:
-            conn: smtplib.SMTP = smtplib.SMTP_SSL(
-                self._host, self._port, timeout=self._timeout
-            )
+            conn: smtplib.SMTP = smtplib.SMTP_SSL(self._host, self._port, timeout=self._timeout)
         else:
             conn = smtplib.SMTP(self._host, self._port, timeout=self._timeout)
             if self._mode == SmtpMode.STARTTLS:
                 conn.starttls()
         return conn
 
-    def _build_mime(self, message: "EmailMessage") -> MIMEMultipart:
+    def _build_mime(self, message: EmailMessage) -> MIMEMultipart:
         """Construct the MIME message tree."""
         inline = [a for a in message.attachments if a.cid is not None]
         regular = [a for a in message.attachments if a.cid is None]

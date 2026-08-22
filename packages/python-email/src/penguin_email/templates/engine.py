@@ -57,10 +57,20 @@ class TemplateRenderer:
         template = env.get_template(p.name)
         return template.render(**kwargs)
 
-    def render_string(self, template_str: str, **kwargs: object) -> str:
-        """Render a raw Jinja2 string template."""
+    def render_string(self, template_str: str, *, autoescape: bool = True, **kwargs: object) -> str:
+        """Render a raw Jinja2 string template.
+
+        *autoescape* controls HTML-entity escaping of substituted variables.
+        Defaults to ``True`` (matches prior behavior for HTML string
+        templates). Pass ``autoescape=False`` when rendering plain-text
+        content — e.g. a signature's text form — so values such as ``&``
+        are not rewritten to ``&amp;``. Text rendered with autoescaping
+        disabled is never placed in an HTML context (only in ``text/plain``
+        MIME bodies), so this does not carry the XSS risk the caller-facing
+        toggle would otherwise imply.
+        """
         env = Environment(
-            autoescape=select_autoescape(["html"]),
+            autoescape=autoescape,  # nosec B701 -- text/plain output only, see docstring
             undefined=StrictUndefined,
             trim_blocks=True,
             lstrip_blocks=True,
