@@ -12,6 +12,11 @@ Provides:
 
 from .csrf import generate_csrf_token, validate_csrf_token
 from .password import hash_password, verify_password
+
+# ValidationErrorResponse, model_response, validate_body, validate_query_params, and
+# validated_request are intentionally NOT imported here — they ultimately import Flask
+# (an optional dependency) at module level. They are exposed lazily via __getattr__
+# below (PEP 562) so `import penguin_security` succeeds without Flask installed.
 from .pydantic import (
     ConfigurableModel,
     Description1000,
@@ -30,13 +35,8 @@ from .pydantic import (
     SlugStr,
     StrongPassword,
     URLStr,
-    ValidationErrorResponse,
     bounded_str,
-    model_response,
     strong_password,
-    validate_body,
-    validate_query_params,
-    validated_request,
 )
 from .ratelimit import check_rate_limit
 from .sanitize import escape_shell_arg, escape_sql_string, sanitize_html
@@ -137,3 +137,31 @@ __all__ = [
     "validated_request",
     "model_response",
 ]
+
+_FLASK_INTEGRATION_NAMES = frozenset(
+    {
+        "ValidationErrorResponse",
+        "model_response",
+        "validate_body",
+        "validate_query_params",
+        "validated_request",
+    }
+)
+
+
+def __getattr__(name: str) -> object:
+    """Lazily import Flask-dependent request/response helpers (optional dependency).
+
+    Defers the Flask import in penguin_security.pydantic.flask_integration until one
+    of its symbols is actually accessed, so `import penguin_security` succeeds without
+    Flask installed (regression fix; precedent: penguin_aaa 11c4e19).
+    """
+    if name in _FLASK_INTEGRATION_NAMES:
+        try:
+            from .pydantic import flask_integration
+        except ImportError as e:
+            raise ImportError(
+                f"{name} requires the 'flask' extra: pip install penguin-security[flask]"
+            ) from e
+        return getattr(flask_integration, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
