@@ -2,7 +2,23 @@
 
 from __future__ import annotations
 
+from typing import Any, Protocol
+
 _SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+
+
+class RefreshableCredentials(Protocol):
+    """Structural type for the google-auth credential object we refresh.
+
+    The google-auth libraries ship no type stubs, so this Protocol pins the
+    one method :func:`refresh_credentials` actually calls rather than falling
+    back to an untyped ``object``.
+    """
+
+    def refresh(self, request: Any) -> None:
+        """Exchange the stored refresh token for a fresh access token."""
+        ...
+
 
 # Module-level imports so that unittest.mock.patch can target them.
 # Both are None when the [gmail] extra is not installed.
@@ -53,7 +69,7 @@ def run_oauth_flow(
     print(f"Token saved to {token_path}")
 
 
-def refresh_credentials(creds: object) -> object:
+def refresh_credentials(creds: RefreshableCredentials) -> RefreshableCredentials:
     """Refresh an expired Google OAuth2 credential object.
 
     Calls ``creds.refresh(Request())`` using the stored refresh token.
@@ -69,5 +85,5 @@ def refresh_credentials(creds: object) -> object:
             "Gmail support requires 'google-auth'. Install with: pip install 'penguin-email[gmail]'"
         )
 
-    creds.refresh(Request())  # type: ignore[union-attr]
+    creds.refresh(Request())
     return creds

@@ -1,6 +1,6 @@
 """penguin-email — pluggable email sending library for Penguin Tech applications."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .client import EmailClient
 from .message import EmailMessage

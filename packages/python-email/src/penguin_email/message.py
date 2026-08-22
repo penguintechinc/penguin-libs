@@ -174,21 +174,49 @@ class EmailMessage:
         data: bytes,
         filename: str,
         content_type: str = "application/octet-stream",
+        *,
+        cid: str | None = None,
     ) -> EmailMessage:
-        """Attach raw bytes."""
+        """Attach raw bytes.
+
+        Pass ``cid`` to embed the bytes as an inline resource referenced from
+        the HTML body as ``<img src="cid:...">`` instead of a downloadable
+        attachment.
+        """
         self._attachments.append(
-            Attachment(filename=filename, content_type=content_type, data=data)
+            Attachment(filename=filename, content_type=content_type, data=data, cid=cid)
         )
         return self
 
-    def inline_image(self, path: str, cid: str) -> EmailMessage:
-        """Attach an image as an inline resource referenced by ``cid``."""
-        p = Path(path)
-        ct, _ = mimetypes.guess_type(path)
+    def inline_image(
+        self,
+        path: str | None = None,
+        cid: str = "",
+        *,
+        data: bytes | None = None,
+        filename: str = "",
+        content_type: str = "",
+    ) -> EmailMessage:
+        """Attach an image as an inline resource referenced by ``cid``.
+
+        Supply either ``path`` (read from the filesystem) or ``data`` with a
+        ``filename``; ``content_type`` is guessed from the name when omitted.
+        """
+        if not cid:
+            raise ValueError("inline_image() requires a cid")
+        if (path is None) == (data is None):
+            raise ValueError("inline_image() requires exactly one of path or data")
+
+        name = filename or (Path(path).name if path else "")
+        if not name:
+            raise ValueError("inline_image() requires a filename when passing data")
+        ct = content_type or (mimetypes.guess_type(name)[0] or "image/png")
+
         self._attachments.append(
             Attachment(
-                filename=p.name,
-                content_type=ct or "image/png",
+                filename=name,
+                content_type=ct,
+                data=data,
                 path=path,
                 cid=cid,
             )

@@ -107,6 +107,54 @@ class TestEmailMessageBuilder:
         )
         assert msg.attachments[0].cid == "logo"
 
+    def test_inline_image_accepts_raw_bytes(self) -> None:
+        msg = (
+            EmailMessage()
+            .to("a@example.com")
+            .subject("S")
+            .html('<img src="cid:logo">')
+            .inline_image(cid="logo", data=b"\x89PNG", filename="logo.png")
+        )
+        att = msg.attachments[0]
+        assert (att.cid, att.data, att.filename) == ("logo", b"\x89PNG", "logo.png")
+        assert att.content_type == "image/png"
+        assert att.path is None
+
+    def test_attach_bytes_accepts_cid_for_inline_content(self) -> None:
+        msg = (
+            EmailMessage()
+            .to("a@example.com")
+            .subject("S")
+            .html('<img src="cid:chart">')
+            .attach_bytes(b"\x89PNG", "chart.png", "image/png", cid="chart")
+        )
+        assert msg.attachments[0].cid == "chart"
+
+    def test_attach_bytes_defaults_to_regular_attachment(self) -> None:
+        msg = EmailMessage().to("a@example.com").subject("S").html("<p>x</p>")
+        msg.attach_bytes(b"data", "report.pdf", "application/pdf")
+        assert msg.attachments[0].cid is None
+
+    def test_inline_image_rejects_both_path_and_data(self, tmp_path) -> None:
+        img = tmp_path / "logo.png"
+        img.write_bytes(b"\x89PNG")
+        with pytest.raises(ValueError, match="exactly one of path or data"):
+            EmailMessage().inline_image(str(img), cid="logo", data=b"\x89PNG")
+
+    def test_inline_image_rejects_neither_path_nor_data(self) -> None:
+        with pytest.raises(ValueError, match="exactly one of path or data"):
+            EmailMessage().inline_image(cid="logo")
+
+    def test_inline_image_requires_cid(self, tmp_path) -> None:
+        img = tmp_path / "logo.png"
+        img.write_bytes(b"\x89PNG")
+        with pytest.raises(ValueError, match="requires a cid"):
+            EmailMessage().inline_image(str(img))
+
+    def test_inline_image_requires_filename_with_raw_bytes(self) -> None:
+        with pytest.raises(ValueError, match="requires a filename"):
+            EmailMessage().inline_image(cid="logo", data=b"\x89PNG")
+
     def test_build_sets_built_flag(self) -> None:
         msg = EmailMessage().to("a@example.com").subject("S").html("<p>x</p>")
         assert not msg.is_built

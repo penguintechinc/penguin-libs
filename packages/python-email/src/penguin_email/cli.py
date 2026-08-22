@@ -16,6 +16,10 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .transports import EmailTransport
 
 
 def _cmd_auth(args: argparse.Namespace) -> int:
@@ -41,6 +45,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
     """Run a health check on the configured transport."""
     mode = os.environ.get("EMAIL_TRANSPORT", "smtp").lower()
 
+    transport: EmailTransport
     if mode == "gmail":
         try:
             from .transports.gmail import GmailTransport
