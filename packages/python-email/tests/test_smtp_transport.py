@@ -1,10 +1,12 @@
 """Tests for SmtpTransport."""
 
-import smtplib
 from unittest.mock import MagicMock, patch
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
+from penguin_email.dkim_signing import DkimConfig
 from penguin_email.message import EmailMessage
 from penguin_email.transports.smtp import InsecureConnectionWarning, SmtpMode, SmtpTransport
 
@@ -13,6 +15,22 @@ def _make_message(html: str = "<p>Test</p>") -> EmailMessage:
     msg = EmailMessage().from_addr("s@x.com").to("r@x.com").subject("Subj").html(html)
     msg.build()
     return msg
+
+
+def _generate_pem_private_key() -> str:
+    """Generate a throwaway RSA private key in memory; never persisted to disk."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    return pem.decode("ascii")
+
+
+@pytest.fixture(scope="module")
+def dkim_private_key() -> str:
+    return _generate_pem_private_key()
 
 
 class TestSmtpTransport:
@@ -180,13 +198,7 @@ class TestSmtpTransport:
 
     def test_send_with_regular_attachment_uses_mixed_multipart(self) -> None:
         transport = SmtpTransport(host="smtp.example.com", mode=SmtpMode.STARTTLS)
-        msg = (
-            EmailMessage()
-            .from_addr("s@x.com")
-            .to("r@x.com")
-            .subject("S")
-            .html("<p>attached</p>")
-        )
+        msg = EmailMessage().from_addr("s@x.com").to("r@x.com").subject("S").html("<p>attached</p>")
         msg.attach_bytes(b"%PDF-1.4 ...", "report.pdf", "application/pdf")
         msg.build()
         mock_conn = MagicMock()
@@ -199,3 +211,72 @@ class TestSmtpTransport:
         assert result.success is True
         mime_str = mock_conn.sendmail.call_args[0][2]
         assert "mixed" in mime_str.lower() or len(mime_str) > 0
+
+    def test_no_dkim_configured_sends_unchanged_string_payload(self) -> None:
+        """DKIM is opt-in: without a DkimConfig, the sendmail payload is the
+        exact same plain str MIME serialization as before -- not bytes, no
+        DKIM-Signature header, no behaviour change.
+        """
+        transport = SmtpTransport(host="smtp.example.com", mode=SmtpMode.STARTTLS)
+        mock_conn = MagicMock()
+        mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+        mock_conn.__exit__ = MagicMock(return_value=False)
+
+        with patch("smtplib.SMTP", return_value=mock_conn):
+            result = transport.send(_make_message())
+
+        assert result.success is True
+        sent_payload = mock_conn.sendmail.call_args[0][2]
+        assert isinstance(sent_payload, str)
+        assert "DKIM-Signature" not in sent_payload
+
+
+class TestSmtpTransportDkimSigning:
+    def test_configured_dkim_prepends_signature_header_to_sent_payload(
+        self, dkim_private_key
+    ) -> None:
+        config = DkimConfig(domain="example.com", selector="sel1", private_key=dkim_private_key)
+        transport = SmtpTransport(host="smtp.example.com", mode=SmtpMode.STARTTLS, dkim=config)
+        mock_conn = MagicMock()
+        mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+        mock_conn.__exit__ = MagicMock(return_value=False)
+
+        with patch("smtplib.SMTP", return_value=mock_conn):
+            result = transport.send(_make_message())
+
+        assert result.success is True
+        sent_payload = mock_conn.sendmail.call_args[0][2]
+        assert isinstance(sent_payload, bytes)
+        assert sent_payload.startswith(b"DKIM-Signature:")
+        assert b"d=example.com" in sent_payload
+
+    def test_signing_failure_returns_failed_result_and_never_opens_connection(self) -> None:
+        """A configured-but-failing signer must never fall back to an
+        unsigned send -- the send fails loudly and smtplib is never invoked.
+        """
+        config = DkimConfig(domain="example.com", selector="sel1", private_key="not-a-valid-key")
+        transport = SmtpTransport(host="smtp.example.com", mode=SmtpMode.STARTTLS, dkim=config)
+
+        with patch("smtplib.SMTP") as mock_smtp_cls:
+            result = transport.send(_make_message())
+
+        assert result.success is False
+        assert result.error
+        mock_smtp_cls.assert_not_called()
+
+    def test_signing_failure_key_never_leaks_into_result_or_logs(
+        self, dkim_private_key, caplog
+    ) -> None:
+        config = DkimConfig(domain="example.com", selector="sel1", private_key=dkim_private_key)
+        transport = SmtpTransport(host="smtp.example.com", mode=SmtpMode.STARTTLS, dkim=config)
+
+        with patch(
+            "penguin_email.dkim_signing._dkimpy.sign",
+            side_effect=RuntimeError(f"boom, key was: {dkim_private_key}"),
+        ):
+            with caplog.at_level("ERROR"):
+                result = transport.send(_make_message())
+
+        assert result.success is False
+        assert dkim_private_key not in result.error
+        assert dkim_private_key not in caplog.text

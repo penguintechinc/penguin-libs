@@ -9,14 +9,15 @@ import pytest
 
 from penguin_email.cli import _cmd_auth, _cmd_check, main
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_args(**kwargs):  # type: ignore[return]
     """Return a minimal argparse.Namespace with the given attributes."""
     import argparse
+
     ns = argparse.Namespace()
     for k, v in kwargs.items():
         setattr(ns, k, v)
@@ -27,9 +28,9 @@ def _make_args(**kwargs):  # type: ignore[return]
 # _cmd_auth
 # ---------------------------------------------------------------------------
 
+
 class TestCmdAuth:
     def test_auth_runs_oauth_flow(self) -> None:
-        mock_flow = MagicMock()
         with patch("penguin_email.cli._cmd_auth") as patched:
             patched.return_value = 0
             args = _make_args(credentials="creds.json", token="token.json", scopes=None)
@@ -54,10 +55,6 @@ class TestCmdAuth:
 
     def test_auth_missing_gmail_extras_returns_1(self, capsys) -> None:
         """If google-auth-oauthlib is not installed, auth exits with code 1."""
-        with patch("builtins.__import__", side_effect=ImportError("no module")):
-            # Only raise for the specific import inside _cmd_auth
-            original_import = __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
-
         # Simulate the ImportError path by patching the module lookup
         with patch.dict(sys.modules, {"penguin_email.auth.gmail_oauth": None}):
             args = _make_args(credentials="c.json", token="t.json", scopes=None)
@@ -85,6 +82,7 @@ class TestCmdAuth:
 # ---------------------------------------------------------------------------
 # _cmd_check — SMTP path
 # ---------------------------------------------------------------------------
+
 
 class TestCmdCheckSmtp:
     def test_healthy_smtp_returns_0(self, capsys, monkeypatch) -> None:
@@ -154,6 +152,7 @@ class TestCmdCheckSmtp:
 # _cmd_check — Gmail path
 # ---------------------------------------------------------------------------
 
+
 class TestCmdCheckGmail:
     def test_healthy_gmail_returns_0(self, capsys, monkeypatch) -> None:
         monkeypatch.setenv("EMAIL_TRANSPORT", "gmail")
@@ -200,6 +199,7 @@ class TestCmdCheckGmail:
 # ---------------------------------------------------------------------------
 # main() — argument dispatch
 # ---------------------------------------------------------------------------
+
 
 class TestMain:
     def test_no_subcommand_prints_help_exits_0(self, capsys) -> None:

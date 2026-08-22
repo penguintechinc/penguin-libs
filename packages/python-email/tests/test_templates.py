@@ -1,7 +1,5 @@
 """Tests for Jinja2 template rendering."""
 
-import textwrap
-
 import pytest
 from jinja2 import UndefinedError
 
@@ -102,3 +100,11 @@ class TestTemplateRenderer:
     def test_render_string(self) -> None:
         result = self.renderer.render_string("Hello {{ name }}!", name="Zara")
         assert result == "Hello Zara!"
+
+    def test_render_string_autoescapes_by_default(self) -> None:
+        result = self.renderer.render_string("Hello {{ name }}", name="A & B")
+        assert result == "Hello A &amp; B"
+
+    def test_render_string_autoescape_false_leaves_value_raw(self) -> None:
+        result = self.renderer.render_string("Hello {{ name }}", name="A & B", autoescape=False)
+        assert result == "Hello A & B"

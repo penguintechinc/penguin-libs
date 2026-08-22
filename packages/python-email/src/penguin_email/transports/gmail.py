@@ -53,7 +53,7 @@ class GmailTransport:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_env(cls) -> "GmailTransport":
+    def from_env(cls) -> GmailTransport:
         """Build a transport from environment variables.
 
         Required env vars::
@@ -79,13 +79,14 @@ class GmailTransport:
             refresh_token=refresh_token,
             client_id=client_id,
             client_secret=client_secret,
-            token_uri="https://oauth2.googleapis.com/token",
+            # Google's public OAuth token endpoint URL, not a credential.
+            token_uri="https://oauth2.googleapis.com/token",  # nosec B106
         )
         service = build("gmail", "v1", credentials=creds)
         return cls(service=service, sender_email=sender_email)
 
     @classmethod
-    def from_files(cls, credentials_path: str, token_path: str) -> "GmailTransport":
+    def from_files(cls, credentials_path: str, token_path: str) -> GmailTransport:
         """Build a transport from ``credentials.json`` and ``token.json``.
 
         Refreshes the token if expired and writes the updated token back to
@@ -113,9 +114,7 @@ class GmailTransport:
         with open(credentials_path) as f:
             cred_data = json.load(f)
 
-        sender_email = cred_data.get("installed", cred_data.get("web", {})).get(
-            "client_email", ""
-        )
+        sender_email = cred_data.get("installed", cred_data.get("web", {})).get("client_email", "")
         # Fallback: use token subject/email if available
         if not sender_email and hasattr(creds, "token") and creds.token:
             sender_email = token_data.get("email", "")
@@ -124,7 +123,7 @@ class GmailTransport:
         return cls(service=service, sender_email=sender_email)
 
     @classmethod
-    def from_config(cls, config: dict[str, str]) -> "GmailTransport":
+    def from_config(cls, config: dict[str, str]) -> GmailTransport:
         """Build a transport from a plain dict (e.g. from Vault/secrets manager).
 
         Expected keys: ``client_id``, ``client_secret``, ``refresh_token``,
@@ -141,7 +140,8 @@ class GmailTransport:
             refresh_token=config["refresh_token"],
             client_id=config["client_id"],
             client_secret=config["client_secret"],
-            token_uri="https://oauth2.googleapis.com/token",
+            # Google's public OAuth token endpoint URL, not a credential.
+            token_uri="https://oauth2.googleapis.com/token",  # nosec B106
         )
         service = build("gmail", "v1", credentials=creds)
         return cls(service=service, sender_email=config["sender_email"])
@@ -150,17 +150,12 @@ class GmailTransport:
     # Transport interface
     # ------------------------------------------------------------------
 
-    def send(self, message: "EmailMessage") -> SendResult:
+    def send(self, message: EmailMessage) -> SendResult:
         """Build a MIME message and POST it to the Gmail API."""
         try:
             mime = self._build_mime(message)
             raw = base64.urlsafe_b64encode(mime.as_bytes()).decode()
-            result = (
-                self._service.users()
-                .messages()
-                .send(userId="me", body={"raw": raw})
-                .execute()
-            )
+            result = self._service.users().messages().send(userId="me", body={"raw": raw}).execute()
             return SendResult(
                 success=True,
                 transport_used=self.transport_name,
@@ -186,7 +181,7 @@ class GmailTransport:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _build_mime(self, message: "EmailMessage") -> MIMEMultipart:
+    def _build_mime(self, message: EmailMessage) -> MIMEMultipart:
         """Construct the MIME message tree."""
         inline = [a for a in message.attachments if a.cid is not None]
         regular = [a for a in message.attachments if a.cid is None]
@@ -240,9 +235,7 @@ class GmailTransport:
         for att in regular:
             data = att.data or Path(att.path or "").read_bytes()
             part = MIMEApplication(data)
-            part.add_header(
-                "Content-Disposition", "attachment", filename=att.filename
-            )
+            part.add_header("Content-Disposition", "attachment", filename=att.filename)
             outer.attach(part)
 
         return outer

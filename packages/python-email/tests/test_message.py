@@ -3,6 +3,7 @@
 import pytest
 
 from penguin_email.message import EmailMessage
+from penguin_email.signature import Signature
 
 
 class TestEmailMessageBuilder:
@@ -59,11 +60,7 @@ class TestEmailMessageBuilder:
         assert msg.table_caption == "My Table"
 
     def test_multiple_to_calls_accumulate_addresses(self) -> None:
-        msg = (
-            EmailMessage()
-            .to("a@example.com")
-            .to("b@example.com", "c@example.com")
-        )
+        msg = EmailMessage().to("a@example.com").to("b@example.com", "c@example.com")
         assert msg.recipients == ["a@example.com", "b@example.com", "c@example.com"]
 
     def test_build_raises_multiple_body_sources(self) -> None:
@@ -83,13 +80,7 @@ class TestEmailMessageBuilder:
     def test_attach_file_stores_attachment(self, tmp_path) -> None:
         f = tmp_path / "doc.pdf"
         f.write_bytes(b"%PDF-1.4")
-        msg = (
-            EmailMessage()
-            .to("a@example.com")
-            .subject("S")
-            .html("<p>Hi</p>")
-            .attach(str(f))
-        )
+        msg = EmailMessage().to("a@example.com").subject("S").html("<p>Hi</p>").attach(str(f))
         assert len(msg.attachments) == 1
         assert msg.attachments[0].filename == "doc.pdf"
 
@@ -123,11 +114,14 @@ class TestEmailMessageBuilder:
         assert msg.is_built
 
     def test_text_override_stored(self) -> None:
-        msg = (
-            EmailMessage()
-            .to("a@example.com")
-            .subject("S")
-            .html("<p>Hi</p>")
-            .text("Hi plain")
-        )
+        msg = EmailMessage().to("a@example.com").subject("S").html("<p>Hi</p>").text("Hi plain")
         assert msg.text_body == "Hi plain"
+
+    def test_no_signature_by_default(self) -> None:
+        msg = EmailMessage().to("a@example.com").subject("S").html("<p>Hi</p>")
+        assert msg.signature_block is None
+
+    def test_signature_stores_signature_block(self) -> None:
+        sig = Signature(html="<p>Sig</p>", text="Sig")
+        msg = EmailMessage().to("a@example.com").subject("S").html("<p>Hi</p>").signature(sig)
+        assert msg.signature_block is sig

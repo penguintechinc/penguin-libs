@@ -4,6 +4,7 @@ __version__ = "0.1.0"
 
 from .client import EmailClient
 from .message import EmailMessage
+from .signature import Signature
 from .transports import EmailTransport, SendResult
 from .transports.smtp import InsecureConnectionWarning, SmtpMode, SmtpTransport
 
@@ -13,6 +14,7 @@ __all__ = [
     "EmailMessage",
     "EmailTransport",
     "SendResult",
+    "Signature",
     "SmtpTransport",
     "SmtpMode",
     "InsecureConnectionWarning",
