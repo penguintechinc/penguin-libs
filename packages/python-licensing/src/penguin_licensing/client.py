@@ -129,6 +129,16 @@ class LicenseClient:
         """
         self.deployment_host = host
 
+    def set_extra_bypass_domains(self, domains: Sequence[str]) -> None:
+        """
+        Replace the product-specific domains matched alongside the built-in ones.
+
+        Companion to ``set_deployment_host`` for callers that only learn their
+        product's own managed domain (e.g. a ``.app`` production domain) after
+        construction, rather than at ``__init__`` time.
+        """
+        self._extra_bypass_domains = tuple(domains)
+
     def _bypass_active(self) -> bool:
         """Return True when this deployment's host is a managed bypass domain."""
         if not self.deployment_host:

@@ -928,6 +928,31 @@ class TestLicenseClientDomainBypass:
         mock_post.assert_not_called()
 
     @patch("penguin_licensing.client.requests.Session.post")
+    def test_set_extra_bypass_domains_updates_bypass_after_construction(self, mock_post):
+        """A product domain learned after construction still activates bypass."""
+        client = LicenseClient(license_key="PENG-TEST-1234", deployment_host="waddleai.app")
+        assert client._bypass_active() is False
+
+        client.set_extra_bypass_domains(["waddleai.app"])
+
+        assert client._bypass_active() is True
+        assert client.check_feature("anything") is True
+        mock_post.assert_not_called()
+
+    def test_set_extra_bypass_domains_replaces_not_appends(self):
+        """The setter replaces the extra-domain list rather than accumulating it."""
+        client = LicenseClient(
+            license_key="",
+            deployment_host="waddleai.app",
+            extra_bypass_domains=["waddleai.app"],
+        )
+        assert client._bypass_active() is True
+
+        client.set_extra_bypass_domains(["some-other-product.app"])
+
+        assert client._bypass_active() is False
+
+    @patch("penguin_licensing.client.requests.Session.post")
     def test_extra_bypass_domains_cover_product_domain(self, mock_post):
         """A product's own domain can be added without a code change here."""
         client = LicenseClient(
