@@ -7,11 +7,12 @@ import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Sequence, cast
 
 import requests
 import structlog
 
+from .domains import is_bypass_domain
 from .urls import require_https_url
 
 logger = structlog.get_logger()
@@ -60,6 +61,8 @@ class LicenseClient:
         license_key: Optional[str] = None,
         product: str = "elder",
         base_url: Optional[str] = None,
+        deployment_host: Optional[str] = None,
+        extra_bypass_domains: Optional[Sequence[str]] = None,
     ):
         """
         Initialize license client.
@@ -69,9 +72,24 @@ class LicenseClient:
             product: Product identifier
             base_url: License server base URL (default: LICENSE_SERVER_URL env var,
                 falling back to https://license.penguintech.io if unset)
+            deployment_host: This deployment's public hostname (e.g. the ingress
+                host the app is served on), used to decide domain-based license
+                bypass. See ``set_deployment_host`` for services that only learn
+                the host after construction. Never sourced from a client-supplied
+                header -- callers must pass the app's own configured hostname.
+            extra_bypass_domains: Product-specific domains (e.g. a product's own
+                ``.app`` domain) to treat as managed alongside the built-in
+                PenguinCloud/beta-cluster domains.
         """
-        self.license_key = license_key or os.getenv("LICENSE_KEY", "")
+        # os.getenv's overload resolves to `str` on its own (default is a str
+        # literal), but mypy loses that when the call is inlined directly into
+        # an `or` expression -- binding it to an explicitly-typed local first
+        # keeps self.license_key correctly typed as `str`, not `str | None`.
+        env_license_key: str = os.getenv("LICENSE_KEY", "")
+        self.license_key: str = license_key or env_license_key
         self.product = product
+        self.deployment_host = deployment_host
+        self._extra_bypass_domains: tuple[str, ...] = tuple(extra_bypass_domains or ())
         # Explicit arg wins; otherwise honor LICENSE_SERVER_URL; otherwise the
         # hardcoded default. A truthy parameter default here would make the env
         # var dead code (base_url would never be falsy), so the default lives
@@ -101,6 +119,53 @@ class LicenseClient:
         if self.license_key:
             self.session.headers["Authorization"] = f"Bearer {self.license_key}"
 
+    def set_deployment_host(self, host: Optional[str]) -> None:
+        """
+        Update the deployment's public hostname used for domain-based bypass.
+
+        Call this once the app's own hostname becomes known, for services that
+        must construct the client before that value is available (e.g. before
+        config/ingress settings load).
+        """
+        self.deployment_host = host
+
+    def set_extra_bypass_domains(self, domains: Sequence[str]) -> None:
+        """
+        Replace the product-specific domains matched alongside the built-in ones.
+
+        Companion to ``set_deployment_host`` for callers that only learn their
+        product's own managed domain (e.g. a ``.app`` production domain) after
+        construction, rather than at ``__init__`` time.
+        """
+        self._extra_bypass_domains = tuple(domains)
+
+    def _bypass_active(self) -> bool:
+        """Return True when this deployment's host is a managed bypass domain."""
+        if not self.deployment_host:
+            return False
+        active = is_bypass_domain(self.deployment_host, self._extra_bypass_domains)
+        if active:
+            logger.debug("license_check_domain_bypass", host=self.deployment_host)
+        return active
+
+    def _bypass_license_info(self) -> LicenseInfo:
+        """Fully-entitled enterprise LicenseInfo used while domain bypass is active."""
+        now = datetime.now(timezone.utc)
+        return LicenseInfo(
+            valid=True,
+            customer="PenguinTech Managed Deployment",
+            product=self.product,
+            license_version="2.0",
+            license_key=self.license_key,
+            expires_at=datetime.max.replace(tzinfo=timezone.utc),
+            issued_at=now,
+            tier="enterprise",
+            features=[],
+            limits={},
+            metadata={"bypass": "domain"},
+            message=f"License checks bypassed for managed domain {self.deployment_host}",
+        )
+
     def validate(self, force_refresh: bool = False) -> LicenseInfo:
         """
         Validate license and get server ID for keepalives.
@@ -110,12 +175,18 @@ class LicenseClient:
         - 5xx/transport errors: return last cached value if available
         - Expiry: enforce with 72h offline grace period if payload includes expires_at
 
+        Domain bypass short-circuits all of the above: a deployment on a
+        managed PenguinTech domain never hits the license server at all.
+
         Args:
             force_refresh: Force refresh from server (ignore cache)
 
         Returns:
             LicenseInfo with validation results
         """
+        if self._bypass_active():
+            return self._bypass_license_info()
+
         # Check cache first
         if not force_refresh and self._cached_validation and self._cache_expiry:
             if datetime.now(timezone.utc) < self._cache_expiry:
@@ -270,6 +341,9 @@ class LicenseClient:
         Returns:
             True if feature is entitled, False otherwise
         """
+        if self._bypass_active():
+            return True
+
         validation = self.validate()
 
         if not validation.valid:
@@ -293,6 +367,9 @@ class LicenseClient:
         Returns:
             True if license tier meets or exceeds requirement
         """
+        if self._bypass_active():
+            return True
+
         tier_levels = {"community": 1, "professional": 2, "enterprise": 3}
 
         validation = self.validate()
