@@ -10,7 +10,7 @@ build: ## Build/compile all packages
 	@echo "=== Building Python packages ==="
 	cd packages/python-aaa && python3 -m py_compile src/penguin_aaa/__init__.py
 	cd packages/python-utils && python3 -m py_compile src/penguintechinc_utils/__init__.py
-	cd packages/python-rpc && python3 -m py_compile src/penguin_rpc/__init__.py
+	cd packages/python-rpc && python3 -m py_compile src/penguin_prpc/__init__.py
 	cd packages/python-email && python3 -m py_compile src/penguin_email/__init__.py
 	@echo "=== Building React packages ==="
 	cd packages/react-aaa && npm run build

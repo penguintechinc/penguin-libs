@@ -1,4 +1,4 @@
-# penguin-rpc
+# penguin-prpc
 
 pRPC: Connect RPC over HTTP/3/QUIC with zero-trust defaults and MCP/A2A mounting
 
@@ -9,7 +9,7 @@ pRPC: Connect RPC over HTTP/3/QUIC with zero-trust defaults and MCP/A2A mounting
 ## Installation
 
 ```bash
-pip install penguin-rpc
+pip install penguin-prpc
 ```
 
 ## License

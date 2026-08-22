@@ -126,7 +126,7 @@ jobs:
         run: pip install pip-audit && pip-audit
       - name: Python Test
         if: matrix.language == 'python'
-        run: pytest tests/ -v --tb=short --cov=penguin_rpc
+        run: pytest tests/ -v --tb=short --cov=penguin_prpc
 
       # --- Rust (mirrors ci.yml build-rust-rpc) ---
       - name: Setup Rust
