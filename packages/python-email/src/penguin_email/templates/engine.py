@@ -70,7 +70,7 @@ class TemplateRenderer:
         toggle would otherwise imply.
         """
         env = Environment(
-            autoescape=autoescape,  # nosec B701 -- text/plain output only, see docstring
+            autoescape=autoescape,  # nosec B701 # noqa: S701 -- text/plain output only, see docstring
             undefined=StrictUndefined,
             trim_blocks=True,
             lstrip_blocks=True,

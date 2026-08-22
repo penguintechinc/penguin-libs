@@ -215,7 +215,7 @@ class TestSendGridApiKeyNeverLeaks:
     """The raw API key must never appear in log output or exception messages."""
 
     def test_key_not_in_send_error_result(self, caplog) -> None:
-        secret_key = "SG.super-secret-key-value.dont-leak-me"
+        secret_key = "SG.super-secret-key-value.dont-leak-me"  # noqa: S105 -- test fixture literal, not a real credential
         transport = SendGridTransport(api_key=secret_key)
 
         with patch(
@@ -229,7 +229,7 @@ class TestSendGridApiKeyNeverLeaks:
         assert secret_key not in caplog.text
 
     def test_key_not_in_error_summary_on_failure_response(self) -> None:
-        secret_key = "SG.super-secret-key-value.dont-leak-me"
+        secret_key = "SG.super-secret-key-value.dont-leak-me"  # noqa: S105 -- test fixture literal, not a real credential
         transport = SendGridTransport(api_key=secret_key)
         response = _mock_response(403, json_body={"errors": [{"message": "forbidden"}]})
 
@@ -239,6 +239,6 @@ class TestSendGridApiKeyNeverLeaks:
         assert secret_key not in result.error
 
     def test_key_not_in_repr_or_str(self) -> None:
-        secret_key = "SG.super-secret-key-value.dont-leak-me"
+        secret_key = "SG.super-secret-key-value.dont-leak-me"  # noqa: S105 -- test fixture literal, not a real credential
         transport = SendGridTransport(api_key=secret_key)
         assert secret_key not in repr(transport)

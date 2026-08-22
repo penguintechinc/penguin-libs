@@ -24,8 +24,9 @@ pip install "penguin-email[gmail]"   # adds Gmail REST API support
 ```python
 from penguin_email import EmailClient, EmailMessage, SmtpTransport, SmtpMode
 
-transport = SmtpTransport(host="smtp.example.com", mode=SmtpMode.STARTTLS,
-                          username="user", password="pass")
+transport = SmtpTransport(
+    host="smtp.example.com", mode=SmtpMode.STARTTLS, username="user", password="pass"
+)
 client = EmailClient(transport)
 
 result = client.send(
@@ -43,7 +44,7 @@ print(result.success, result.message_id)
 ```python
 from penguin_email import EmailClient, EmailMessage, GmailTransport
 
-transport = GmailTransport.from_env()   # reads GMAIL_* env vars
+transport = GmailTransport.from_env()  # reads GMAIL_* env vars
 client = EmailClient(transport)
 ```
 

@@ -33,7 +33,7 @@ class TestCmdAuth:
     def test_auth_runs_oauth_flow(self) -> None:
         with patch("penguin_email.cli._cmd_auth") as patched:
             patched.return_value = 0
-            args = _make_args(credentials="creds.json", token="token.json", scopes=None)
+            args = _make_args(credentials="creds.json", token="token.json", scopes=None)  # noqa: S106 -- test fixture filename, not a real credential
             assert patched(args) == 0
 
     def test_auth_calls_run_oauth_flow(self) -> None:
@@ -44,12 +44,12 @@ class TestCmdAuth:
                 sys.modules,
                 {"penguin_email.auth.gmail_oauth": MagicMock(run_oauth_flow=mock_run)},
             ):
-                args = _make_args(credentials="c.json", token="t.json", scopes=None)
+                args = _make_args(credentials="c.json", token="t.json", scopes=None)  # noqa: S106 -- test fixture filename, not a real credential
                 rc = _cmd_auth(args)
         assert rc == 0
         mock_run.assert_called_once_with(
             credentials_path="c.json",
-            token_path="t.json",
+            token_path="t.json",  # noqa: S106 -- test fixture filename, not a real credential
             scopes=None,
         )
 
@@ -57,7 +57,7 @@ class TestCmdAuth:
         """If google-auth-oauthlib is not installed, auth exits with code 1."""
         # Simulate the ImportError path by patching the module lookup
         with patch.dict(sys.modules, {"penguin_email.auth.gmail_oauth": None}):
-            args = _make_args(credentials="c.json", token="t.json", scopes=None)
+            args = _make_args(credentials="c.json", token="t.json", scopes=None)  # noqa: S106 -- test fixture filename, not a real credential
             rc = _cmd_auth(args)
         assert rc == 1
         captured = capsys.readouterr()
@@ -70,11 +70,11 @@ class TestCmdAuth:
             sys.modules,
             {"penguin_email.auth.gmail_oauth": MagicMock(run_oauth_flow=mock_run)},
         ):
-            args = _make_args(credentials="c.json", token="t.json", scopes=scopes)
+            args = _make_args(credentials="c.json", token="t.json", scopes=scopes)  # noqa: S106 -- test fixture filename, not a real credential
             _cmd_auth(args)
         mock_run.assert_called_once_with(
             credentials_path="c.json",
-            token_path="t.json",
+            token_path="t.json",  # noqa: S106 -- test fixture filename, not a real credential
             scopes=scopes,
         )
 
