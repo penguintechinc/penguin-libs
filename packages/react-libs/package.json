@@ -21,6 +21,7 @@
     "README.md"
   ],
   "scripts": {
+    "prebuild": "npm run build -w @penguintechinc/react-form-builder -w @penguintechinc/react-login -w @penguintechinc/react-sidebar -w @penguintechinc/react-console-version -w @penguintechinc/react-hooks --prefix ../..",
     "build": "tsc",
     "build:watch": "tsc --watch",
     "clean": "rm -rf dist",
@@ -86,7 +87,7 @@
     "jsdom": "28.1.0",
     "prettier": "3.8.1",
     "typescript": "5.9.3",
-    "vitest": "4.0.18"
+    "vitest": "4.1.10"
   },
   "dependencies": {
     "@penguintechinc/react-console-version": "0.1.0",

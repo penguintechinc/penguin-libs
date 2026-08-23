@@ -4,6 +4,7 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -92,7 +93,7 @@ func TestHTTPMiddleware_Anonymous_Unauthorized(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/x", nil) // no Authorization header at all
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil) // no Authorization header at all
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
 
@@ -119,7 +120,7 @@ func TestHTTPMiddleware_ValidTokenValidTenant_Success(t *testing.T) {
 	})
 
 	tok := testFixture.token(t, "user-1", []string{"report:read"}, nil, "tenant-a")
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
@@ -154,7 +155,7 @@ func TestHTTPMiddleware_MissingTenant_Forbidden(t *testing.T) {
 	})
 
 	tok := testFixture.token(t, "user-1", []string{"report:read"}, nil, "" /* no tenant */)
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
@@ -179,7 +180,7 @@ func TestHTTPMiddleware_InvalidToken_Unauthorized(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	req.Header.Set("Authorization", "Bearer this.is.not-a-valid-jwt")
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
@@ -211,7 +212,7 @@ func TestHTTPMiddleware_RequiredScopes_MissingScope_Forbidden(t *testing.T) {
 	})
 
 	tok := testFixture.token(t, "user-1", []string{"report:read"}, nil, "tenant-a")
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
@@ -241,7 +242,7 @@ func TestHTTPMiddleware_RequiredScopes_AllPresent_Success(t *testing.T) {
 	})
 
 	tok := testFixture.token(t, "user-1", []string{"report:read", "report:write", "extra:scope"}, nil, "tenant-a")
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
@@ -269,7 +270,7 @@ func TestHTTPMiddleware_SPIFFEMode_NoPeerCertificate_Unauthorized(t *testing.T) 
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/x", nil) // no r.TLS at all
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil) // no r.TLS at all
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
 
@@ -298,7 +299,7 @@ func TestHTTPMiddleware_BothMode_DispatchesToOIDCWhenBearerPresent(t *testing.T)
 	// the SPIFFE branch it would fail (no peer certificate); success here
 	// proves the OIDC branch, not SPIFFE, handled it.
 	tok := testFixture.token(t, "user-1", nil, nil, "tenant-a")
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
@@ -332,7 +333,7 @@ func TestHTTPMiddleware_BothMode_DispatchesToSPIFFEWhenNoBearerToken(t *testing.
 	// TestHTTPMiddleware_SPIFFEMode_NoPeerCertificate_Unauthorized above, it
 	// pins that the fail-closed outcome holds for the "both, no bearer" case
 	// specifically, not just the has-bearer case.
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
 
@@ -363,7 +364,7 @@ func TestHTTPMiddleware_AuditEmitsEventOnSuccess(t *testing.T) {
 	})
 
 	tok := testFixture.token(t, "user-1", nil, nil, "tenant-a")
-	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/mcp", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
@@ -403,7 +404,7 @@ func TestHTTPMiddleware_AuditEmitsEventOnRejection(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/mcp", nil) // anonymous
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/mcp", nil) // anonymous
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
 
@@ -433,8 +434,8 @@ func TestHTTPMiddleware_ErrorBodyDoesNotEchoToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	const secretLookingToken = "Bearer eyJhbGciOiJSUzI1NiJ9.super-secret-payload.sig"
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	const secretLookingToken = "Bearer eyJhbGciOiJSUzI1NiJ9.super-secret-payload.sig" // #nosec G101 -- synthetic fixture asserting error bodies never echo tokens back, not a real credential
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	req.Header.Set("Authorization", secretLookingToken)
 	rec := httptest.NewRecorder()
 	mw(next).ServeHTTP(rec, req)
@@ -470,7 +471,7 @@ func TestHTTPMiddleware_ComposedWithServeMux_AnonymousMCPRejected(t *testing.T) 
 	}))
 	wrapped := mw(mux)
 
-	anonReq := httptest.NewRequest(http.MethodGet, "/mcp", nil) // no Authorization header
+	anonReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/mcp", nil) // no Authorization header
 	anonRec := httptest.NewRecorder()
 	wrapped.ServeHTTP(anonRec, anonReq)
 	if anonRec.Code != http.StatusUnauthorized {
@@ -478,7 +479,7 @@ func TestHTTPMiddleware_ComposedWithServeMux_AnonymousMCPRejected(t *testing.T) 
 	}
 
 	tok := testFixture.token(t, "user-1", nil, nil, "tenant-a")
-	authReq := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	authReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/mcp", nil)
 	authReq.Header.Set("Authorization", "Bearer "+tok)
 	authRec := httptest.NewRecorder()
 	wrapped.ServeHTTP(authRec, authReq)

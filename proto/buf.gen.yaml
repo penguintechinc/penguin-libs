@@ -1,21 +1,21 @@
 version: v2
 plugins:
   # Go protobuf messages
-  - remote: buf.build/protocolbuffers/go
+  - remote: buf.build/protocolbuffers/go:v1.36.12
     out: ../gen/go
     opt: paths=source_relative
   # ConnectRPC Go handlers + clients
-  - remote: buf.build/connectrpc/go
+  - remote: buf.build/connectrpc/go:v1.20.0
     out: ../gen/go
     opt: paths=source_relative
   # Python protobuf messages
-  - remote: buf.build/protocolbuffers/python
+  - remote: buf.build/protocolbuffers/python:v36.0
     out: ../packages/python-libs/src/penguin_libs/gen
   # go-rpc: Go protobuf messages (prpc/* only — scoped via `buf generate --path prpc`)
-  - remote: buf.build/protocolbuffers/go
+  - remote: buf.build/protocolbuffers/go:v1.36.12
     out: ../packages/go-rpc/gen
     opt: paths=source_relative
   # go-rpc: ConnectRPC Go handlers + clients (prpc/* only — scoped via `buf generate --path prpc`)
-  - remote: buf.build/connectrpc/go
+  - remote: buf.build/connectrpc/go:v1.20.0
     out: ../packages/go-rpc/gen
     opt: paths=source_relative

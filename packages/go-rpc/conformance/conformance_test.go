@@ -249,7 +249,7 @@ func TestProtocolMiddleware_StampsProtoMajorIntoContext(t *testing.T) {
 			})
 			handler := ProtocolMiddleware(next)
 
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 			req.ProtoMajor = tt.protoMajor
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
