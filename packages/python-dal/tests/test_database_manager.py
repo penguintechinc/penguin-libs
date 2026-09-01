@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy import MetaData
 
 from penguin_dal import DatabaseManager
 from penguin_dal.db import DB
@@ -79,6 +80,26 @@ class TestDatabaseManagerWithReplica:
         dm(mock_query)
         read_db.assert_called_once_with(mock_query)
         write_db.assert_not_called()
+
+    def test_repr_masks_password(self):
+        """__repr__ delegates to DB.__repr__(write=...!r) — must not leak.
+
+        regression: HIGH finding — DatabaseManager(write={self.write!r}, ...)
+        transitively embedded the raw connection string via DB.__repr__
+        before that was fixed to mask credentials.
+        """
+        write_db = object.__new__(DB)
+        write_db._uri = "postgresql://dbuser:s3cr3t-pw@dbhost:5432/dbname"
+        write_db._metadata = MetaData()
+
+        dm = DatabaseManager.__new__(DatabaseManager)
+        dm.write = write_db
+        dm.read = write_db
+
+        rendered = repr(dm)
+        assert "s3cr3t-pw" not in rendered
+        assert "***" in rendered
+        assert "dbhost" in rendered
 
 
 class TestDatabaseManagerFlaskExt:

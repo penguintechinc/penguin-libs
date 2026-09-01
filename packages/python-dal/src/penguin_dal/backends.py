@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 # Map PyDAL-style URI prefixes to SQLAlchemy equivalents
 _URI_MAP: dict[str, str] = {
@@ -73,6 +74,34 @@ def ensure_async_uri(uri: str) -> str:
         f"No async driver known for scheme '{scheme}'. "
         f"Supported: {', '.join(_ASYNC_DRIVER_MAP.keys())}"
     )
+
+
+def mask_uri_credentials(uri: str) -> str:
+    """Mask the password embedded in a database URI for safe display.
+
+    Used by ``__repr__``/``__str__`` on DB/AsyncDB so a stray ``print()``,
+    log line, or uncaught traceback never leaks a live password from a
+    connection string. Scheme/user/host/port/path are preserved so the
+    output stays useful for debugging.
+
+    Args:
+        uri: Database URI, possibly containing embedded credentials.
+
+    Returns:
+        The URI with any password replaced by ``***``. Returned unchanged
+        if it carries no password.
+    """
+    parts = urlsplit(uri)
+    if not parts.password:
+        return uri
+
+    host = parts.hostname or ""
+    if parts.port is not None:
+        host = f"{host}:{parts.port}"
+    userinfo = f"{parts.username}:***" if parts.username else "***"
+    netloc = f"{userinfo}@{host}"
+
+    return urlunsplit(parts._replace(netloc=netloc))
 
 
 def get_engine_kwargs(uri: str, pool_size: int = 10) -> dict[str, Any]:

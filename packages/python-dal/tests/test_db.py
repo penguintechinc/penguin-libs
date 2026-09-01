@@ -1,6 +1,7 @@
 """Tests for DB (sync) entry point."""
 
 import pytest
+from sqlalchemy import MetaData
 
 from penguin_dal.db import DB
 from penguin_dal.exceptions import TableNotFoundError
@@ -132,6 +133,25 @@ class TestDB:
 
     def test_repr(self, db):
         assert "DB(" in repr(db)
+
+    def test_repr_masks_password(self):
+        """__repr__/__str__ must never leak a live DB password.
+
+        regression: HIGH finding — DB(uri=...) previously embedded the raw
+        connection string, so print(db)/logger.info(db)/an uncaught
+        traceback would leak user:password@host from the DB URI.
+        """
+        # Bypass __init__ (and therefore engine/driver creation) so this
+        # test runs offline with no live DB or optional driver installed.
+        db = object.__new__(DB)
+        db._uri = "postgresql://dbuser:s3cr3t-pw@dbhost:5432/dbname"
+        db._metadata = MetaData()
+
+        for rendered in (repr(db), str(db)):
+            assert "s3cr3t-pw" not in rendered
+            assert "***" in rendered
+            assert "dbhost" in rendered
+            assert "dbuser" in rendered
 
     def test_close(self):
         db = DB("sqlite://")

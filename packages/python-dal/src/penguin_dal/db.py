@@ -9,7 +9,12 @@ from typing import Any, cast
 from sqlalchemy import MetaData, Table, create_engine
 from sqlalchemy.orm import sessionmaker
 
-from penguin_dal.backends import ensure_async_uri, get_engine_kwargs, normalize_uri
+from penguin_dal.backends import (
+    ensure_async_uri,
+    get_engine_kwargs,
+    mask_uri_credentials,
+    normalize_uri,
+)
 from penguin_dal.exceptions import TableNotFoundError
 from penguin_dal.query import AsyncQuerySet, Query, QuerySet, Rows
 from penguin_dal.table_proxy import TableProxy
@@ -446,7 +451,7 @@ class DB:
 
     def __repr__(self) -> str:
         table_count = len(self._metadata.tables)
-        return f"DB(uri='{self._uri}', tables={table_count})"
+        return f"DB(uri='{mask_uri_credentials(self._uri)}', tables={table_count})"
 
 
 class AsyncDB:
@@ -777,7 +782,7 @@ class AsyncDB:
 
     def __repr__(self) -> str:
         table_count = len(self._metadata.tables)
-        return f"AsyncDB(uri='{self._uri}', tables={table_count})"
+        return f"AsyncDB(uri='{mask_uri_credentials(self._uri)}', tables={table_count})"
 
 
 class DatabaseManager:

@@ -106,6 +106,26 @@ class TestAsyncDB:
     async def test_repr(self, async_db):
         assert "AsyncDB(" in repr(async_db)
 
+    def test_repr_masks_password(self):
+        """__repr__/__str__ must never leak a live DB password.
+
+        regression: HIGH finding — AsyncDB(uri=...) previously embedded the
+        raw connection string, so print(db)/logger.info(db)/an uncaught
+        traceback would leak user:password@host from the DB URI.
+        """
+        # Bypass __init__ (and therefore async engine/driver creation) so
+        # this test runs offline with no live DB or optional driver
+        # (e.g. asyncpg) installed.
+        db = object.__new__(AsyncDB)
+        db._uri = "postgresql+asyncpg://dbuser:s3cr3t-pw@dbhost:5432/dbname"
+        db._metadata = MetaData()
+
+        for rendered in (repr(db), str(db)):
+            assert "s3cr3t-pw" not in rendered
+            assert "***" in rendered
+            assert "dbhost" in rendered
+            assert "dbuser" in rendered
+
     async def test_metadata_property(self, async_db):
         assert async_db.metadata is not None
 
