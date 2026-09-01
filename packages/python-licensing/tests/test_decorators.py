@@ -14,6 +14,7 @@ from penguin_licensing.decorators import (
     FeatureNotAvailableError,
     LicenseRequiredError,
     _is_bypass_domain,
+    configure_deployment_domain,
     feature_required,
     license_required,
 )
@@ -33,11 +34,16 @@ def reset_shared_client():
 
 
 @pytest.fixture(autouse=True)
-def reset_no_web_framework_warning_flag():
-    """Clear the one-time "no web framework" warning latch between tests."""
-    decorators_module._logged_no_web_framework = False
+def reset_deployment_domain(monkeypatch):
+    """Clear the configured deployment domain (both config and env) between tests.
+
+    Bypass now derives solely from server-side config, so a domain configured
+    by one test must never leak into the next.
+    """
+    decorators_module._deployment_domain_override = None
+    monkeypatch.delenv(decorators_module._DEPLOYMENT_DOMAIN_ENV_VAR, raising=False)
     yield
-    decorators_module._logged_no_web_framework = False
+    decorators_module._deployment_domain_override = None
 
 
 def _license_payload(tier="enterprise", features=None):
@@ -432,11 +438,55 @@ class TestExceptionIdentity:
         assert excinfo.value.current_tier == "community"
 
 
+class TestDeploymentDomainConfig:
+    """Resolution and precedence of the server-side deployment domain signal.
+
+    This is the sole authoritative bypass gate — a deployer-set value, never
+    request-derived (see `decorators.configure_deployment_domain`).
+    """
+
+    def test_unset_resolves_to_none(self):
+        """No config call and no env var means no deployment domain at all."""
+        assert decorators_module._configured_deployment_domain() is None
+
+    def test_configure_function_sets_value(self):
+        """configure_deployment_domain() is read back by the resolver."""
+        configure_deployment_domain("widgets.penguintech.cloud")
+        assert decorators_module._configured_deployment_domain() == "widgets.penguintech.cloud"
+
+    def test_env_var_used_as_fallback(self, monkeypatch):
+        """The env var is honored when configure_deployment_domain() was never called."""
+        monkeypatch.setenv(
+            decorators_module._DEPLOYMENT_DOMAIN_ENV_VAR, "widgets.penguintech.cloud"
+        )
+        assert decorators_module._configured_deployment_domain() == "widgets.penguintech.cloud"
+
+    def test_explicit_config_wins_over_env_var(self, monkeypatch):
+        """A configure_deployment_domain() call takes precedence over the env var."""
+        monkeypatch.setenv(decorators_module._DEPLOYMENT_DOMAIN_ENV_VAR, "env.penguintech.cloud")
+        configure_deployment_domain("code.penguintech.cloud")
+        assert decorators_module._configured_deployment_domain() == "code.penguintech.cloud"
+
+    def test_configure_none_clears_override_back_to_env(self, monkeypatch):
+        """Passing None falls back to the env var instead of leaving a stuck value."""
+        monkeypatch.setenv(decorators_module._DEPLOYMENT_DOMAIN_ENV_VAR, "env.penguintech.cloud")
+        configure_deployment_domain("code.penguintech.cloud")
+        configure_deployment_domain(None)
+        assert decorators_module._configured_deployment_domain() == "env.penguintech.cloud"
+
+    def test_blank_env_var_resolves_to_none(self, monkeypatch):
+        """An empty-string env var is treated as unset, not a matching empty domain."""
+        monkeypatch.setenv(decorators_module._DEPLOYMENT_DOMAIN_ENV_VAR, "")
+        assert decorators_module._configured_deployment_domain() is None
+
+
 class TestDomainBypass:
     """Managed PenguinTech domains skip license enforcement entirely.
 
-    Bypass is host-driven only — there is no env var or config flag — so these
-    tests pin both the matching rules and the zero-client-call guarantee.
+    Bypass is gated on the server-side configured deployment domain — see
+    `TestHostSpoofingRegression` for the vulnerability this replaces. These
+    tests pin the dot-boundary matching rules and the zero-client-call
+    guarantee once a legitimate deployment domain is configured.
     """
 
     @pytest.mark.parametrize(
@@ -469,50 +519,59 @@ class TestDomainBypass:
         """Look-alike hosts must not slip past the dot-boundary check."""
         assert _is_bypass_domain(host) is False
 
-    def test_bypass_host_allows_without_client_calls(self):
-        """A bypass-domain request runs the view with zero license client calls."""
-        app = Flask(__name__)
+    def test_bypass_allows_without_client_calls(self):
+        """A configured bypass domain runs the view with zero license client calls."""
+        configure_deployment_domain("elder.penguincloud.io")
 
         @license_required("enterprise")
         def sync_func():
             return "ran"
 
         with patch("penguin_licensing.client.get_license_client") as mock_get:
-            with app.test_request_context("/", base_url="https://elder.penguincloud.io"):
-                assert sync_func() == "ran"
+            assert sync_func() == "ran"
             mock_get.assert_not_called()
 
-    def test_bypass_host_allows_feature_without_client_calls(self):
-        """feature_required is bypassed on managed domains, with no client calls."""
-        app = Flask(__name__)
+    def test_bypass_allows_feature_without_client_calls(self):
+        """feature_required is bypassed on a configured managed domain, with no client calls."""
+        configure_deployment_domain("waddlebot.penguintech.cloud")
 
         @feature_required("sso")
         def sync_func():
             return "ran"
 
         with patch("penguin_licensing.client.get_license_client") as mock_get:
-            with app.test_request_context("/", base_url="https://waddlebot.penguintech.cloud"):
-                assert sync_func() == "ran"
+            assert sync_func() == "ran"
             mock_get.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_bypass_host_allows_async_without_client_calls(self):
-        """The async wrapper short-circuits on managed domains too."""
-        app = Flask(__name__)
+    async def test_bypass_allows_async_without_client_calls(self):
+        """The async wrapper short-circuits on a configured managed domain too."""
+        configure_deployment_domain("elder.penguincloud.io")
 
         @license_required("enterprise")
         async def async_func():
             return "ran"
 
         with patch("penguin_licensing.client.get_license_client") as mock_get:
-            with app.test_request_context("/", base_url="https://elder.penguincloud.io"):
-                assert await async_func() == "ran"
+            assert await async_func() == "ran"
+            mock_get.assert_not_called()
+
+    def test_bypass_works_with_no_request_context_at_all(self):
+        """The configured domain is authoritative on its own — no framework or request needed."""
+        configure_deployment_domain("elder.penguincloud.io")
+
+        @license_required("enterprise")
+        def sync_func():
+            return "ran"
+
+        with patch("penguin_licensing.client.get_license_client") as mock_get:
+            assert sync_func() == "ran"
             mock_get.assert_not_called()
 
     @patch("penguin_licensing.client.LicenseClient")
-    def test_non_bypass_host_still_enforced(self, mock_client_class):
-        """A non-managed host gets the normal fail-closed tier check."""
-        app = Flask(__name__)
+    def test_non_bypass_configured_domain_still_enforced(self, mock_client_class):
+        """A configured domain outside the managed suffix list gets the normal fail-closed check."""
+        configure_deployment_domain("customer.example.com")
         mock_client = MagicMock()
         mock_client_class.return_value = mock_client
         mock_validation = MagicMock()
@@ -524,13 +583,12 @@ class TestDomainBypass:
         def sync_func():
             return "ran"
 
-        with app.test_request_context("/", base_url="https://customer.example.com"):
-            with pytest.raises(LicenseRequiredError):
-                sync_func()
+        with pytest.raises(LicenseRequiredError):
+            sync_func()
 
     @patch("penguin_licensing.client.LicenseClient")
-    def test_no_flask_context_fails_closed(self, mock_client_class):
-        """Outside a Flask request there is no trusted host, so gating still runs."""
+    def test_no_config_and_no_request_context_fails_closed(self, mock_client_class):
+        """With nothing configured and no request in flight, gating still runs."""
         mock_client = MagicMock()
         mock_client_class.return_value = mock_client
         mock_validation = MagicMock()
@@ -546,49 +604,18 @@ class TestDomainBypass:
             sync_func()
 
 
-class TestQuartDomainBypass:
-    """Quart is the mandated PenguinTech framework — bypass must work under it.
+class TestHostMismatchDefenseInDepth:
+    """Defense-in-depth: an inconsistent in-flight request Host narrows the bypass.
 
-    ``request.host`` is only populated by Quart when a Host header is present
-    on the synthetic request, so these use ``headers={"host": ...}`` rather
-    than the ``base_url`` kwarg Flask's ``test_request_context`` accepts.
+    The configured deployment domain is still the sole *grant*; a mismatched
+    request Host can only refuse a bypass that config already allowed, never
+    grant one on its own.
     """
 
     @pytest.mark.asyncio
-    async def test_bypass_host_allows_without_client_calls(self):
-        """A bypass-domain request under Quart runs the view with zero client calls."""
-        app = Quart(__name__)
-
-        @license_required("enterprise")
-        def sync_func():
-            return "ran"
-
-        with patch("penguin_licensing.client.get_license_client") as mock_get:
-            async with app.test_request_context(
-                "/", headers={"host": "elder.penguincloud.io"}, scheme="https"
-            ):
-                assert sync_func() == "ran"
-            mock_get.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_bypass_host_allows_async_without_client_calls(self):
-        """The async wrapper short-circuits on managed domains under Quart too."""
-        app = Quart(__name__)
-
-        @license_required("enterprise")
-        async def async_func():
-            return "ran"
-
-        with patch("penguin_licensing.client.get_license_client") as mock_get:
-            async with app.test_request_context(
-                "/", headers={"host": "waddlebot.penguintech.cloud"}, scheme="https"
-            ):
-                assert await async_func() == "ran"
-            mock_get.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_non_bypass_host_still_enforced(self):
-        """A non-managed host under Quart still gets the normal fail-closed check."""
+    async def test_mismatched_quart_host_refuses_bypass_despite_matching_config(self):
+        """A configured bypass domain does not fire if the live request Host disagrees."""
+        configure_deployment_domain("elder.penguincloud.io")
         app = Quart(__name__)
 
         with patch("penguin_licensing.client.LicenseClient") as mock_client_class:
@@ -609,61 +636,149 @@ class TestQuartDomainBypass:
                 with pytest.raises(LicenseRequiredError):
                     sync_func()
 
-    @patch("penguin_licensing.client.LicenseClient")
-    def test_flask_context_still_bypasses_when_quart_also_installed(self, mock_client_class):
-        """Quart being importable must not shadow an active Flask request context.
-
-        Quart is preferred, but when Quart has no active context the code
-        must still fall back and read Flask's — this is the regression case
-        for the original bug (hard dependency on Flask's globals).
-        """
-        app = Flask(__name__)
+    @pytest.mark.asyncio
+    async def test_matching_quart_host_allows_bypass(self):
+        """A live request Host consistent with the configured domain does not block the bypass."""
+        configure_deployment_domain("elder.penguincloud.io")
+        app = Quart(__name__)
 
         @license_required("enterprise")
         def sync_func():
             return "ran"
 
         with patch("penguin_licensing.client.get_license_client") as mock_get:
-            with app.test_request_context("/", base_url="https://elder.penguincloud.io"):
+            async with app.test_request_context(
+                "/", headers={"host": "elder.penguincloud.io"}, scheme="https"
+            ):
                 assert sync_func() == "ran"
             mock_get.assert_not_called()
 
+    def test_mismatched_flask_host_refuses_bypass_despite_matching_config(self):
+        """Same narrowing behaviour under the legacy Flask fallback path."""
+        configure_deployment_domain("elder.penguincloud.io")
+        app = Flask(__name__)
 
-class TestNoWebFrameworkInstalled:
-    """Neither Quart nor Flask importable is a config gap, not a bypass signal."""
+        with patch("penguin_licensing.client.LicenseClient") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_validation = MagicMock()
+            mock_validation.valid = True
+            mock_validation.tier = "community"
+            mock_client.validate.return_value = mock_validation
 
-    @patch("penguin_licensing.client.LicenseClient")
-    def test_fails_closed_and_warns_once(self, mock_client_class):
-        """Missing both frameworks still fails closed, and logs a warning exactly once.
+            @license_required("enterprise")
+            def sync_func():
+                return "ran"
 
-        structlog's default (unconfigured) logger writes via its own printer,
-        not stdlib ``logging`` handlers, so ``caplog`` can't observe it here —
-        assert on the logger call directly instead.
-        """
-        mock_client = MagicMock()
-        mock_client_class.return_value = mock_client
-        mock_validation = MagicMock()
-        mock_validation.valid = True
-        mock_validation.tier = "community"
-        mock_client.validate.return_value = mock_validation
+            with app.test_request_context("/", base_url="https://customer.example.com"):
+                with pytest.raises(LicenseRequiredError):
+                    sync_func()
+
+
+class TestHostSpoofingRegression:
+    """
+    Regression tests for the published 0.1.0 vulnerability.
+
+    `_bypass_active()` used to derive the bypass entirely from
+    `request.host` — a client-supplied, unverified header — so any request
+    carrying `Host: x.penguintech.cloud` unlocked every licensed feature on
+    a self-hosted deployment, unauthenticated. These must FAIL against the
+    pre-fix code and PASS against the fix.
+    """
+
+    def test_spoofed_host_without_configured_domain_does_not_bypass(self):
+        """(a) A spoofed Host with no server-side config configured grants nothing."""
+        app = Flask(__name__)
+
+        with patch("penguin_licensing.client.LicenseClient") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_validation = MagicMock()
+            mock_validation.valid = True
+            mock_validation.tier = "community"
+            mock_client.validate.return_value = mock_validation
+
+            @license_required("enterprise")
+            def sync_func():
+                return "ran"
+
+            with app.test_request_context("/", base_url="https://evil.penguintech.cloud"):
+                with pytest.raises(LicenseRequiredError):
+                    sync_func()
+
+    def test_configured_bypass_domain_grants_access(self):
+        """(b) A configured deployment domain matching a managed suffix bypasses gating."""
+        configure_deployment_domain("foo.penguintech.cloud")
 
         @license_required("enterprise")
         def sync_func():
             return "ran"
 
-        with (
-            patch.object(decorators_module, "_quart_request_host", return_value=(None, False)),
-            patch.object(decorators_module, "_flask_request_host", return_value=(None, False)),
-            patch.object(decorators_module, "logger") as mock_logger,
-        ):
-            with pytest.raises(LicenseRequiredError):
-                sync_func()
+        with patch("penguin_licensing.client.get_license_client") as mock_get:
+            assert sync_func() == "ran"
+            mock_get.assert_not_called()
+
+    def test_configured_customer_domain_does_not_bypass(self):
+        """(c) A configured domain that is a genuine customer domain never bypasses."""
+        configure_deployment_domain("customer.example.com")
+
+        with patch("penguin_licensing.client.LicenseClient") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_validation = MagicMock()
+            mock_validation.valid = True
+            mock_validation.tier = "community"
+            mock_client.validate.return_value = mock_validation
+
+            @license_required("enterprise")
+            def sync_func():
+                return "ran"
+
             with pytest.raises(LicenseRequiredError):
                 sync_func()
 
-        warn_calls = [
-            c
-            for c in mock_logger.warning.call_args_list
-            if c.args[:1] == ("license_bypass_no_web_framework",)
-        ]
-        assert len(warn_calls) == 1
+    def test_no_request_context_fails_closed(self):
+        """(d) No configured domain and no request in flight still fails closed."""
+        with patch("penguin_licensing.client.LicenseClient") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_validation = MagicMock()
+            mock_validation.valid = True
+            mock_validation.tier = "community"
+            mock_client.validate.return_value = mock_validation
+
+            @license_required("enterprise")
+            def sync_func():
+                return "ran"
+
+            with pytest.raises(LicenseRequiredError):
+                sync_func()
+
+    def test_no_env_var_can_toggle_licensing_off(self, monkeypatch):
+        """(e) No env var, of any plausible name, disables enforcement outright."""
+        for toggle_name, toggle_value in [
+            ("LICENSE_REQUIRED", "false"),
+            ("LICENSE_ENFORCEMENT", "0"),
+            ("PENGUIN_LICENSE_DISABLE", "1"),
+            ("PENGUIN_LICENSE_BYPASS", "true"),
+        ]:
+            monkeypatch.setenv(toggle_name, toggle_value)
+
+        # The one env var this module DOES read is a domain identity, not a
+        # toggle — pointing it at a non-managed domain must still enforce.
+        monkeypatch.setenv(decorators_module._DEPLOYMENT_DOMAIN_ENV_VAR, "customer.example.com")
+
+        with patch("penguin_licensing.client.LicenseClient") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_validation = MagicMock()
+            mock_validation.valid = True
+            mock_validation.tier = "community"
+            mock_client.validate.return_value = mock_validation
+
+            @license_required("enterprise")
+            def sync_func():
+                return "ran"
+
+            with pytest.raises(LicenseRequiredError):
+                sync_func()
