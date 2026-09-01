@@ -8,7 +8,7 @@ import secrets
 import urllib.parse
 from dataclasses import dataclass, field
 from datetime import UTC, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import jwt
@@ -16,6 +16,9 @@ from jwt import PyJWKClient
 
 from penguin_aaa.authn.types import ALLOWED_RP_ALGORITHMS, Claims
 from penguin_aaa.hardening.validators import validate_https_url
+
+if TYPE_CHECKING:
+    from penguin_aaa.token_store.base import TokenStore
 
 
 @dataclass(slots=True)
@@ -46,12 +49,19 @@ class OIDCRelyingParty:
 
     Discovers JWKS from the issuer's discovery document, validates tokens,
     and provides helpers for the authorization code flow.
+
+    Args:
+        config: Relying party configuration (issuer, client, algorithms).
+        token_store: Optional TokenStore consulted after signature validation
+            to reject tokens whose jti has been revoked. When None, jti
+            revocation is not enforced (no store to check against).
     """
 
-    def __init__(self, config: OIDCRPConfig) -> None:
+    def __init__(self, config: OIDCRPConfig, token_store: "TokenStore | None" = None) -> None:
         self._config = config
         self._discovery: dict[str, Any] | None = None
         self._jwks_client: PyJWKClient | None = None
+        self._token_store = token_store
 
     async def discover(self) -> dict[str, Any]:
         """
@@ -62,7 +72,8 @@ class OIDCRelyingParty:
 
         Raises:
             httpx.HTTPError: On network or HTTP errors.
-            ValueError: If the discovery document is missing required fields.
+            ValueError: If the discovery document is missing required fields
+                or advertises a non-HTTPS (non-localhost) jwks_uri.
         """
         if self._discovery is not None:
             return self._discovery
@@ -78,6 +89,8 @@ class OIDCRelyingParty:
         missing = required_fields - set(document.keys())
         if missing:
             raise ValueError(f"Discovery document missing required fields: {missing}")
+
+        validate_https_url(document["jwks_uri"], "jwks_uri")
 
         self._discovery = document
         self._jwks_client = PyJWKClient(document["jwks_uri"])
@@ -95,7 +108,8 @@ class OIDCRelyingParty:
             Validated Claims instance.
 
         Raises:
-            jwt.PyJWTError: On signature, expiry, audience, or nonce mismatches.
+            jwt.PyJWTError: On signature, expiry, audience, nonce, or
+                revocation-status mismatches.
             ValueError: If required claims are missing or malformed.
         """
         if len(raw_token) > 8192:
@@ -117,6 +131,14 @@ class OIDCRelyingParty:
             issuer=self._discovery["issuer"],
             leeway=skew_seconds,
         )
+
+        # Reject tokens whose jti has been revoked (e.g. via /oauth2/revoke or
+        # /oauth2/introspect-adjacent admin action), even though the signature
+        # and standard claims are otherwise valid.
+        if self._token_store is not None:
+            jti = payload.get("jti")
+            if jti and self._token_store.is_jti_revoked(jti):
+                raise jwt.InvalidTokenError("Token has been revoked")
 
         # Verify nonce if expected
         if expected_nonce is not None:

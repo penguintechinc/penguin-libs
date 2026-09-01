@@ -1,6 +1,7 @@
 """Key store implementations — in-memory and file-backed."""
 
 import json
+import os
 import uuid
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -209,4 +210,14 @@ class FileKeyStore:
         ]
         data: _FileStoreData = {"keys": entries}
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        payload = json.dumps(data, indent=2).encode("utf-8")
+
+        # Write with owner-only permissions from creation — the file contains
+        # private key PEM material. Use os.open with an explicit mode so no
+        # world/group-readable window exists between creation and chmod.
+        fd = os.open(self._path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, payload)
+        finally:
+            os.close(fd)
+        os.chmod(self._path, 0o600)

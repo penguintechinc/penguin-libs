@@ -17,6 +17,31 @@ Send = Callable[[dict[str, Any]], Awaitable[None]]
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 
 
+def _normalize_claims(claims: Any) -> Any:
+    """
+    Normalize a verified-token result into a dict-like object for scope state.
+
+    ``OIDCRelyingParty.verify_token`` returns a pydantic ``Claims`` instance,
+    which has no ``.get()`` method — but downstream consumers (TenantMiddleware,
+    AuditMiddleware, authz decorators) all treat ``scope["state"]["claims"]``
+    as dict-like. API-key verifiers may already return a plain dict or other
+    object, so only pydantic models are converted; everything else passes
+    through unchanged.
+
+    Args:
+        claims: The claims object returned by token/API-key verification.
+
+    Returns:
+        A plain dict if ``claims`` was a pydantic BaseModel, otherwise ``claims``
+        unchanged.
+    """
+    model_dump = getattr(claims, "model_dump", None)
+    if callable(model_dump):
+        result: Any = model_dump(mode="json")
+        return result
+    return claims
+
+
 async def _send_json_error(send: Send, status: int, message: str) -> None:
     """Send a minimal JSON error response without invoking the wrapped app."""
     body = json.dumps({"error": message}).encode()
@@ -87,7 +112,7 @@ class OIDCAuthMiddleware:
             token = auth[7:]
             try:
                 claims = await self._rp.verify_token(token)
-                scope.setdefault("state", {})["claims"] = claims
+                scope.setdefault("state", {})["claims"] = _normalize_claims(claims)
                 await self._app(scope, receive, send)
                 return
             except Exception:
@@ -96,7 +121,7 @@ class OIDCAuthMiddleware:
                     # Try treating the token as an API key
                     try:
                         result = await self._api_key_verifier(token)
-                        scope.setdefault("state", {})["claims"] = result
+                        scope.setdefault("state", {})["claims"] = _normalize_claims(result)
                         await self._app(scope, receive, send)
                         return
                     except Exception:
@@ -114,7 +139,7 @@ class OIDCAuthMiddleware:
             if candidate:
                 try:
                     result = await self._api_key_verifier(candidate)
-                    scope.setdefault("state", {})["claims"] = result
+                    scope.setdefault("state", {})["claims"] = _normalize_claims(result)
                     await self._app(scope, receive, send)
                     return
                 except Exception:

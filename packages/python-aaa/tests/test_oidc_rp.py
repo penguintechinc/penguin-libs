@@ -117,6 +117,28 @@ class TestOIDCRelyingPartyDiscover:
             with pytest.raises(ValueError, match="missing required fields"):
                 await rp.discover()
 
+    @pytest.mark.asyncio
+    async def test_discover_rejects_non_https_jwks_uri(self):
+        """Regression: a malicious/compromised discovery doc must not be able
+        to redirect JWKS fetches to a non-HTTPS (e.g. attacker-controlled
+        plaintext) endpoint."""
+        config = _make_rp_config()
+        rp = OIDCRelyingParty(config)
+
+        discovery_doc = {
+            "issuer": ISSUER,
+            "authorization_endpoint": f"{ISSUER}/oauth2/authorize",
+            "token_endpoint": f"{ISSUER}/oauth2/token",
+            "jwks_uri": "http://evil.example.com/jwks.json",
+        }
+        mock_response = MagicMock()
+        mock_response.json.return_value = discovery_doc
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("httpx.AsyncClient.get", return_value=mock_response):
+            with pytest.raises(ValueError, match="HTTPS"):
+                await rp.discover()
+
 
 class TestOIDCRelyingPartyValidateToken:
     @pytest.mark.asyncio
@@ -182,6 +204,69 @@ class TestOIDCRelyingPartyValidateToken:
         # jwt.decode should reject mismatched issuer
         with pytest.raises(jwt.InvalidIssuerError):
             await rp.validate_token(wrong_issuer_token)
+
+
+class TestOIDCRelyingPartyRevocation:
+    """Regression: revoked access tokens (by jti) must be rejected by the RP,
+    the actual bearer-token verification path used by OIDCAuthMiddleware —
+    not just by the provider's own /oauth2/introspect endpoint."""
+
+    def _make_rp_with_signed_token(
+        self, token_store, extra_claims: dict | None = None
+    ) -> tuple[OIDCRelyingParty, str, str]:
+        keystore = MemoryKeyStore(algorithm="RS256")
+        config = _make_rp_config()
+        rp = OIDCRelyingParty(config, token_store=token_store)
+
+        jti = "jti-under-test"
+        payload_extra = {"jti": jti}
+        if extra_claims:
+            payload_extra.update(extra_claims)
+        token = _issue_test_token(keystore, extra_claims=payload_extra)
+
+        signing_key, kid = keystore.get_signing_key()
+        public_key = signing_key.public_key()
+        mock_signing_key = MagicMock()
+        mock_signing_key.key = public_key
+        mock_jwks_client = MagicMock()
+        mock_jwks_client.get_signing_key_from_jwt.return_value = mock_signing_key
+
+        rp._discovery = _make_discovery_doc(keystore)
+        rp._jwks_client = mock_jwks_client
+        return rp, token, jti
+
+    @pytest.mark.asyncio
+    async def test_revoked_jti_is_rejected(self):
+        from datetime import timedelta
+
+        from penguin_aaa.token_store.memory import MemoryTokenStore
+
+        token_store = MemoryTokenStore()
+        rp, token, jti = self._make_rp_with_signed_token(token_store)
+        token_store.add_revoked_jti(jti, timedelta(hours=1))
+
+        with pytest.raises(jwt.InvalidTokenError, match="revoked"):
+            await rp.validate_token(token)
+
+    @pytest.mark.asyncio
+    async def test_non_revoked_jti_is_accepted(self):
+        from penguin_aaa.token_store.memory import MemoryTokenStore
+
+        token_store = MemoryTokenStore()
+        rp, token, _jti = self._make_rp_with_signed_token(token_store)
+
+        claims = await rp.validate_token(token)
+        assert claims.sub == "user-123"
+
+    @pytest.mark.asyncio
+    async def test_without_token_store_revocation_not_enforced(self):
+        """No token_store configured means jti revocation cannot be checked
+        (backward-compatible default) — the token is still accepted purely
+        on signature/claims validity."""
+        rp, token, _jti = self._make_rp_with_signed_token(token_store=None)
+
+        claims = await rp.validate_token(token)
+        assert claims.sub == "user-123"
 
 
 class TestOIDCRelyingPartyVerifyToken:

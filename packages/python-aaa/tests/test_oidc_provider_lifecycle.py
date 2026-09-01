@@ -81,6 +81,81 @@ class TestOIDCProviderRefresh:
             provider.refresh("any-token")
 
 
+class TestOIDCProviderForgedTokenRejection:
+    """Regression: /oauth2/revoke and /oauth2/introspect must cryptographically
+    verify a JWT's signature against this provider's own keystore before
+    trusting any claim (jti, sub, tenant, ...) inside it. Previously both
+    endpoints called jwt.decode(..., options={"verify_signature": False}),
+    letting anyone forge a token to (a) impersonate any subject/tenant via
+    introspect, or (b) kill an arbitrary victim session (DoS) via revoke by
+    guessing/observing a jti and wrapping it in an unsigned/wrongly-signed
+    JWT."""
+
+    def _forge_token(self, jti: str, sub: str = "attacker", tenant: str = "evil-corp") -> str:
+        """Build a JWT with attacker-controlled claims, signed by a key the
+        provider's keystore has never issued or trusted."""
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        attacker_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        now = datetime.now(UTC)
+        payload = {
+            "sub": sub,
+            "iss": "https://auth.example.com",
+            "aud": ["api.example.com"],
+            "iat": int(now.timestamp()),
+            "exp": int((now + timedelta(hours=1)).timestamp()),
+            "scope": ["admin:all"],
+            "tenant": tenant,
+            "jti": jti,
+        }
+        # Use a kid that doesn't exist in the real keystore, exercising the
+        # "no matching key" rejection path.
+        return jwt.encode(payload, attacker_key, algorithm="RS256", headers={"kid": "attacker-kid"})
+
+    def test_introspect_rejects_forged_token(self) -> None:
+        provider, _, _ = _make_provider_with_store()
+        forged = self._forge_token(jti="forged-jti")
+
+        result = provider.introspect(forged)
+
+        assert result["active"] is False
+
+    def test_introspect_forged_token_does_not_leak_attacker_claims(self) -> None:
+        provider, _, _ = _make_provider_with_store()
+        forged = self._forge_token(jti="forged-jti", sub="attacker", tenant="evil-corp")
+
+        result = provider.introspect(forged)
+
+        assert result == {"active": False}
+        assert result.get("sub") != "attacker"
+        assert result.get("tenant") != "evil-corp"
+
+    def test_revoke_forged_token_does_not_revoke_arbitrary_jti(self) -> None:
+        """Attacker guesses/observes a legitimate victim jti and wraps it in
+        a forged token, attempting to kill that session without ever
+        authenticating."""
+        provider, _, token_store = _make_provider_with_store()
+        victim_jti = "victim-session-jti"
+        forged = self._forge_token(jti=victim_jti)
+
+        provider.revoke(forged)
+
+        assert token_store.is_jti_revoked(victim_jti) is False
+
+    def test_introspect_and_revoke_accept_genuinely_signed_token(self) -> None:
+        """Sanity check: the fix must not break legitimate self-issued tokens."""
+        provider, _, token_store = _make_provider_with_store()
+        claims = _make_claims()
+        token_set = provider.issue_token_set(claims)
+
+        result = provider.introspect(token_set.access_token)
+        assert result["active"] is True
+
+        provider.revoke(token_set.access_token)
+        payload = jwt.decode(token_set.access_token, options={"verify_signature": False})
+        assert token_store.is_jti_revoked(payload["jti"]) is True
+
+
 class TestOIDCProviderRevoke:
     def test_revoke_refresh_token(self) -> None:
         provider, _, token_store = _make_provider_with_store()

@@ -1,10 +1,39 @@
 """Flask blueprint for OIDC endpoints (discovery, JWKS, refresh, revoke, introspect, userinfo)."""
 
-import jwt
+import asyncio
+import concurrent.futures
+from collections.abc import Coroutine
+from typing import Any, TypeVar
+
 from flask import Blueprint, Response, jsonify, request
 
 from penguin_aaa.authn.oidc_provider import OIDCProvider
 from penguin_aaa.authn.oidc_rp import OIDCRelyingParty
+
+_T = TypeVar("_T")
+
+
+def _run_sync(coro: Coroutine[Any, Any, _T]) -> _T:
+    """
+    Execute an async coroutine from synchronous Flask handler code.
+
+    Safe both when no event loop is running (the normal Flask/WSGI worker
+    case, where a fresh loop is used directly) and when one already is
+    (e.g. under pytest-asyncio), in which case the coroutine is run to
+    completion on a dedicated background thread to avoid nesting loops.
+
+    Args:
+        coro: The coroutine to run to completion.
+
+    Returns:
+        The coroutine's result.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 def create_oidc_blueprint(provider: OIDCProvider, rp: OIDCRelyingParty) -> Blueprint:
@@ -91,41 +120,34 @@ def create_oidc_blueprint(provider: OIDCProvider, rp: OIDCRelyingParty) -> Bluep
 
     @bp.route("/oauth2/userinfo", methods=["GET"])
     def userinfo() -> tuple[Response, int]:
-        """Return claims for the authenticated user."""
+        """Return claims for the authenticated user, verified via the relying party."""
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             return jsonify({"error": "unauthorized"}), 401
 
         bearer_token = auth_header[len("Bearer ") :]
         try:
-            # For Flask, decode without verification (relying party would handle full validation)
-            payload = jwt.decode(bearer_token, options={"verify_signature": False})
-
-            # Convert timestamps if needed
-            for field in ("iat", "exp"):
-                val = payload.get(field)
-                if isinstance(val, (int, float)):
-                    payload[field] = int(val)
-
-            return (
-                jsonify(
-                    {
-                        "sub": payload.get("sub"),
-                        "iss": payload.get("iss"),
-                        "aud": payload.get("aud"),
-                        "iat": payload.get("iat"),
-                        "exp": payload.get("exp"),
-                        "scope": payload.get("scope", []),
-                        "roles": payload.get("roles", []),
-                        "tenant": payload.get("tenant"),
-                        "teams": payload.get("teams", []),
-                    }
-                ),
-                200,
-            )
-        except jwt.PyJWTError as e:
+            claims = _run_sync(rp.verify_token(bearer_token))
+        except Exception as e:
+            # Any verification failure (bad signature, expired, wrong issuer/audience,
+            # malformed token, oversized token) is treated uniformly as unauthorized.
             return jsonify({"error": "invalid_token", "error_description": str(e)}), 401
-        except ValueError as e:
-            return jsonify({"error": "invalid_request", "error_description": str(e)}), 400
+
+        return (
+            jsonify(
+                {
+                    "sub": claims.sub,
+                    "iss": claims.iss,
+                    "aud": claims.aud,
+                    "iat": int(claims.iat.timestamp()),
+                    "exp": int(claims.exp.timestamp()),
+                    "scope": claims.scope,
+                    "roles": claims.roles,
+                    "tenant": claims.tenant,
+                    "teams": claims.teams,
+                }
+            ),
+            200,
+        )
 
     return bp

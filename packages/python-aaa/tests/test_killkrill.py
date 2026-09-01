@@ -39,6 +39,19 @@ class TestKillKrillConfig:
         assert cfg.timeout == 2.0
         assert cfg.max_retries == 0
 
+    def test_http_endpoint_rejected_for_non_localhost(self) -> None:
+        """Regression: audit sink must not silently ship events over plaintext HTTP."""
+        with pytest.raises(ValueError, match="HTTPS"):
+            KillKrillConfig(endpoint="http://audit.example.io", api_key="key-1")
+
+    def test_localhost_http_endpoint_allowed(self) -> None:
+        cfg = KillKrillConfig(endpoint="http://localhost:9200", api_key="key-1")
+        assert cfg.endpoint == "http://localhost:9200"
+
+    def test_empty_endpoint_rejected(self) -> None:
+        with pytest.raises(ValueError, match="endpoint"):
+            KillKrillConfig(endpoint="", api_key="key-1")
+
 
 # ---------------------------------------------------------------------------
 # Helpers

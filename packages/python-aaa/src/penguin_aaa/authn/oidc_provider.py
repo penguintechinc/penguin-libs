@@ -201,6 +201,9 @@ class OIDCProvider:
         Revoke a token (access or refresh). RFC 7009 compliant.
 
         Always returns success (200) even if token is already revoked or invalid.
+        JWT (access/id) tokens are only revoked once their signature has been
+        verified against this provider's own keystore — an unverifiable token
+        (unsigned, forged, or expired) cannot be used to revoke an arbitrary jti.
 
         Args:
             token: The token to revoke (opaque or JWT).
@@ -211,21 +214,22 @@ class OIDCProvider:
         # If it looks like a refresh token (opaque) or is hinted as such
         if token_type_hint == "refresh_token" or not token.startswith("eyJ"):
             self._token_store.revoke_refresh(token)
-        else:
-            # It's a JWT; extract jti and revoke
-            try:
-                payload = jwt.decode(token, options={"verify_signature": False})
-                jti = payload.get("jti")
-                if jti:
-                    self._token_store.add_revoked_jti(jti, self._config.token_ttl)
-            except jwt.PyJWTError:
-                pass  # Invalid token; silently ignore per RFC 7009
+            return
+        # It's a JWT; verify its signature before trusting its jti claim
+        payload = self._verify_own_token(token)
+        if payload is None:
+            return  # Invalid/unverifiable token; silently ignore per RFC 7009
+        jti = payload.get("jti")
+        if jti:
+            self._token_store.add_revoked_jti(jti, self._config.token_ttl)
 
     def introspect(self, token: str) -> dict[str, Any]:
         """
         Return token introspection data. RFC 7662 compliant.
 
         Returns {"active": False} for invalid tokens, {"active": True, ...} for valid tokens.
+        JWT (access/id) tokens are only reported active once their signature has
+        been verified against this provider's own keystore.
 
         Args:
             token: The token to introspect (opaque or JWT).
@@ -234,8 +238,8 @@ class OIDCProvider:
             A dict with introspection result.
         """
         # Try JWT first
-        try:
-            payload = jwt.decode(token, options={"verify_signature": False})
+        payload = self._verify_own_token(token)
+        if payload is not None:
             jti = payload.get("jti")
             if jti and self._token_store and self._token_store.is_jti_revoked(jti):
                 return {"active": False}
@@ -248,8 +252,6 @@ class OIDCProvider:
                 "aud": payload.get("aud"),
                 "iss": payload.get("iss"),
             }
-        except jwt.PyJWTError:
-            pass
         # Try as refresh token
         if self._token_store is not None:
             claims = self._token_store.get_claims_for_refresh(token)
@@ -261,3 +263,45 @@ class OIDCProvider:
                     "tenant": claims.tenant,
                 }
         return {"active": False}
+
+    def _verify_own_token(self, token: str) -> dict[str, Any] | None:
+        """
+        Verify a JWT's signature and standard claims against this provider's own keys.
+
+        Looks up the signing key by the token's ``kid`` header in this
+        provider's keystore (not an external/attacker-supplied source), then
+        verifies signature, expiry, issuer, and audience.
+
+        Args:
+            token: The encoded JWT string.
+
+        Returns:
+            The decoded payload dict if the token is validly signed by this
+            provider and unexpired, otherwise None.
+        """
+        try:
+            header = jwt.get_unverified_header(token)
+        except jwt.PyJWTError:
+            return None
+
+        kid = header.get("kid")
+        jwks = self._keystore.get_jwks()
+        matching_jwk = next(
+            (key for key in jwks.get("keys", []) if key.get("kid") == kid),
+            None,
+        )
+        if matching_jwk is None:
+            return None
+
+        try:
+            public_key = jwt.PyJWK(matching_jwk).key
+            payload: dict[str, Any] = jwt.decode(
+                token,
+                public_key,
+                algorithms=[self._config.algorithm],
+                audience=self._config.audiences,
+                issuer=self._config.issuer,
+            )
+        except jwt.PyJWTError:
+            return None
+        return payload

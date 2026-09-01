@@ -1,6 +1,8 @@
 """Tests for penguin_aaa.crypto.keystore and penguin_aaa.crypto.jwks."""
 
 import json
+import stat
+import sys
 import uuid
 from pathlib import Path
 
@@ -128,6 +130,23 @@ class TestFileKeyStore:
         store = FileKeyStore(key_file, algorithm="ES256")
         key, _ = store.get_signing_key()
         assert isinstance(key, EllipticCurvePrivateKey)
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX file permissions only")
+    def test_key_file_is_owner_read_write_only(self, tmp_path: Path):
+        """Regression: private key PEM file must not be group/world readable."""
+        key_file = tmp_path / "keys.json"
+        FileKeyStore(key_file, algorithm="RS256")
+        mode = stat.S_IMODE(key_file.stat().st_mode)
+        assert mode == 0o600
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX file permissions only")
+    def test_key_file_permissions_preserved_after_rotation(self, tmp_path: Path):
+        """Regression: rotation re-writes the file and must not widen permissions."""
+        key_file = tmp_path / "keys.json"
+        store = FileKeyStore(key_file, algorithm="RS256")
+        store.rotate_key()
+        mode = stat.S_IMODE(key_file.stat().st_mode)
+        assert mode == 0o600
 
 
 class TestAlgorithmForKey:

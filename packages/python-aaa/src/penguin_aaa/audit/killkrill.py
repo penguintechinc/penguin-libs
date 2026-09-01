@@ -11,6 +11,8 @@ from typing import Any
 
 import httpx
 
+from penguin_aaa.hardening.validators import validate_https_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,6 +35,9 @@ class KillKrillConfig:
     flush_interval: float = 5.0
     timeout: float = 10.0
     max_retries: int = 3
+
+    def __post_init__(self) -> None:
+        validate_https_url(self.endpoint, "endpoint")
 
 
 class KillKrillSink:
