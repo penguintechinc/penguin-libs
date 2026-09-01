@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "penguin-limiter"
-version = "0.1.0"
+version = "0.1.1"
 description = "Pluggable rate limiting for REST, gRPC, and H3 — with automatic private-IP bypass"
 readme = "README.md"
 license = {text = "MIT"}
@@ -37,6 +37,7 @@ dev = [
     "bandit>=1.7",
     "grpcio>=1.60",
     "redis>=5.0",
+    "flask>=3.0",
 ]
 
 [project.urls]

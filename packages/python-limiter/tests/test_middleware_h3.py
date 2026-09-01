@@ -81,14 +81,33 @@ class TestH3RateLimitMiddleware:
             assert status_event["status"] == 200  # private IP always passes
 
     @pytest.mark.asyncio
-    async def test_xff_public_ip_is_limited(self) -> None:
+    async def test_forged_xff_does_not_bypass_public_client(self) -> None:
+        """Default config (trusted_proxy_count=0): a public QUIC source
+        address must still be rate-limited even with a forged private
+        X-Forwarded-For header — the bypass must not fire from an untrusted
+        header."""
         storage = MemoryStorage()
         mw = H3RateLimitMiddleware(
             _dummy_app,
             config=RateLimitConfig.from_string("2/minute"),
             storage=storage,
         )
-        # Internal client address but XFF reveals real public client
+        scope = _make_scope("7.7.7.7", xff="10.0.0.1")  # forged private hop
+        for _ in range(2):
+            await _collect_response(mw, scope)
+        events = await _collect_response(mw, scope)
+        status_event = next(e for e in events if e.get("type") == "http.response.start")
+        assert status_event["status"] == 429
+
+    @pytest.mark.asyncio
+    async def test_trusted_proxy_xff_public_ip_is_limited(self) -> None:
+        storage = MemoryStorage()
+        mw = H3RateLimitMiddleware(
+            _dummy_app,
+            config=RateLimitConfig.from_string("2/minute", trusted_proxy_count=1),
+            storage=storage,
+        )
+        # Internal client address but trusted XFF reveals real public client
         scope = _make_scope("10.0.0.1", xff="10.0.0.2, 7.7.7.7")
         for _ in range(2):
             await _collect_response(mw, scope)

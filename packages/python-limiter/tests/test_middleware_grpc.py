@@ -12,12 +12,15 @@ from penguin_limiter.storage.memory import MemoryStorage
 
 
 class TestPeerToIp:
-    @pytest.mark.parametrize("peer,expected", [
-        ("ipv4:1.2.3.4:50051", "1.2.3.4"),
-        ("ipv6:[::1]:50051", "::1"),
-        ("1.2.3.4:50051", "1.2.3.4"),
-        ("1.2.3.4", "1.2.3.4"),
-    ])
+    @pytest.mark.parametrize(
+        "peer,expected",
+        [
+            ("ipv4:1.2.3.4:50051", "1.2.3.4"),
+            ("ipv6:[::1]:50051", "::1"),
+            ("1.2.3.4:50051", "1.2.3.4"),
+            ("1.2.3.4", "1.2.3.4"),
+        ],
+    )
     def test_extracts_ip(self, peer: str, expected: str) -> None:
         assert _peer_to_ip(peer) == expected
 
@@ -50,7 +53,8 @@ class TestGrpcRateLimitInterceptor:
         ctx = self._make_context()
 
         try:
-            import grpc
+            import grpc  # noqa: F401 -- import triggers ImportError to skip when grpcio absent
+
             wrapped = interceptor.intercept_service(lambda _: handler, MagicMock())
             wrapped.unary_unary(MagicMock(), ctx)
             handler.unary_unary.assert_called_once()
@@ -67,7 +71,8 @@ class TestGrpcRateLimitInterceptor:
         ctx = self._make_context(peer="ipv4:192.168.1.1:50051")
 
         try:
-            import grpc
+            import grpc  # noqa: F401 -- import triggers ImportError to skip when grpcio absent
+
             wrapped = interceptor.intercept_service(lambda _: handler, MagicMock())
             # Call 5 times — private IP should always pass
             for _ in range(5):
@@ -86,6 +91,7 @@ class TestGrpcRateLimitInterceptor:
 
         try:
             import grpc
+
             wrapped = interceptor.intercept_service(lambda _: handler, MagicMock())
 
             ctx = self._make_context("ipv4:5.5.5.5:50051")
@@ -101,7 +107,12 @@ class TestGrpcRateLimitInterceptor:
         except ImportError:
             pytest.skip("grpcio not installed")
 
-    def test_xff_metadata_used_for_ip(self) -> None:
+    def test_xff_metadata_ignored_by_default_uses_peer(self) -> None:
+        """Regression (b): default config (trusted_proxy_count=0) — gRPC
+        metadata is entirely client-settable, no proxy required. A public
+        peer must still be rate-limited even if it sends a forged
+        x-forwarded-for metadata value; the metadata must not override the
+        real peer address."""
         storage = MemoryStorage()
         interceptor = GrpcRateLimitInterceptor(
             config=RateLimitConfig.from_string("2/minute"),
@@ -110,10 +121,37 @@ class TestGrpcRateLimitInterceptor:
         handler = self._make_handler()
 
         try:
-            import grpc
+            import grpc  # noqa: F401 -- import triggers ImportError to skip when grpcio absent
+
             wrapped = interceptor.intercept_service(lambda _: handler, MagicMock())
             ctx = self._make_context(
-                peer="ipv4:10.0.0.1:50051",  # internal peer
+                peer="ipv4:8.8.8.8:50051",  # real, public peer
+                metadata={"x-forwarded-for": "10.0.0.1"},  # attacker-forged private hop
+            )
+            wrapped.unary_unary(MagicMock(), ctx)
+            wrapped.unary_unary(MagicMock(), ctx)
+            # Third should be denied — bypass must not fire from forged metadata
+            wrapped.unary_unary(MagicMock(), ctx)
+            ctx.abort.assert_called()
+        except ImportError:
+            pytest.skip("grpcio not installed")
+
+    def test_trusted_proxy_xff_metadata_used_for_ip(self) -> None:
+        """With trusted_proxy_count=1 configured, the rightmost
+        x-forwarded-for metadata hop is honored as the real client."""
+        storage = MemoryStorage()
+        interceptor = GrpcRateLimitInterceptor(
+            config=RateLimitConfig.from_string("2/minute", trusted_proxy_count=1),
+            storage=storage,
+        )
+        handler = self._make_handler()
+
+        try:
+            import grpc  # noqa: F401 -- import triggers ImportError to skip when grpcio absent
+
+            wrapped = interceptor.intercept_service(lambda _: handler, MagicMock())
+            ctx = self._make_context(
+                peer="ipv4:10.0.0.1:50051",  # internal peer (trusted proxy)
                 metadata={"x-forwarded-for": "8.8.8.8"},  # real client
             )
             wrapped.unary_unary(MagicMock(), ctx)
@@ -133,7 +171,8 @@ class TestGrpcRateLimitInterceptor:
         handler = self._make_handler()
 
         try:
-            import grpc
+            import grpc  # noqa: F401 -- import triggers ImportError to skip when grpcio absent
+
             wrapped = interceptor.intercept_service(lambda _: handler, MagicMock())
             ctx = self._make_context("ipv4:192.168.1.1:50051")
             wrapped.unary_unary(MagicMock(), ctx)  # first ok

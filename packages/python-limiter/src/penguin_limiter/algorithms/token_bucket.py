@@ -77,8 +77,8 @@ class TokenBucket:
 
         try:
             self._storage.set_token_state(key, tokens, now, self._window * 2)
-        except Exception:
-            pass  # fail-open: don't deny if we can't persist state
+        except Exception:  # noqa: S110 -- fail-open: don't deny if state can't persist
+            pass
 
         return RateLimitResult(
             allowed=allowed,

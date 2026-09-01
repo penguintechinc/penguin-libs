@@ -19,6 +19,15 @@ are **never counted or blocked**.  Internal cluster traffic is exempt.
 To disable the bypass for a specific rule::
 
     config = RateLimitConfig.from_string("100/minute", skip_private_ips=False)
+
+Forwarded-header trust
+-----------------------
+``X-Forwarded-For`` / ``X-Real-IP`` (and gRPC's ``x-forwarded-for`` metadata)
+are **untrusted by default** (``trusted_proxy_count=0``) — only the direct
+transport peer address is used, so a client cannot forge a private-looking
+address to trigger the bypass above. Set ``trusted_proxy_count`` to the
+number of trusted reverse proxies in front of this service to honour
+forwarded headers. See :mod:`penguin_limiter.ip` for the full trust model.
 """
 
 from .algorithms import RateLimitResult
@@ -55,4 +64,4 @@ __all__ = [
     "H3RateLimitMiddleware",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

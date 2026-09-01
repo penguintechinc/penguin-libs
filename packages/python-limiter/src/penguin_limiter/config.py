@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import ClassVar
 
 
-class Algorithm(str, Enum):
+class Algorithm(StrEnum):
     """Rate-limiting algorithm selection."""
 
     FIXED_WINDOW = "fixed_window"
@@ -24,7 +24,7 @@ class Algorithm(str, Enum):
     SLIDING_WINDOW = "sliding_window"
     """Per-key timestamp log. Precise but uses more storage for high-traffic keys."""
 
-    TOKEN_BUCKET = "token_bucket"
+    TOKEN_BUCKET = "token_bucket"  # noqa: S105 -- algorithm name, not a credential
     """Smooth burst handling. Tokens accumulate at *limit/window* per second."""
 
 
@@ -90,7 +90,17 @@ class RateLimitConfig:
         Attach ``X-RateLimit-*`` and ``Retry-After`` headers to responses.
     skip_private_ips:
         Skip rate limiting entirely for requests from private / internal IPs.
-        Defaults to ``True`` — internal cluster traffic is always exempt.
+        Defaults to ``True`` — internal cluster traffic is always exempt. The
+        private-IP check is always performed against the *trusted* client
+        address (see ``trusted_proxy_count``), never a raw client-supplied
+        header value.
+    trusted_proxy_count:
+        Number of trusted reverse proxies (e.g. an in-cluster ingress) known
+        to sit directly in front of this service. Defaults to ``0`` — safe
+        by default: ``X-Forwarded-For`` / ``X-Real-IP`` are **not trusted**
+        and only the direct transport peer address is used. Set this to the
+        actual proxy hop count to honour forwarded headers; see
+        :mod:`penguin_limiter.ip` for the trust model.
     """
 
     limit: int
@@ -100,6 +110,7 @@ class RateLimitConfig:
     fail_open: bool = True
     add_headers: bool = True
     skip_private_ips: bool = True
+    trusted_proxy_count: int = 0
 
     # Multi-tier support: if set, these override limit/window with a list of tiers
     tiers: list[tuple[int, int]] = field(default_factory=list)
@@ -112,7 +123,7 @@ class RateLimitConfig:
         spec: str,
         algorithm: Algorithm = Algorithm.SLIDING_WINDOW,
         **kwargs: object,
-    ) -> "RateLimitConfig":
+    ) -> RateLimitConfig:
         """Build from a limit string, e.g. ``RateLimitConfig.from_string('100/minute')``."""
         tiers = parse_multi_tier(spec)
         # Use the tightest tier as primary limit/window

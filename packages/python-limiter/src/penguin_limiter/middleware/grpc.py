@@ -15,23 +15,29 @@ Compatible with ``grpcio >= 1.60``.  Add to your server::
 
 IP extraction
 -------------
-gRPC metadata does not automatically propagate HTTP headers.  The interceptor
-reads them in this priority order:
+gRPC metadata is entirely client-settable — no proxy required — so
+``x-forwarded-for`` / ``x-real-ip`` metadata is **untrusted by default**.
+The interceptor resolves the client IP in this priority order:
 
-1. ``x-forwarded-for`` metadata key (set by an ingress / envoy proxy)
-2. ``x-real-ip`` metadata key
+1. ``x-forwarded-for`` metadata key — only when
+   :attr:`~penguin_limiter.config.RateLimitConfig.trusted_proxy_count` > 0.
+2. ``x-real-ip`` metadata key — same condition.
 3. ``servicer_context.peer()`` — the TCP peer address (``ipv4:1.2.3.4:port``
-   or ``ipv6:[::1]:port``)
+   or ``ipv6:[::1]:port``). Always used when the metadata above is untrusted
+   or absent — the safe default requires zero configuration.
 
 The ``skip_private_ips`` flag in :class:`~penguin_limiter.config.RateLimitConfig`
-controls whether internal IPs bypass rate limiting (default: ``True``).
-Set ``skip_private_ips=False`` to enforce limits regardless of source.
+controls whether internal IPs bypass rate limiting (default: ``True``), keyed
+off the resolved (trusted) client IP — never a raw metadata value. Set
+``skip_private_ips=False`` to enforce limits regardless of source. See
+:mod:`penguin_limiter.ip` for the full trust model.
 """
 
 from __future__ import annotations
 
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from ..algorithms.fixed_window import FixedWindow
 from ..algorithms.sliding_window import SlidingWindow
@@ -80,6 +86,7 @@ class GrpcRateLimitInterceptor:
     ) -> None:
         if storage is None:
             from ..storage.memory import MemoryStorage
+
             storage = MemoryStorage()
         self._config = config
         self._algo = _build_algorithm(config, storage)
@@ -105,12 +112,16 @@ class GrpcRateLimitInterceptor:
             peer_ip = _peer_to_ip(context.peer()) if hasattr(context, "peer") else None
 
             if config.skip_private_ips:
-                do_limit, client_ip = should_rate_limit(xff, xri, peer_ip)
+                do_limit, client_ip = should_rate_limit(
+                    xff, xri, peer_ip, trusted_proxy_count=config.trusted_proxy_count
+                )
                 if not do_limit:
                     # Internal caller — pass through without counting
                     return handler.unary_unary(request, context)
             else:
-                _, client_ip = should_rate_limit(xff, xri, peer_ip)
+                _, client_ip = should_rate_limit(
+                    xff, xri, peer_ip, trusted_proxy_count=config.trusted_proxy_count
+                )
                 do_limit = True
 
             key = f"{config.key_prefix}:{client_ip or peer_ip or 'unknown'}"
@@ -121,11 +132,13 @@ class GrpcRateLimitInterceptor:
                 if config.fail_open:
                     return handler.unary_unary(request, context)
                 import grpc
+
                 context.abort(grpc.StatusCode.UNAVAILABLE, "Rate limit service unavailable")
                 return None
 
             if not result.allowed:
                 import grpc
+
                 context.abort(
                     grpc.StatusCode.RESOURCE_EXHAUSTED,
                     f"Rate limit exceeded. Try again in {int(result.reset_after)}s.",
@@ -136,6 +149,7 @@ class GrpcRateLimitInterceptor:
 
         try:
             import grpc
+
             return grpc.unary_unary_rpc_method_handler(
                 rate_limit_wrapper,
                 request_deserializer=getattr(handler, "request_deserializer", None),

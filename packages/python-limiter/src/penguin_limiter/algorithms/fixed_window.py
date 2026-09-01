@@ -11,8 +11,6 @@ bursts are unacceptable.
 
 from __future__ import annotations
 
-import time
-
 from ..algorithms import RateLimitResult
 from ..storage import RateLimitStorage
 

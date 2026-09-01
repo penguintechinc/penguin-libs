@@ -22,20 +22,27 @@ Usage::
 
 IP extraction for H3
 --------------------
-H3 connections carry HTTP/3 headers.  The middleware reads (in order):
+H3 connections carry HTTP/3 headers, which are client-settable like any other
+HTTP header — so they are **untrusted by default**. The middleware resolves
+the client IP in this order:
 
-1. ``x-forwarded-for`` header from the H3 request headers
-2. ``x-real-ip`` header
-3. ``scope["client"][0]`` — the QUIC source address
+1. ``x-forwarded-for`` header — only when
+   :attr:`~penguin_limiter.config.RateLimitConfig.trusted_proxy_count` > 0.
+2. ``x-real-ip`` header — same condition.
+3. ``scope["client"][0]`` — the QUIC source address. Always used when the
+   headers above are untrusted or absent — the safe default.
 
 Private-IP bypass is controlled by ``skip_private_ips`` on the config
-(default ``True``).  Pass ``skip_private_ips=False`` to disable it.
+(default ``True``), keyed off the resolved (trusted) client IP. Pass
+``skip_private_ips=False`` to disable it. See :mod:`penguin_limiter.ip` for
+the full trust model.
 """
 
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from ..algorithms.fixed_window import FixedWindow
 from ..algorithms.sliding_window import SlidingWindow
@@ -78,6 +85,7 @@ class H3RateLimitMiddleware:
     ) -> None:
         if storage is None:
             from ..storage.memory import MemoryStorage
+
             storage = MemoryStorage()
         self._app = app
         self._config = config
@@ -107,13 +115,18 @@ class H3RateLimitMiddleware:
         client = scope.get("client")
         remote_addr = client[0] if isinstance(client, (list, tuple)) and client else None
 
+        trusted_proxy_count = self._config.trusted_proxy_count
         if self._config.skip_private_ips:
-            do_limit, client_ip = should_rate_limit(xff, xri, remote_addr)
+            do_limit, client_ip = should_rate_limit(
+                xff, xri, remote_addr, trusted_proxy_count=trusted_proxy_count
+            )
             if not do_limit:
                 await self._app(scope, receive, send)
                 return
         else:
-            _, client_ip = should_rate_limit(xff, xri, remote_addr)
+            _, client_ip = should_rate_limit(
+                xff, xri, remote_addr, trusted_proxy_count=trusted_proxy_count
+            )
             client_ip = client_ip or remote_addr or "unknown"
             do_limit = True
 

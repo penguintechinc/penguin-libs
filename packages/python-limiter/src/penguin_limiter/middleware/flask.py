@@ -24,13 +24,21 @@ Usage — per-route decorator::
 The ``skip_private_ips`` flag on :class:`~penguin_limiter.config.RateLimitConfig`
 is honoured by default — internal cluster traffic is **never** counted.
 Set ``skip_private_ips=False`` in the config to disable the bypass.
+
+``X-Forwarded-For`` / ``X-Real-IP`` are **untrusted by default**
+(``trusted_proxy_count=0``) — only ``request.remote_addr`` is used, so the
+bypass cannot be forged by a client-supplied header. Set
+``trusted_proxy_count`` to the number of trusted reverse proxies in front of
+this service to honour forwarded headers. See :mod:`penguin_limiter.ip` for
+the trust model.
 """
 
 from __future__ import annotations
 
 import functools
 import time
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from ..algorithms import RateLimitResult
 from ..algorithms.fixed_window import FixedWindow
@@ -85,6 +93,7 @@ class FlaskRateLimiter:
     ) -> None:
         if storage is None:
             from ..storage.memory import MemoryStorage
+
             storage = MemoryStorage()
         self._config = config
         self._storage = storage
@@ -92,13 +101,14 @@ class FlaskRateLimiter:
         self._key_func = key_func or self._default_key_func
         self._app: Any = None
 
-    @staticmethod
-    def _default_key_func(request: Any) -> str:  # noqa: ANN401
+    def _default_key_func(self, request: Any) -> str:  # noqa: ANN401
         """Extract client IP from the Flask request object."""
         xff = request.headers.get("X-Forwarded-For")
         xri = request.headers.get("X-Real-IP")
         ra = request.remote_addr or ""
-        _, ip = should_rate_limit(xff, xri, ra)
+        _, ip = should_rate_limit(
+            xff, xri, ra, trusted_proxy_count=self._config.trusted_proxy_count
+        )
         return ip or ra
 
     def init_app(self, app: Any) -> None:
@@ -112,7 +122,7 @@ class FlaskRateLimiter:
             from flask import abort, request
         except ImportError:
             try:
-                from quart import abort, request  # type: ignore[no-reattr]
+                from quart import abort, request  # type: ignore[no-redef]
             except ImportError:
                 return None
 
@@ -123,7 +133,9 @@ class FlaskRateLimiter:
             xff = request.headers.get("X-Forwarded-For")
             xri = request.headers.get("X-Real-IP")
             ra = request.remote_addr or ""
-            do_limit, client_ip = should_rate_limit(xff, xri, ra)
+            do_limit, client_ip = should_rate_limit(
+                xff, xri, ra, trusted_proxy_count=self._config.trusted_proxy_count
+            )
             if not do_limit:
                 return None  # internal traffic — skip entirely
         else:
@@ -138,8 +150,7 @@ class FlaskRateLimiter:
             abort(503)
 
         if not result.allowed:
-            response = abort(429)
-            return response
+            abort(429)  # always raises; nothing to return
 
         return None
 
@@ -168,10 +179,9 @@ class FlaskRateLimiter:
             fail_open=self._config.fail_open,
             add_headers=self._config.add_headers,
             skip_private_ips=(
-                skip_private_ips
-                if skip_private_ips is not None
-                else self._config.skip_private_ips
+                skip_private_ips if skip_private_ips is not None else self._config.skip_private_ips
             ),
+            trusted_proxy_count=self._config.trusted_proxy_count,
         )
         route_algo = _build_algorithm(route_config, self._storage)
         effective_key_func = key_func or self._key_func
@@ -182,14 +192,19 @@ class FlaskRateLimiter:
                 try:
                     from flask import abort, request
                 except ImportError:
-                    from quart import abort, request  # type: ignore[no-reattr]
+                    from quart import abort, request  # type: ignore[no-redef]
 
                 # Private-IP bypass for this route
                 if route_config.skip_private_ips:
                     xff = request.headers.get("X-Forwarded-For")
                     xri = request.headers.get("X-Real-IP")
                     ra = request.remote_addr or ""
-                    do_limit, client_ip = should_rate_limit(xff, xri, ra)
+                    do_limit, client_ip = should_rate_limit(
+                        xff,
+                        xri,
+                        ra,
+                        trusted_proxy_count=route_config.trusted_proxy_count,
+                    )
                     if not do_limit:
                         return fn(*args, **kwargs)
                     key = f"{route_config.key_prefix}:{client_ip}"

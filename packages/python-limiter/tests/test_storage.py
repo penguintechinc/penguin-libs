@@ -100,6 +100,7 @@ class TestRedisStorage:
     def storage(self):  # type: ignore[return]
         try:
             import fakeredis
+
             from penguin_limiter.storage.redis_store import RedisStorage
         except ImportError:
             pytest.skip("fakeredis not available")
