@@ -11,6 +11,7 @@ from jinja2 import (
     StrictUndefined,
     select_autoescape,
 )
+from jinja2.sandbox import SandboxedEnvironment
 
 
 class TemplateRenderer:
@@ -19,6 +20,17 @@ class TemplateRenderer:
     Built-in templates are loaded from the ``penguin_email/templates/builtin/``
     package directory using :mod:`importlib.resources` — this works correctly
     from an installed wheel, avoiding any ``pkg_resources`` dependency.
+
+    :meth:`render_file` and :meth:`render_string` render caller-supplied
+    template *text* (not just template variables), so both use Jinja2's
+    :class:`~jinja2.sandbox.SandboxedEnvironment` to block attribute access
+    to Python internals (e.g. ``__class__``, ``__globals__``) and other
+    sandbox-escape gadgets. This narrows, but does not eliminate, the risk
+    of feeding fully-untrusted template text to these methods — callers
+    should still only pass template content from trusted sources (app
+    config, internal signature definitions), never raw end-user input.
+    Built-in templates are the package's own trusted ``.j2`` files and use
+    a plain :class:`~jinja2.Environment`.
     """
 
     def __init__(self) -> None:
@@ -45,9 +57,14 @@ class TemplateRenderer:
         return template.render(**kwargs)
 
     def render_file(self, path: str, **kwargs: object) -> str:
-        """Render a Jinja2 template from an arbitrary filesystem path."""
+        """Render a Jinja2 template from an arbitrary filesystem path.
+
+        Uses a :class:`~jinja2.sandbox.SandboxedEnvironment` — the file's
+        contents are caller/possibly-untrusted template text, not just
+        variables, so Python-internals attribute access is blocked.
+        """
         p = Path(path)
-        env = Environment(
+        env = SandboxedEnvironment(
             loader=FileSystemLoader(str(p.parent)),
             autoescape=select_autoescape(["html", "j2"]),
             undefined=StrictUndefined,
@@ -60,6 +77,15 @@ class TemplateRenderer:
     def render_string(self, template_str: str, *, autoescape: bool = True, **kwargs: object) -> str:
         """Render a raw Jinja2 string template.
 
+        *template_str* is caller-supplied template text (e.g. a
+        :class:`~penguin_email.signature.Signature` body), not just
+        variables — rendered with a
+        :class:`~jinja2.sandbox.SandboxedEnvironment` to block attribute
+        access to Python internals (``__class__``, ``__globals__``, etc.)
+        and other sandbox-escape gadgets. This narrows, but does not
+        eliminate, the risk of passing fully-untrusted text here — callers
+        should still only pass template content from trusted sources.
+
         *autoescape* controls HTML-entity escaping of substituted variables.
         Defaults to ``True`` (matches prior behavior for HTML string
         templates). Pass ``autoescape=False`` when rendering plain-text
@@ -69,7 +95,7 @@ class TemplateRenderer:
         MIME bodies), so this does not carry the XSS risk the caller-facing
         toggle would otherwise imply.
         """
-        env = Environment(
+        env = SandboxedEnvironment(
             autoescape=autoescape,  # nosec B701 # noqa: S701 -- text/plain output only, see docstring
             undefined=StrictUndefined,
             trim_blocks=True,

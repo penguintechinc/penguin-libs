@@ -2,6 +2,7 @@
 
 import pytest
 from jinja2 import UndefinedError
+from jinja2.exceptions import SecurityError
 
 from penguin_email.templates.engine import TemplateRenderer
 
@@ -108,3 +109,40 @@ class TestTemplateRenderer:
     def test_render_string_autoescape_false_leaves_value_raw(self) -> None:
         result = self.renderer.render_string("Hello {{ name }}", name="A & B", autoescape=False)
         assert result == "Hello A & B"
+
+    # SSTI sandboxing (regression: SandboxedEnvironment blocks Python-internals
+    # attribute access on caller-supplied template text)
+    def test_render_string_blocks_sandbox_escape_attribute_access(self) -> None:
+        malicious = '{{ "".__class__.__mro__[1].__subclasses__() }}'
+        with pytest.raises(SecurityError):
+            self.renderer.render_string(malicious)
+
+    def test_render_string_blocks_globals_access(self) -> None:
+        malicious = "{{ range.__globals__ }}"
+        with pytest.raises(SecurityError):
+            self.renderer.render_string(malicious)
+
+    def test_render_string_still_renders_legitimate_template(self) -> None:
+        result = self.renderer.render_string("Hello {{ name }}!", name="Zara")
+        assert result == "Hello Zara!"
+
+    def test_render_file_blocks_sandbox_escape_attribute_access(self, tmp_path) -> None:
+        tpl = tmp_path / "evil.html.j2"
+        tpl.write_text("{{ [].__class__.__base__.__subclasses__() }}")
+        with pytest.raises(SecurityError):
+            self.renderer.render_file(str(tpl))
+
+    def test_render_file_still_renders_legitimate_template(self, tmp_path) -> None:
+        tpl = tmp_path / "custom.html.j2"
+        tpl.write_text("<p>Hello {{ name }}!</p>")
+        html = self.renderer.render_file(str(tpl), name="World")
+        assert html == "<p>Hello World!</p>"
+
+    def test_render_builtin_still_renders_after_sandboxing_string_paths(self) -> None:
+        html = self.renderer.render_builtin(
+            "welcome",
+            name="Alice",
+            app_name="TestApp",
+            login_url="https://app.example.com/login",
+        )
+        assert "Alice" in html
