@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { FormModalBuilder } from '../src/FormModalBuilder';
+import { FormModalBuilder, generatePassword } from '../src/FormModalBuilder';
 import type { FormModalBuilderProps } from '../src/FormModalBuilder';
 
 describe('FormModalBuilder', () => {
@@ -495,6 +495,44 @@ describe('FormModalBuilder', () => {
 
       // Button should show loading text or be disabled
       expect(submitButton).toBeInTheDocument();
+    });
+  });
+
+  describe('generatePassword (CSPRNG)', () => {
+    // regression: password generation must use a cryptographically secure RNG
+    // (crypto.getRandomValues), not Math.random(), since users may submit the
+    // generated value as a real password.
+    it('does not call Math.random and does call crypto.getRandomValues', () => {
+      const mathRandomSpy = vi.spyOn(Math, 'random');
+      const getRandomValuesSpy = vi.spyOn(crypto, 'getRandomValues');
+
+      generatePassword(20);
+
+      expect(mathRandomSpy).not.toHaveBeenCalled();
+      expect(getRandomValuesSpy).toHaveBeenCalled();
+
+      mathRandomSpy.mockRestore();
+      getRandomValuesSpy.mockRestore();
+    });
+
+    it('returns a string of the requested length from the expected charset', () => {
+      const allowedChars = /^[A-Za-z0-9]+$/;
+
+      for (const length of [1, 8, 14, 32]) {
+        const password = generatePassword(length);
+        expect(password).toHaveLength(length);
+        expect(password).toMatch(allowedChars);
+      }
+    });
+
+    it('defaults to a length-14 password when no length is provided', () => {
+      const password = generatePassword();
+      expect(password).toHaveLength(14);
+    });
+
+    it('produces different output across calls (not deterministic/predictable)', () => {
+      const passwords = new Set(Array.from({ length: 10 }, () => generatePassword(20)));
+      expect(passwords.size).toBeGreaterThan(1);
     });
   });
 });

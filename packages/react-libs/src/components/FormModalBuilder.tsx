@@ -358,14 +358,26 @@ export interface FormModalBuilderProps {
 }
 
 /**
- * Generate a random password with mixed case letters and numbers.
+ * Generate a cryptographically secure random password with mixed case letters and numbers.
+ * Uses the Web Crypto API (`crypto.getRandomValues`) with rejection sampling to avoid
+ * modulo bias, rather than the non-cryptographic `Math.random()`.
  * @param length - Password length (default 14)
  */
 export function generatePassword(length = 14): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const charsLength = chars.length;
+  // Largest multiple of charsLength that fits in a byte (0-255). Bytes at or above
+  // this value are discarded so `byte % charsLength` stays uniformly distributed.
+  const maxUnbiased = Math.floor(256 / charsLength) * charsLength;
   let password = '';
-  for (let i = 0; i < length; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  const buffer = new Uint8Array(Math.max(length * 2, 16));
+  while (password.length < length) {
+    crypto.getRandomValues(buffer);
+    for (let i = 0; i < buffer.length && password.length < length; i++) {
+      const byte = buffer[i];
+      if (byte === undefined || byte >= maxUnbiased) continue;
+      password += chars.charAt(byte % charsLength);
+    }
   }
   return password;
 }

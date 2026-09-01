@@ -1,6 +1,6 @@
 {
   "name": "@penguintechinc/react-form-builder",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "PenguinTech FormBuilder and FormModalBuilder React components",
   "type": "module",
   "main": "./dist/index.js",
