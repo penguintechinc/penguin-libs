@@ -4,7 +4,7 @@ Penguin Tech Python Utilities
 Shared utilities for Penguin Tech Python applications.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 from .decorators import (
     DecoratorContext,

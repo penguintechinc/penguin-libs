@@ -43,8 +43,31 @@ SENSITIVE_KEYS = frozenset(
     }
 )
 
-# Regex for email detection
+# Regex for email detection. Intentionally NOT anchored — used with
+# .search()/.sub() so an email embedded anywhere in a larger string
+# (e.g. "user alice@example.com logged in") is still found and redacted,
+# not just values that are a full/exact email address.
 EMAIL_REGEX = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+
+
+def _redact_email_match(match: re.Match[str]) -> str:
+    """Replace a single matched email address, keeping the domain visible."""
+    _, _, domain = match.group(0).partition("@")
+    return f"[email]@{domain}" if domain else "[REDACTED_EMAIL]"
+
+
+def _sanitize_string(value: str) -> str:
+    """
+    Redact sensitive patterns found anywhere within a string value.
+
+    Uses EMAIL_REGEX.sub rather than a full-string match so embedded
+    matches are redacted in place (e.g. free-text log messages or dict
+    values that merely contain an email) instead of requiring the whole
+    string to be exactly one email address.
+    """
+    if "@" not in value:
+        return value
+    return EMAIL_REGEX.sub(_redact_email_match, value)
 
 
 def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -70,15 +93,7 @@ def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
         if key_lower in SENSITIVE_KEYS or any(s in key_lower for s in SENSITIVE_KEYS):
             sanitized[key] = "[REDACTED]"
         elif isinstance(value, str):
-            # Check for email addresses — only log domain
-            if "@" in value and EMAIL_REGEX.match(value):
-                parts = value.split("@")
-                if len(parts) == 2:
-                    sanitized[key] = f"[email]@{parts[1]}"
-                else:
-                    sanitized[key] = "[REDACTED_EMAIL]"
-            else:
-                sanitized[key] = value
+            sanitized[key] = _sanitize_string(value)
         elif isinstance(value, dict):
             sanitized[key] = cast(Any, sanitize_log_data(value))
         elif isinstance(value, list):
@@ -181,8 +196,9 @@ class SanitizedLogger:
         self._logger = get_logger(name, level)
 
     def _log(self, method: str, message: str, data: dict[str, Any] | None = None) -> None:
+        sanitized_message = _sanitize_string(message) if isinstance(message, str) else message
         sanitized = sanitize_log_data(data) if data else {}
-        getattr(self._logger, method)(message, **sanitized)
+        getattr(self._logger, method)(sanitized_message, **sanitized)
 
     def debug(self, message: str, data: dict[str, Any] | None = None) -> None:
         """Log a debug message with optional sanitized data."""
