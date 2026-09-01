@@ -1037,6 +1037,53 @@ class TestValidationErrorResponse:
                 assert "message" in err
                 assert "type" in err
 
+    def test_from_pydantic_error_response_does_not_leak_submitted_value(self) -> None:
+        """Regression: the submitted field value must never appear in the
+        error response, even for sensitive fields like passwords/tokens.
+        Pydantic's ValidationError.errors() defaults to include_input=True,
+        which embeds the raw submitted value verbatim in each error dict.
+        """
+
+        class LoginRequest(BaseModel):
+            password: int  # wrong-typed input below forces a validation error
+
+        secret_value = "s3cr3t-P@ssw0rd-do-not-leak"  # noqa: S105 -- test fixture, not a real credential
+        try:
+            LoginRequest(password=secret_value)
+        except ValidationError as e:
+            # Sanity check: pydantic's raw errors do carry the value by default.
+            assert any(err.get("input") == secret_value for err in e.errors())
+
+            error_dict, status_code = ValidationErrorResponse.from_pydantic_error(e)
+            assert status_code == 400
+            assert secret_value not in str(error_dict)
+            for err in error_dict["validation_errors"]:
+                assert "input" not in err
+
+    def test_from_pydantic_error_does_not_log_submitted_value(self) -> None:
+        """Regression: the submitted field value must never be written to
+        the application logger either -- only the sanitized (include_input=
+        False) errors may be logged.
+        """
+        from flask import Flask
+
+        class LoginRequest(BaseModel):
+            password: int
+
+        secret_value = "s3cr3t-P@ssw0rd-do-not-leak"  # noqa: S105 -- test fixture, not a real credential
+        app = Flask(__name__)
+        app.logger.error = MagicMock()  # type: ignore[method-assign]
+
+        with app.app_context():
+            try:
+                LoginRequest(password=secret_value)
+            except ValidationError as e:
+                ValidationErrorResponse.from_pydantic_error(e)
+
+        app.logger.error.assert_called_once()
+        logged_message = app.logger.error.call_args[0][0]
+        assert secret_value not in logged_message
+
 
 @pytest.mark.skipif(not FLASK_AVAILABLE, reason="Flask not available")
 def test_validate_body() -> None:

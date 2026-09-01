@@ -1,14 +1,26 @@
-"""Flask integration for Pydantic 2 validation."""
+"""Flask integration for Pydantic 2 validation.
+
+Flask is an optional extra (``pip install penguin-security[flask]``) --
+this module must import cleanly without Flask installed so that
+``import penguin_security`` never forces Flask on consumers who only need
+e.g. sanitize/password/crypto. Every Flask symbol is therefore imported
+locally, inside the function that needs it; only calling one of these
+functions without Flask installed raises ImportError.
+"""
 
 # flake8: noqa: E501
+
+from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
 from functools import wraps
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from flask import Response, jsonify, request
 from pydantic import BaseModel, ValidationError
+
+if TYPE_CHECKING:
+    from flask import Response
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -26,14 +38,20 @@ class ValidationErrorResponse:
         Returns:
             Tuple of (error dict, status code)
         """
-        # Log validation errors for debugging
+        # Log validation errors for debugging. include_input=False/
+        # include_url=False keep raw submitted field values (passwords,
+        # tokens, any sensitive body field) out of both the log line and
+        # the per-field error dict below -- pydantic's default
+        # ValidationError.errors() embeds the submitted value verbatim.
         from flask import current_app, has_app_context
 
+        safe_errors = error.errors(include_input=False, include_url=False)
+
         if has_app_context() and current_app:
-            current_app.logger.error(f"Validation error: {error.errors()}")
+            current_app.logger.error(f"Validation error: {safe_errors}")
 
         validation_errors = []
-        for err in error.errors():
+        for err in safe_errors:
             validation_errors.append(
                 {
                     "field": ".".join(str(x) for x in err["loc"]),
@@ -60,6 +78,8 @@ def validate_body[T: BaseModel](model_class: type[T]) -> T:
     Raises:
         ValidationError: If validation fails
     """
+    from flask import request
+
     data = request.get_json()
     return model_class.model_validate(data)
 
@@ -76,6 +96,8 @@ def validate_query_params[T: BaseModel](model_class: type[T]) -> T:
     Raises:
         ValidationError: If validation fails
     """
+    from flask import request
+
     data = request.args.to_dict()
     return model_class.model_validate(data)
 
@@ -158,7 +180,7 @@ def model_response(
             user = UserResponse(id=user_id, name="Alice", email="alice@example.com")
             return model_response(user)
     """
-    from flask import has_app_context
+    from flask import Response, has_app_context, jsonify
 
     data = model.model_dump(exclude_none=exclude_none)
 

@@ -123,6 +123,34 @@ class TestSanitizeHtml:
         # Second pass should not introduce new issues
         assert "script" not in twice or "<script>" not in twice
 
+    def test_sanitize_html_neutralizes_blocklist_bypass_payloads(self) -> None:
+        """Regression: an allowlist parser (nh3) must neutralize classic
+        blocklist-regex bypass payloads -- malformed/nested tags, unusual
+        casing/whitespace -- that defeat string-matching sanitizers.
+        """
+        from penguin_security import sanitize_html
+
+        payloads = [
+            "<img src=x onerror=alert(1)>",
+            "<scr<script>ipt>alert(1)</scr</script>ipt>",
+            "<IMG SRC=x OnErRor=alert(1)>",
+            "<img src=x onerror =alert(1)>",
+            "<svg/onload=alert(1)>",
+            "<iframe src=javascript:alert(1)></iframe>",
+            '<a href="  javascript:alert(1)">click</a>',
+            '<object data="javascript:alert(1)"></object>',
+            '<embed src="javascript:alert(1)">',
+        ]
+        for payload in payloads:
+            result = sanitize_html(payload).lower()
+            assert "onerror" not in result, payload
+            assert "onload" not in result, payload
+            assert "javascript:" not in result, payload
+            assert "<script" not in result, payload
+            assert "<iframe" not in result, payload
+            assert "<object" not in result, payload
+            assert "<embed" not in result, payload
+
 
 class TestEscapeSqlString:
     """Tests for SQL string escaping."""
@@ -180,6 +208,16 @@ class TestEscapeSqlString:
 
         with pytest.raises(TypeError):
             escape_sql_string(None)  # type: ignore
+
+    def test_escape_sql_string_emits_deprecation_warning(self) -> None:
+        """Regression: escape_sql_string must warn on every call, steering
+        callers toward parameterized queries (penguin-dal) instead of
+        hand-rolled quote-doubling next to that guidance in its docstring.
+        """
+        from penguin_security import escape_sql_string
+
+        with pytest.warns(DeprecationWarning):
+            escape_sql_string("It's")
 
 
 class TestEscapeShellArg:
@@ -672,13 +710,22 @@ class TestSecurityIntegration:
     """Integration tests for security utilities."""
 
     def test_sanitize_then_escape(self) -> None:
-        """Test combining sanitization and escaping."""
+        """Test combining sanitization and escaping.
+
+        Note: nh3 (allowlist sanitizer) removes <script> tags and their
+        content entirely -- unlike the prior blocklist regex, which only
+        stripped script content matching specific dangerous-function
+        patterns and would have left "DROP TABLE users" untouched. Assert
+        against surrounding safe text instead of raw output length.
+        """
         from penguin_security import escape_sql_string, sanitize_html
 
-        malicious = "<script>'; DROP TABLE users; --</script>"
+        malicious = "It's a test<script>'; DROP TABLE users; --</script>"
         sanitized = sanitize_html(malicious)
+        assert "<script" not in sanitized
+        assert "DROP TABLE" not in sanitized
         escaped = escape_sql_string(sanitized)
-        assert len(escaped) > 0
+        assert "''" in escaped  # the single quote in "It's" is doubled
 
     def test_password_workflow(self) -> None:
         """Test complete password hashing and verification workflow."""

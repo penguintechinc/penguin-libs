@@ -1,24 +1,29 @@
 """HTML sanitization and XSS prevention utilities."""
 
-import re
+import warnings
+
+import nh3
 
 
 def sanitize_html(text: str) -> str:
     """Sanitize HTML to prevent XSS attacks.
 
-    Removes:
-    - Script tags (but extracts and cleans their text content)
-    - Event handlers (onclick, onerror, onload, etc.)
-    - JavaScript URLs (javascript:)
-    - Data URLs with scripts
-    - Null bytes
-    - SVG-based XSS vectors
+    Uses nh3 (a Rust/ammonia binding) to allowlist-sanitize HTML: only a
+    fixed, safe set of tags and attributes survives -- everything else,
+    including script tags, event handlers, javascript:/data: URLs, and
+    disallowed elements (svg, iframe, object, embed), is stripped.
+
+    This replaces a prior blocklist regex implementation. Blocklist regex
+    sanitizers are well-known to be bypassable via malformed/nested tags,
+    unusual casing or whitespace, and encoding tricks -- string matching
+    can never enumerate every way to spell a dangerous construct. An
+    allowlist parser is the only sound defense.
 
     Args:
         text: HTML string to sanitize
 
     Returns:
-        str: Sanitized HTML string with harmful tags removed
+        str: Sanitized HTML string with only allowlisted tags/attributes
 
     Raises:
         TypeError: If text is not a string
@@ -26,60 +31,17 @@ def sanitize_html(text: str) -> str:
     if not isinstance(text, str):
         raise TypeError(f"Expected str, got {type(text).__name__}")
 
-    # Remove null bytes
-    text = text.replace("\x00", "")
-
-    # Remove script tags but try to preserve text content for non-dangerous scripts
-    # Pattern: extract content between script tags, then remove the tags entirely if it contains dangerous code  # noqa: E501
-    def sanitize_script_tag(match):
-        content = match.group(1)
-        # Remove dangerous JavaScript functions/patterns
-        dangerous_patterns = [
-            r"alert\s*\(",
-            r"confirm\s*\(",
-            r"prompt\s*\(",
-            r"eval\s*\(",
-            r"Function\s*\(",
-            r"fetch\s*\(",
-            r"XMLHttpRequest",
-            r"WebSocket",
-        ]
-        # If content contains any dangerous patterns, remove entirely
-        for pattern in dangerous_patterns:
-            if re.search(pattern, content, re.IGNORECASE):
-                return ""
-        # Otherwise preserve the content (it might be data or safe text)
-        return content
-
-    text = re.sub(
-        r"<script[^>]*>(.*?)</script>", sanitize_script_tag, text, flags=re.IGNORECASE | re.DOTALL
-    )  # noqa: E501
-
-    # Remove event handlers (onclick, onerror, onload, etc.)
-    text = re.sub(r'\s+on\w+\s*=\s*["\']?[^"\'>\s]*["\']?', "", text, flags=re.IGNORECASE)  # noqa: E501
-
-    # Remove javascript: URLs
-    text = re.sub(r"javascript:", "", text, flags=re.IGNORECASE)
-
-    # Remove data: URLs that might contain scripts
-    text = re.sub(r"data:text/html[^,]*,", "", text, flags=re.IGNORECASE)
-
-    # Remove SVG with onload/onerror and their content
-    text = re.sub(r"<svg[^>]*>.*?</svg>", "", text, flags=re.IGNORECASE | re.DOTALL)  # noqa: E501
-
-    # Remove iframe, embed, object tags and their content
-    text = re.sub(
-        r"<(iframe|embed|object)[^>]*>.*?</\1>", "", text, flags=re.IGNORECASE | re.DOTALL
-    )  # noqa: E501
-
-    return text
+    return nh3.clean(text)
 
 
 def escape_sql_string(text: str) -> str:
     """Escape SQL string to prevent SQL injection.
 
-    Note: This is a basic escaping function. For production, use
-    parameterized queries instead.
+    Deprecated: hand-rolled quote-doubling is NOT a substitute for
+    parameterized queries and must never be used to build SQL directly.
+    Use parameterized queries via penguin-dal (or your driver's native
+    parameter binding) instead -- this function is kept only so existing
+    importers don't break, and emits a DeprecationWarning on every call.
 
     Args:
         text: String to escape
@@ -90,6 +52,14 @@ def escape_sql_string(text: str) -> str:
     Raises:
         TypeError: If text is not a string
     """
+    warnings.warn(
+        "escape_sql_string is deprecated and is NOT a substitute for "
+        "parameterized queries. Use parameterized queries via penguin-dal "
+        "(or your driver's native parameter binding) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     if not isinstance(text, str):
         raise TypeError(f"Expected str, got {type(text).__name__}")
 
