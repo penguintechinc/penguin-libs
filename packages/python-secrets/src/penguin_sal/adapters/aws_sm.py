@@ -255,19 +255,33 @@ class AWSSecretsManagerAdapter(BaseAdapter):
             ) from e
 
     def exists(self, key: str) -> bool:
-        """Check if a secret exists."""
+        """Check if a secret exists.
+
+        Only a genuine ResourceNotFoundException returns False; other
+        errors (auth, permissions, network) propagate as BackendError,
+        matching the discrimination in `get()`.
+        """
         if not self._connected:
             self._init_connection()
 
         try:
             self._client.describe_secret(SecretId=key)
             return True
+        except self._get_client_error() as e:
+            error_code = getattr(e, "response", {}).get("Error", {}).get("Code", "")  # type: ignore[union-attr]
+            if error_code == "ResourceNotFoundException":
+                return False
+            raise BackendError(
+                f"Failed to check secret {key}: {e}",
+                backend="aws-sm",
+                original_error=e,
+            ) from e
         except Exception as e:
-            if hasattr(e, "response"):
-                error_code = e.response.get("Error", {}).get("Code", "")
-                if error_code == "ResourceNotFoundException":
-                    return False
-            return False
+            raise BackendError(
+                f"Unexpected error checking secret {key}: {e}",
+                backend="aws-sm",
+                original_error=e,
+            ) from e
 
     def health_check(self) -> bool:
         """Check if the backend is healthy."""

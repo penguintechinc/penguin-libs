@@ -602,16 +602,32 @@ class TestOCIVaultAdapterExists:
 
         assert result is False
 
-    def test_exists_other_error_returns_false(self, config: ConnectionConfig, mock_oci):
-        """Test that other errors return False."""
+    def test_exists_raises_on_other_error(self, config: ConnectionConfig, mock_oci):
+        """exists must not mask unexpected errors as False.
+
+        regression: penguin-sal MEDIUM finding - exists() previously
+        caught all exceptions and returned False, hiding backend
+        failures behind a false "secret absent" signal.
+        """
         adapter = OCIVaultAdapter(config)
         adapter._init_connection()
 
         adapter._secrets_client.get_secret_bundle_by_name.side_effect = Exception("Network error")
 
-        result = adapter.exists("my-secret")
+        with pytest.raises(BackendError):
+            adapter.exists("my-secret")
 
-        assert result is False
+    def test_exists_raises_on_non_404_service_error(self, config: ConnectionConfig, mock_oci):
+        """exists re-raises a non-404 ServiceError as BackendError instead of False."""
+        adapter = OCIVaultAdapter(config)
+        adapter._init_connection()
+
+        error = mock_oci.exceptions.ServiceError()
+        error.status = 500
+        adapter._secrets_client.get_secret_bundle_by_name.side_effect = error
+
+        with pytest.raises(BackendError):
+            adapter.exists("my-secret")
 
 
 class TestOCIVaultAdapterHealthCheck:

@@ -462,16 +462,21 @@ class TestExists:
 
         assert result is False
 
-    def test_exists_false_other_error(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
-        """Exists returns False on other errors (cannot determine)."""
+    def test_exists_raises_on_other_error(self, mock_conjur_api: Mock, valid_config: ConnectionConfig) -> None:
+        """exists must not mask unexpected errors as False.
+
+        regression: penguin-sal MEDIUM finding - exists() previously
+        caught all exceptions and returned False, hiding backend
+        failures behind a false "secret absent" signal.
+        """
         mock_client = Mock()
         mock_client.get_secret.side_effect = Exception("Connection error")
         mock_conjur_api.ConjurClient.return_value = mock_client
 
         adapter = CyberArkAdapter(valid_config)
-        result = adapter.exists("prod/db/password")
 
-        assert result is False
+        with pytest.raises(BackendError):
+            adapter.exists("prod/db/password")
 
 
 @patch("penguin_sal.adapters.cyberark.conjur_api")

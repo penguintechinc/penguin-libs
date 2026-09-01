@@ -307,7 +307,11 @@ class KubernetesSecretsAdapter(BaseAdapter):
             key: The secret name.
 
         Returns:
-            True if the secret exists.
+            True if the secret exists, False only if genuinely absent.
+
+        Raises:
+            AuthenticationError: If status 401.
+            BackendError: For all other errors.
         """
         if not self._connected or not self._api_client:
             self._init_connection()
@@ -316,10 +320,11 @@ class KubernetesSecretsAdapter(BaseAdapter):
             self._api_client.read_namespaced_secret(key, self._namespace)
             return True
         except Exception as e:
-            if hasattr(e, "status") and e.status == 404:  # type: ignore[attr-defined]
+            try:
+                self._raise_for_api_exception(e, f"Failed to check secret '{key}'", key)
+            except SecretNotFoundError:
                 return False
-            # Ignore other errors and return False
-            return False
+            raise  # pragma: no cover - _raise_for_api_exception always raises
 
     def health_check(self) -> bool:
         """Check Kubernetes cluster health by listing namespaces.

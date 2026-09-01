@@ -103,11 +103,21 @@ class BaseAdapter(ABC):
     def exists(self, key: str) -> bool:
         """Check if a secret exists.
 
+        Implementations must return False only when the secret is
+        genuinely absent. Authentication, authorization, and other
+        backend/network errors must propagate (e.g. as
+        AuthenticationError, AuthorizationError, or BackendError)
+        rather than being reported as absence.
+
         Args:
             key: The secret identifier.
 
         Returns:
-            True if the secret exists.
+            True if the secret exists, False only if not found.
+
+        Raises:
+            BackendError: If the existence check fails for a reason
+                other than the secret being absent.
         """
 
     @abstractmethod

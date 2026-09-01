@@ -85,6 +85,32 @@ class TestInvalidURIError:
         msg = str(exc)
         assert msg == "Invalid URI: bad://uri"
 
+    def test_invalid_uri_redacts_credentials(self) -> None:
+        """Plaintext credentials in a malformed URI never reach the
+        exception message or the `.uri` attribute.
+
+        regression: penguin-sal HIGH finding - InvalidURIError embedded
+        raw connection URIs (including credentials) verbatim.
+        """
+        exc = InvalidURIError("redis://user:s3cr3t@bad host", "failed to parse")
+        msg = str(exc)
+        assert "s3cr3t" not in msg
+        assert "s3cr3t" not in exc.uri
+        assert "user" not in msg
+        assert "***" in msg
+
+    def test_invalid_uri_redacts_credentials_no_reason(self) -> None:
+        """Credential redaction also applies without a reason string."""
+        exc = InvalidURIError("vault://admin:hunter2@vault.internal:8200")
+        assert "hunter2" not in str(exc)
+        assert "hunter2" not in exc.uri
+
+    def test_invalid_uri_no_credentials_unaffected(self) -> None:
+        """URIs without userinfo are unchanged by redaction."""
+        exc = InvalidURIError("vault://example.com", "unsupported scheme")
+        assert exc.uri == "vault://example.com"
+        assert "vault://example.com" in str(exc)
+
 
 class TestBackendError:
     """Test BackendError exception."""

@@ -188,13 +188,21 @@ class PassboltAdapter(BaseAdapter):
             ) from e
 
     def exists(self, key: str) -> bool:
-        """Check if resource exists. Returns False on error."""
+        """Check if resource exists.
+
+        Returns False only if genuinely absent; backend failures raise
+        BackendError rather than being reported as absence.
+        """
         if not self._client:
             self._init_connection()
         try:
             return any(res.get("name") == key for res in self._client.get_resources())
-        except Exception:
-            return False
+        except Exception as e:
+            raise BackendError(
+                f"Failed to check secret {key}",
+                backend="passbolt",
+                original_error=e,
+            ) from e
 
     def health_check(self) -> bool:
         """Check server health. Returns False on error."""

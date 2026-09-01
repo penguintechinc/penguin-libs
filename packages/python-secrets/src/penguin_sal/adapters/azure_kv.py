@@ -283,7 +283,11 @@ class AzureKeyVaultAdapter(BaseAdapter):
             key: The secret name.
 
         Returns:
-            True if the secret exists, False otherwise.
+            True if the secret exists, False only if genuinely absent.
+
+        Raises:
+            BackendError: If the check fails for a reason other than
+                the secret being absent.
         """
         if not self._client:
             return False
@@ -293,8 +297,12 @@ class AzureKeyVaultAdapter(BaseAdapter):
             return True
         except self._resource_not_found_error:
             return False
-        except Exception:
-            return False
+        except Exception as e:
+            raise BackendError(
+                f"Failed to check secret '{key}': {e}",
+                backend="azure-kv",
+                original_error=e,
+            ) from e
 
     def health_check(self) -> bool:
         """Check if Azure Key Vault is healthy and reachable.

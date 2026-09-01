@@ -556,7 +556,13 @@ class TestExists:
 
         assert result is False
 
-    def test_returns_false_on_other_error(self) -> None:
+    def test_raises_on_unexpected_error(self) -> None:
+        """exists must not mask unexpected errors as False.
+
+        regression: penguin-sal MEDIUM finding - exists() previously
+        caught all exceptions and returned False, hiding backend
+        failures behind a false "secret absent" signal.
+        """
         config = ConnectionConfig(scheme="aws-sm", host="localhost")
         adapter = AWSSecretsManagerAdapter(config)
 
@@ -565,9 +571,22 @@ class TestExists:
         adapter._client = mock_client
         adapter._connected = True
 
-        result = adapter.exists("test-key")
+        with pytest.raises(BackendError):
+            adapter.exists("test-key")
 
-        assert result is False
+    def test_raises_on_auth_error(self) -> None:
+        """exists re-raises AccessDenied as BackendError instead of False."""
+        config = ConnectionConfig(scheme="aws-sm", host="localhost")
+        adapter = AWSSecretsManagerAdapter(config)
+
+        mock_client = MagicMock()
+        error = _make_client_error("AccessDenied", "access denied")
+        mock_client.describe_secret.side_effect = error
+        adapter._client = mock_client
+        adapter._connected = True
+
+        with pytest.raises(BackendError):
+            adapter.exists("test-key")
 
 
 class TestHealthCheck:

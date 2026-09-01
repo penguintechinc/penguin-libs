@@ -2,7 +2,26 @@
 
 from __future__ import annotations
 
-from typing import Any
+import re
+
+# Matches the userinfo segment of a connection URI immediately following
+# "://" (or a bare "//"), e.g. "user:s3cr3t@" in "redis://user:s3cr3t@host".
+# Deliberately tolerant of malformed/unparseable URIs (invalid hosts,
+# stray whitespace, etc.) since InvalidURIError is raised precisely when
+# the URI failed to parse cleanly - redaction must not depend on the URI
+# being well-formed.
+_URI_USERINFO_RE = re.compile(r"//(?P<userinfo>[^/@\s]+)@")
+
+
+def _redact_uri(uri: str) -> str:
+    """Strip credentials from a connection URI before it is displayed.
+
+    Replaces any `user:pass@` (or `user@`) segment following `//` with a
+    fixed placeholder so plaintext backend credentials never reach
+    exception messages, logs, or tracebacks - even for malformed URIs
+    that fail parsing.
+    """
+    return _URI_USERINFO_RE.sub("//***@", uri)
 
 
 class PySecretsError(Exception):
@@ -37,9 +56,10 @@ class InvalidURIError(PySecretsError):
     """The connection URI is malformed or unsupported."""
 
     def __init__(self, uri: str, reason: str = "") -> None:
-        self.uri = uri
+        redacted = _redact_uri(uri)
+        self.uri = redacted
         self.reason = reason
-        msg = f"Invalid URI: {uri}"
+        msg = f"Invalid URI: {redacted}"
         if reason:
             msg += f" ({reason})"
         super().__init__(msg)

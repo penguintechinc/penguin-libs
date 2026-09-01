@@ -571,19 +571,24 @@ class TestAzureKeyVaultAdapterExists:
 
         assert result is False
 
-    def test_exists_error_returns_false(
+    def test_exists_raises_on_unexpected_error(
         self, mock_azure_imports: dict[str, Any]
     ) -> None:
-        """Test exists returns False on unexpected error."""
+        """exists must not mask unexpected errors as False.
+
+        regression: penguin-sal MEDIUM finding - exists() previously
+        caught all exceptions and returned False, hiding backend
+        failures behind a false "secret absent" signal.
+        """
         mock_azure_imports["client"].get_secret = Mock(
             side_effect=RuntimeError("Unexpected error")
         )
 
         config = ConnectionConfig(scheme="azure-kv", host="my-vault.vault.azure.net")
         adapter = AzureKeyVaultAdapter(config)
-        result = adapter.exists("my-secret")
 
-        assert result is False
+        with pytest.raises(BackendError):
+            adapter.exists("my-secret")
 
 
 class TestAzureKeyVaultAdapterHealthCheck:

@@ -448,12 +448,24 @@ class TestVaultAdapterExists:
         adapter.client = None
         assert adapter.exists("test/secret") is False
 
-    def test_exists_handles_errors(self, adapter: VaultAdapter) -> None:
-        """Test exists handles unexpected errors."""
+    def test_exists_propagates_unexpected_errors(self, adapter: VaultAdapter) -> None:
+        """exists must not mask unexpected (non-not-found) errors as False.
+
+        regression: penguin-sal MEDIUM finding - exists() previously
+        caught all exceptions and returned False, hiding auth/network
+        failures behind a false "secret absent" signal.
+        """
         adapter.client.secrets.kv.v2.read_secret_version.side_effect = Exception(
             "Unexpected error"
         )
-        assert adapter.exists("test/secret") is False
+        with pytest.raises(Exception, match="Unexpected error"):
+            adapter.exists("test/secret")
+
+    def test_exists_propagates_auth_errors(self, adapter: VaultAdapter) -> None:
+        """exists re-raises Unauthorized as BackendError instead of False."""
+        adapter.client.secrets.kv.v2.read_secret_version.side_effect = Unauthorized("denied")
+        with pytest.raises(BackendError):
+            adapter.exists("test/secret")
 
 
 class TestVaultAdapterHealthCheck:

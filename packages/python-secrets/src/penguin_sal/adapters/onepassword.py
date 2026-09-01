@@ -273,7 +273,11 @@ class OnePasswordAdapter(BaseAdapter):
             key: The item title to check.
 
         Returns:
-            True if the item exists in the vault.
+            True if the item exists in the vault, False only if
+            genuinely absent.
+
+        Raises:
+            BackendError: If the backend request fails.
         """
         if not self._client or not self._vault_id:
             return False
@@ -281,8 +285,12 @@ class OnePasswordAdapter(BaseAdapter):
         try:
             items = self._client.items.list(self._vault_id)
             return any(item.title == key for item in items)
-        except Exception:
-            return False
+        except Exception as e:
+            raise BackendError(
+                f"Failed to check secret '{key}'",
+                backend="onepassword",
+                original_error=e,
+            ) from e
 
     def health_check(self) -> bool:
         """Check if 1Password is healthy and reachable.

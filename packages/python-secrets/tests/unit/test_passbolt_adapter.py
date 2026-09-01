@@ -569,19 +569,25 @@ class TestExists:
         assert adapter.exists("nonexistent") is False
 
     @patch("passbolt_python_api.PassboltAPI", create=True)
-    def test_exists_handles_error(
+    def test_exists_raises_on_error(
         self,
         mock_passbolt_class: Mock,
         config: ConnectionConfig,
         mock_api: Mock,
     ) -> None:
-        """Test exists returns False on error."""
+        """exists must not mask a backend error as False.
+
+        regression: penguin-sal MEDIUM finding - exists() previously
+        caught all exceptions and returned False, hiding backend
+        failures behind a false "secret absent" signal.
+        """
         mock_passbolt_class.return_value = mock_api
         mock_api.get_resources.side_effect = RuntimeError("API error")
 
         adapter = PassboltAdapter(config)
         adapter._client = mock_api
-        assert adapter.exists("secret") is False
+        with pytest.raises(BackendError):
+            adapter.exists("secret")
 
 
 class TestHealthCheck:

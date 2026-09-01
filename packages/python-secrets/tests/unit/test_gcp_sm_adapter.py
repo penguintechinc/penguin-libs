@@ -492,8 +492,13 @@ class TestExists:
 
         assert result is False
 
-    def test_exists_returns_false_on_other_errors(self) -> None:
-        """exists returns False on unexpected errors."""
+    def test_exists_raises_on_other_errors(self) -> None:
+        """exists must not mask unexpected errors as False.
+
+        regression: penguin-sal MEDIUM finding - exists() previously
+        caught all exceptions and returned False, hiding backend
+        failures behind a false "secret absent" signal.
+        """
         mock_client = MagicMock()
         _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
         mock_client.get_secret.side_effect = RuntimeError("unexpected error")
@@ -506,9 +511,27 @@ class TestExists:
         adapter = GCPSecretManagerAdapter(config)
         adapter._init_connection()
 
-        result = adapter.exists("api-key")
+        with pytest.raises(BackendError):
+            adapter.exists("api-key")
 
-        assert result is False
+    def test_exists_raises_authorization_error_on_permission_denied(self) -> None:
+        """exists re-raises PermissionDenied as AuthorizationError instead of False."""
+        mock_client = MagicMock()
+        _mock_secretmanager.SecretManagerServiceClient.return_value = mock_client
+        mock_client.get_secret.side_effect = _mock_api_core_exceptions.PermissionDenied(
+            "denied"
+        )
+
+        config = ConnectionConfig(
+            scheme="gcp-sm",
+            host="secretmanager.googleapis.com",
+            params={"project": "my-project"},
+        )
+        adapter = GCPSecretManagerAdapter(config)
+        adapter._init_connection()
+
+        with pytest.raises(AuthorizationError):
+            adapter.exists("api-key")
 
 
 class TestHealthCheck:

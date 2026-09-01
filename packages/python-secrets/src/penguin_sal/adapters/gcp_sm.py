@@ -318,22 +318,31 @@ class GCPSecretManagerAdapter(BaseAdapter):
             key: The secret name.
 
         Returns:
-            True if the secret exists, False otherwise.
+            True if the secret exists, False only if genuinely absent.
+
+        Raises:
+            AuthorizationError: If permission is denied.
+            BackendError: If the check otherwise fails.
         """
         if not self._connected:
             self._init_connection()
 
         try:
-            from google.api_core.exceptions import NotFound
+            from google.api_core.exceptions import NotFound, PermissionDenied
 
             secret_name = f"{self._project}/secrets/{key}"
             self._client.get_secret(request={"name": secret_name})
             return True
         except NotFound:
             return False
-        except Exception:
-            # On other errors, assume doesn't exist rather than crashing
-            return False
+        except PermissionDenied as e:
+            raise AuthorizationError(f"Permission denied accessing secret {key}: {e}") from e
+        except Exception as e:
+            raise BackendError(
+                f"Failed to check secret {key}",
+                backend="gcp-sm",
+                original_error=e,
+            ) from e
 
     def health_check(self) -> bool:
         """Check if GCP Secret Manager is reachable and healthy.

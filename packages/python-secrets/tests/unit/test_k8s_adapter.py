@@ -460,6 +460,41 @@ class TestExists:
 
         assert result is False
 
+    def test_exists_raises_authentication_error(
+        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
+    ) -> None:
+        """exists re-raises a 401 as AuthenticationError instead of False.
+
+        regression: penguin-sal MEDIUM finding - exists() previously
+        caught all exceptions and returned False, hiding auth/network
+        failures behind a false "secret absent" signal.
+        """
+        mock_api = MagicMock()
+        api_err = Exception("Unauthorized")
+        api_err.status = 401  # type: ignore[attr-defined]
+        mock_api.read_namespaced_secret.side_effect = api_err
+
+        sys.modules["kubernetes"].config.load_incluster_config = MagicMock()
+        sys.modules["kubernetes"].client.CoreV1Api = lambda: mock_api
+
+        adapter = KubernetesSecretsAdapter(k8s_config)
+        with pytest.raises(AuthenticationError):
+            adapter.exists("my-secret")
+
+    def test_exists_raises_backend_error(
+        self, mock_k8s_module: Any, k8s_config: ConnectionConfig
+    ) -> None:
+        """exists re-raises unrecognized backend errors as BackendError."""
+        mock_api = MagicMock()
+        mock_api.read_namespaced_secret.side_effect = RuntimeError("network error")
+
+        sys.modules["kubernetes"].config.load_incluster_config = MagicMock()
+        sys.modules["kubernetes"].client.CoreV1Api = lambda: mock_api
+
+        adapter = KubernetesSecretsAdapter(k8s_config)
+        with pytest.raises(BackendError):
+            adapter.exists("my-secret")
+
 
 class TestHealthCheck:
     """Test health check."""

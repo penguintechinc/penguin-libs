@@ -485,14 +485,20 @@ class TestOnePasswordAdapterExists:
     def test_exists_backend_error(
         self, config: ConnectionConfig, mock_client: MagicMock
     ) -> None:
-        """Return False on backend error."""
+        """exists must not mask a backend error as False.
+
+        regression: penguin-sal MEDIUM finding - exists() previously
+        caught all exceptions and returned False, hiding backend
+        failures behind a false "secret absent" signal.
+        """
         adapter = OnePasswordAdapter(config)
         adapter._client = mock_client
         adapter._vault_id = "test-vault"
 
         mock_client.items.list.side_effect = Exception("Server error")
 
-        assert adapter.exists("my-secret") is False
+        with pytest.raises(BackendError):
+            adapter.exists("my-secret")
 
 
 class TestOnePasswordAdapterHealthCheck:

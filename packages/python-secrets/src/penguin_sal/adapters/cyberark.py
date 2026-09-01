@@ -289,7 +289,11 @@ class CyberArkAdapter(BaseAdapter):
             key: Variable path.
 
         Returns:
-            True if the variable exists, False otherwise.
+            True if the variable exists, False only if genuinely absent.
+
+        Raises:
+            BackendError: If the check fails for a reason other than
+                the variable being absent.
         """
         try:
             if not self.client:
@@ -302,8 +306,11 @@ class CyberArkAdapter(BaseAdapter):
         except Exception as e:
             if "404" in str(e) or "not found" in str(e).lower():
                 return False
-            # For other errors, we can't determine existence
-            return False
+            raise BackendError(
+                f"Failed to check secret '{key}'",
+                backend="cyberark",
+                original_error=e,
+            ) from e
 
     def health_check(self) -> bool:
         """Check if Conjur is healthy and reachable.

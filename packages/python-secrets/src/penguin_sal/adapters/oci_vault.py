@@ -410,7 +410,11 @@ class OCIVaultAdapter(BaseAdapter):
             key: Secret name.
 
         Returns:
-            True if secret exists.
+            True if secret exists, False only if genuinely absent.
+
+        Raises:
+            BackendError: If the check fails for a reason other than
+                the secret being absent.
         """
         if not self._connected:
             self._init_connection()
@@ -428,8 +432,14 @@ class OCIVaultAdapter(BaseAdapter):
                     return False
                 raise
 
-        except Exception:
-            return False
+        except oci.exceptions.ServiceError as e:
+            msg = f"Failed to check secret {key}: {e}"
+            logger.error(msg)
+            raise BackendError(msg, "oci-vault", e) from e
+        except Exception as e:
+            msg = f"Failed to check secret {key}: {e}"
+            logger.error(msg)
+            raise BackendError(msg, "oci-vault", e) from e
 
     def health_check(self) -> bool:
         """Check OCI Vault health.

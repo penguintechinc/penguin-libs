@@ -184,13 +184,17 @@ class VaultAdapter(BaseAdapter):
             raise BackendError(f"Failed to list secrets: {e}", backend="vault") from e
 
     def exists(self, key: str) -> bool:
-        """Check if a secret exists in Vault."""
+        """Check if a secret exists in Vault.
+
+        Only a genuine not-found result returns False; authentication,
+        authorization, and other backend errors propagate (see `get()`).
+        """
         if not self.client:
             return False
         try:
             self.get(key)
             return True
-        except (SecretNotFoundError, Exception):
+        except SecretNotFoundError:
             return False
 
     def health_check(self) -> bool:
