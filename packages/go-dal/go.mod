@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.48
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.71.0
 	github.com/confluentinc/confluent-kafka-go/v2 v2.6.0
-	github.com/redis/go-redis/v9 v9.7.0
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/valkey-io/valkey-go v1.0.54
 	go.mongodb.org/mongo-driver v1.17.9
 )
