@@ -17,6 +17,7 @@ build: ## Build/compile all packages
 	cd packages/react-libs && npm run build
 	@echo "=== Building Rust packages ==="
 	cd packages/rust-rpc && cargo build --workspace
+	cd packages/rust-logging && $(MAKE) build
 
 lint: ## Run linters on all packages
 	@echo "=== Go lint ==="
@@ -43,6 +44,7 @@ lint: ## Run linters on all packages
 	cd packages/react-hooks && npm run lint
 	@echo "=== Rust lint ==="
 	cd packages/rust-rpc && cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --all --check
+	cd packages/rust-logging && $(MAKE) fmt lint
 	@echo "=== Containers/shell lint ==="
 	@if command -v hadolint >/dev/null 2>&1; then find . -name "Dockerfile*" -not -path "*/.git/*" -not -path "*/node_modules/*" | xargs -r hadolint; fi
 	@if command -v shellcheck >/dev/null 2>&1; then find . -name "*.sh" -not -path "*/.git/*" -not -path "*/node_modules/*" | xargs -r shellcheck; fi
@@ -76,6 +78,7 @@ test: ## Run tests on all packages
 	cd packages/react-hooks && npm test
 	@echo "=== Rust tests ==="
 	cd packages/rust-rpc && cargo test --workspace
+	cd packages/rust-logging && $(MAKE) test
 
 test-security: ## Run security scans on all packages
 	@echo "=== Go security ==="
@@ -90,6 +93,7 @@ test-security: ## Run security scans on all packages
 	cd packages/react-aaa && npm audit --omit=dev
 	@echo "=== Rust security ==="
 	cd packages/rust-rpc && cargo audit && cargo deny check
+	cd packages/rust-logging && $(MAKE) deny audit
 
 prpc-proto: ## Lint, breaking-check, and format-check proto definitions
 	cd proto && buf lint && buf breaking --against '../.git#branch=main,subdir=proto' && buf format --diff --exit-code

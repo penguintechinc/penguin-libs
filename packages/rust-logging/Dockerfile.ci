@@ -1,0 +1,11 @@
+# Pinned toolchain + CI tooling for penguin-logging. Every `make` target in
+# this crate runs a `cargo` command through this image so the host's cargo
+# is never used (rules/backend-rust.md: "All builds in Docker").
+FROM rust:1.97.1-slim-bookworm@sha256:2775a09d208ff0d7c1f50490c45b62db929e87ba1dcbc3f2132ac71a704bcdd3
+
+RUN rustup component add clippy rustfmt llvm-tools-preview \
+    && cargo install cargo-deny --version 0.20.2 --locked \
+    && cargo install cargo-llvm-cov --version 0.9.1 --locked \
+    && cargo install cargo-audit --version 0.22.2 --locked
+
+WORKDIR /workspace

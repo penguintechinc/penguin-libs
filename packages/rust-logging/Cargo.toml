@@ -1,0 +1,54 @@
+[package]
+name = "penguin-logging"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.97"
+description = "Waddles/PenguinTech structured, sanitized logging + OTel logs/metrics/traces + health/metrics endpoints"
+license = "MIT"
+repository = "https://github.com/penguintechinc/penguin-libs"
+authors = ["Penguin Tech Inc <support@penguintech.io>"]
+keywords = ["logging", "opentelemetry", "observability", "tracing"]
+categories = ["development-tools::debugging"]
+
+[features]
+default = []
+# Forwards to opentelemetry_sdk's own `testing` feature, which gates its
+# InMemoryLogExporter / InMemoryMetricExporter / InMemorySpanExporter
+# (verified present at exactly this path in opentelemetry_sdk 0.32.1 by
+# downloading and inspecting the crate source during planning: they live
+# under `#[cfg(any(feature = "testing", test))] pub mod in_memory_exporter`
+# in src/{logs,metrics,trace}/mod.rs, not gated by any other feature name).
+testing = ["opentelemetry_sdk/testing"]
+
+[dependencies]
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", features = ["env-filter", "json", "registry"] }
+tracing-opentelemetry = "=0.33.0"
+opentelemetry = "=0.32.0"
+opentelemetry-otlp = { version = "=0.32.0", features = ["grpc-tonic"] }
+opentelemetry_sdk = { version = "=0.32.1", features = ["rt-tokio"] }
+opentelemetry-appender-tracing = "=0.32.0"
+opentelemetry-prometheus = "=0.32.0"
+prometheus = "=0.14.0"
+axum = "=0.8.9"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+regex = "=1.13.1"
+thiserror = "=2.0.20"
+tokio = { version = "=1.53.1", features = ["sync", "rt", "macros", "time"] }
+# D30 (spec §5.11): validates workstream_id is a UUID before it is
+# recorded as a span/log field -- the last line of defense against PII
+# being smuggled into a field whose name implies a trusted identifier.
+uuid = "=1.26.1"
+
+[dev-dependencies]
+rstest = "=0.27.0"
+axum-test = "=21.1.0"
+tokio = { version = "=1.53.1", features = ["full", "test-util"] }
+
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
