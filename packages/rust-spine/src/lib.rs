@@ -28,10 +28,10 @@ mod metrics;
 mod reader;
 mod scope;
 
-// TODO(task-2): pub use scope::{parse_scope_from_key, Scope, Stage, TENANT_WIDE_SEGMENT};
+pub use scope::{parse_scope_from_key, Scope, Stage, TENANT_WIDE_SEGMENT};
 // TODO(task-3): pub use envelope::{EnvelopeError, PlatformEvent, Source, StageEnvelope, PROCESS_TARGET_APP_ID_KEY};
 // TODO(task-5): pub use dlq::{DlqError, DlqErrorDetail, DlqErrorKind, DlqRecord};
-// TODO(task-5): pub use error::SpineError;
+pub use error::SpineError;
 // TODO(task-6): pub use metrics::{NoopMetrics, SpineMetrics};
 // TODO(task-9): pub use config::{ProbeClass, ProbeResult, SpineConfig};
 // TODO(task-13): pub use client::{Delivered, Grant, GroupStats, SpineClient};
