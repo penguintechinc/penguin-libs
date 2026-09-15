@@ -13,6 +13,7 @@
 ## Global Constraints
 
 - **Repo/worktree:** all work happens in `/home/penguin/code/penguin-libs` on a short-lived branch cut from `main` inside a worktree (see `using-git-worktrees` skill) — never commit directly to `main`. Suggested branch name: `feature/rust-connectors-and-licensing-ci`.
+- **Shared-file collision (pre-flight review, session_01N2rQgkHY872RubwXoBZxtE):** this plan's tasks append to `Makefile` (repo root), `.github/workflows/ci.yml` and `.github/workflows/publish.yml` — the same three files `penguin-logging` (M1b) also appends to, and `.github/workflows/ci.yml`/`publish.yml` are additionally touched by `penguin-bundle-host` (M1c). Every plan adds a distinct, uniquely-named job/target block (this plan: `build-rust-connectors*`, `build-rust-licensing`; M1b: `build-rust-logging`; M1c: `build-rust-bundle-host`), so a merge conflict here is purely textual (adjacent-line insertion), never semantic. Rebase onto the release branch immediately before opening the PR rather than assuming this plan is the only one touching these files — do not silently drop a sibling plan's block on conflict.
 - **Rust 1.97.1**, `edition = "2021"`, `rust-version = "1.97"` — pinned in `packages/rust-connectors/rust-toolchain.toml`, matching `core/svc_streaming/rust-toolchain.toml` in `waddlebot` and the CI toolchain pin below.
 - **Exact dependency pins only** — every `Cargo.toml` version is `=x.y.z`, never `^`/`~`/bare `*`. `Cargo.lock` is committed. If `cargo add <crate>@<version>` reports that exact version no longer exists on crates.io at execution time, use the closest available exact patch in the same minor line, update the pin in this plan's own `Cargo.toml` snippets to match, and note the substitution in the task's commit message — never widen to a range.
 - **No PRC-origin or sanctioned-entity crates.** `deny.toml`'s `[sources]` allows only `crates.io`; `[bans].deny` follows the `xiu` precedent (`core/svc_streaming/deny.toml` in `waddlebot`) — ban any crate later found to be PRC-origin, with a reason comment.
@@ -21,7 +22,7 @@
 - **All cargo commands run inside the pinned Docker container via `make rust-connectors-*` targets** (Task 1 creates them) — never bare host `cargo`. Every "Run:" line in this plan is a `make` target.
 - **No Valkey, no Postgres, no SeaORM in any connector crate.** Leases, streams, DLQ and config/state keys are `penguin-spine`'s job (M1a) — a connector only ever touches its platform's own socket/HTTP endpoint. If a task's code imports `redis`, `deadpool-redis`, or `sea-orm`, that is a bug in this plan or its execution — stop and flag it.
 - **Connectors do not implement the bundle SSRF guard (§8.2).** Per spec §8.5, "Platform APIs reached by svc-ingest/svc-action built-ins" are operator-configured/compiled-in infrastructure, not bundle-declared egress, so the full allowlist/DNS-rebind-pinning machinery (that's `penguin-bundle-host::host::http`, a different crate) does not apply here. The one exception ported faithfully from the Python reference is Kick's own defense-in-depth private-host check on its (partially configurable) Pusher WebSocket URL (Task 18) — a single, narrow helper, not the full guard.
-- **`penguin-connector-core`'s `PlatformEvent` type must field-for-field match `penguin-spine`'s `PlatformEvent`** (design spec §6.1.1, plan M1a). At the time this plan was written, `/home/penguin/code/penguin-libs/.worktrees/plan-penguin-spine/docs/superpowers/plans/2026-09-14-penguin-spine.md` **did not exist** — Task 4 defines the minimal type from the spec directly and flags it explicitly as **must match plan M1a**; when M1a's plan/implementation lands, reconcile field names/types before M3/M5 depend on both.
+- **`penguin-connector-core`'s `PlatformEvent`/`EventSource` are `penguin-spine`'s own types, re-exported, never duplicated** (design spec §6.1.1, plan M1a). At the time this plan was first written, M1a's plan did not exist and Task 4 defined a local duplicate; pre-flight review (session_01N2rQgkHY872RubwXoBZxtE, 2026-09-15) verified `penguin_spine::PlatformEvent`/`penguin_spine::Source` are field-for-field identical to that duplicate and updated Task 4 to `pub use penguin_spine::PlatformEvent;` plus `pub type EventSource = penguin_spine::Source;` — the same "import from the defining crate, never duplicate" rule already applied to `TraceContext`/`Trace` below. One real behavior change comes with this: `penguin_spine::PlatformEvent` deserializes through a stricter `TryFrom<RawPlatformEvent>` (non-empty `platform`/`event_type`, RFC 3339 `occurred_at`, `source.platform == platform`) that the old local derive-only struct did not enforce — Task 4's own tests must be re-verified against that stricter path, not just recompiled.
 - **XDP/AF_XDP does not apply here.** `backend-rust.md`'s XDP mandate is for networking-capable *services* (listeners); `penguin-connectors` crates are outbound-dialing/webhook-verifying *libraries* consumed by `svc-ingest`/`svc-action` (M5/M3), which are themselves out of this plan's scope.
 - **No Dockerfile for the connector crates themselves** — they are libraries, never a deployed image, matching the `rust-licensing`/`rust-rpc` precedent in this repo (no per-package Dockerfile). The `Dockerfile.dev` this plan adds (Task 1) is dev-tooling only, never published or deployed.
 - **Docs:** every `pub` item gets a 2-3 line doc comment (general.md Code Documentation) — no ASCII-art dividers. Each crate gets a `README.md` (finalized in the task that completes its functionality) and a `CHANGELOG.md` (`## 0.1.0` — Initial release, bullet list of what shipped). All six crates ship at version `0.1.0`.
@@ -310,12 +311,12 @@ repository = "https://github.com/penguintechinc/penguin-libs"
 authors = ["Penguin Tech Inc <dev@penguintech.io>"]
 
 [workspace.dependencies]
-tokio = { version = "=1.52.3", features = ["full"] }
+tokio = { version = "=1.53.1", features = ["full"] }
 tokio-util = "=0.7.13"
-serde = { version = "=1.0.228", features = ["derive"] }
-serde_json = "=1.0.150"
-reqwest = { version = "=0.13.4", default-features = false, features = ["rustls", "json"] }
-thiserror = "=2.0.18"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+reqwest = { version = "=0.12.28", default-features = false, features = ["rustls-tls", "json"] }
+thiserror = "=2.0.20"
 tracing = "=0.1.44"
 chrono = { version = "=0.4.45", features = ["serde"] }
 async-trait = "=0.1.92"
@@ -323,7 +324,7 @@ hmac = "=0.12.1"
 sha2 = "=0.10.9"
 subtle = "=2.6.1"
 hex = "=0.4.3"
-governor = "=0.7.0"
+governor = "=0.10.4"
 backoff = { version = "=0.4.0", features = ["tokio"] }
 tokio-tungstenite = { version = "=0.26.2", features = ["rustls-tls-webpki-roots"] }
 futures-util = "=0.3.31"
@@ -332,10 +333,11 @@ rstest = "=0.23.0"
 wiremock = "=0.6.5"
 # D30 (spec Sec5.11): TraceContext re-exports penguin-spine's Trace type
 # verbatim rather than duplicating {traceparent, tracestate} here --
-# penguin-spine (M1a) is that type's single defining crate. Pins its own
-# serde/serde_json/thiserror slightly ahead of this workspace's; Cargo
-# resolves both exact versions side by side in one lockfile without
-# conflict (a small, accepted duplication, not a version conflict).
+# penguin-spine (M1a) is that type's single defining crate. Post-preflight
+# (2026-09-15): this workspace's tokio/serde/serde_json/thiserror/reqwest/
+# governor pins were realigned to match penguin-spine's and svc_streaming's
+# exact versions (session_01N2rQgkHY872RubwXoBZxtE pre-flight review), so
+# there is no longer a version skew between the two lockfiles for these.
 penguin-spine = "=0.1.0"
 
 [profile.release]
@@ -759,15 +761,8 @@ git push
 - Consumes: `penguin_spine::Trace` (M1a) — re-exported as `TraceContext` under this crate's own name, never duplicated (D30, spec §5.11).
 - Produces (the shapes every later task in this plan, and M3/M5's plans, depend on verbatim):
   ```rust
-  pub struct EventSource { pub platform: String, pub account_id: String, pub channel_id: Option<String> }
-  pub struct PlatformEvent {
-      pub platform: String,
-      pub event_type: String,
-      pub actor: Option<String>,
-      pub payload: serde_json::Map<String, serde_json::Value>,
-      pub occurred_at: String,
-      pub source: Option<EventSource>,
-  }
+  pub use penguin_spine::PlatformEvent; // {platform, event_type, actor, payload, occurred_at, source: Option<Source>}
+  pub type EventSource = penguin_spine::Source; // {platform, account_id, channel_id}
   pub type ActionConfig = std::collections::HashMap<String, serde_json::Value>;
   /// D30 (spec §5.11): the envelope's W3C trace context, propagated onto
   /// every outbound platform call this plan's senders make -- a type
@@ -800,7 +795,7 @@ git push
       async fn send(&self, event: &PlatformEvent, config: &ActionConfig, trace: Option<&TraceContext>) -> Result<SendOutcome, SendError>;
   }
   ```
-  `PlatformEvent`/`EventSource` field-for-field match design spec §6.1.1 and **must match `penguin-spine`'s `PlatformEvent`** (plan M1a) — see Global Constraints.
+  `PlatformEvent` and `EventSource` are re-exported from `penguin-spine` (plan M1a) per the Global Constraints pre-flight fix — never duplicated locally.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -810,47 +805,33 @@ git push
 //! the action-stage config map every sender receives -- mirrors design
 //! spec §6.1.1's `PlatformEvent` JSON shape and
 //! `core/svc_action/bundles/*_send_action.py`'s `config: Mapping[str, Any]`
-//! parameter exactly. **This type must match `penguin-spine`'s own
-//! `PlatformEvent` (plan M1a) field-for-field** -- see this plan's Global
-//! Constraints; it is defined here rather than imported because M1a had no
-//! published plan when this one was written.
+//! parameter exactly. Pre-flight fix (session_01N2rQgkHY872RubwXoBZxtE,
+//! 2026-09-15): `penguin-spine`'s plan (M1a) now exists and its
+//! `PlatformEvent`/`Source` were verified field-for-field identical to the
+//! duplicate this task used to define here -- re-exported verbatim instead,
+//! per the cross-plan "import from the defining crate, never duplicate"
+//! rule (see this plan's Global Constraints).
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Which connection produced an event -- design spec §6.1.1 "source".
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EventSource {
-    /// The platform slug, mirroring `PlatformEvent.platform`.
-    pub platform: String,
-    /// The connection's own stable identity (bot login, app id, ...) --
-    /// never a secret.
-    pub account_id: String,
-    /// The platform's own channel/guild/room id, or `None` for an
-    /// account-level event.
-    pub channel_id: Option<String>,
-}
-
-/// The normalized, cross-platform event shape design spec §6.1.1 defines.
-/// `ActionSender::send` reads `payload` for "reply in place" fields
-/// (`channel_id`, `text`, `thread_ts`, ...) exactly as
+/// Re-exported from `penguin-spine` (M1a) -- that crate is the single
+/// defining source for the normalized, cross-platform event shape design
+/// spec §6.1.1 defines. `ActionSender::send` reads `payload` for "reply in
+/// place" fields (`channel_id`, `text`, `thread_ts`, ...) exactly as
 /// `core/svc_action/bundles/*_send_action.py` reads
-/// `envelope.event.payload`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PlatformEvent {
-    /// Non-empty platform slug (`"twitch"`, `"discord"`, ...).
-    pub platform: String,
-    /// Dotted, lowercase event-type namespace (`"chat.message"`, ...).
-    pub event_type: String,
-    /// The acting user/identity, or `None`.
-    pub actor: Option<String>,
-    /// Arbitrary JSON object -- never a scalar or array.
-    pub payload: serde_json::Map<String, serde_json::Value>,
-    /// RFC 3339 UTC, millisecond precision, `Z` suffix.
-    pub occurred_at: String,
-    /// Which connection produced this event -- see [`EventSource`].
-    pub source: Option<EventSource>,
-}
+/// `envelope.event.payload`. Deserializes through `penguin_spine`'s own
+/// strict `TryFrom<RawPlatformEvent>` (non-empty `platform`/`event_type`,
+/// RFC 3339 `occurred_at`, `source.platform == platform`) -- stricter than
+/// this task's original local derive-only struct; re-verify this task's
+/// deserialize-path tests against that strictness.
+pub use penguin_spine::PlatformEvent;
+
+/// Alias for `penguin_spine::Source`, kept under this crate's original
+/// name -- design spec §6.1.1 "source" -- so every existing
+/// `EventSource { ... }` call site in this plan keeps compiling unchanged.
+/// Never a duplicate definition: this is the identical type as
+/// `penguin_spine::Source`, not a new one.
+pub type EventSource = penguin_spine::Source;
 
 /// An action-stage bundle's resolved config -- the Rust equivalent of
 /// Python's `config: Mapping[str, Any]` parameter on every
