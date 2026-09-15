@@ -1,0 +1,54 @@
+[package]
+name = "penguin-spine"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97.1"
+description = "Waddles data-plane spine: Valkey Streams key builders, envelope/DLQ types, and the two client connection-separation rules"
+license = "MIT"
+repository = "https://github.com/penguintechinc/penguin-libs"
+authors = ["Penguin Tech Inc <support@penguintech.io>"]
+keywords = ["valkey", "redis", "streams", "waddles"]
+categories = ["api-bindings", "asynchronous"]
+
+[dependencies]
+redis = { version = "=1.7.0", default-features = false, features = ["tokio-comp", "tls-rustls", "tokio-rustls-comp", "streams"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+# `preserve_order`: golden-fixture round-trips (Task 8) require
+# deserialize -> re-serialize to be byte-identical (spec Sec14.1), which
+# needs `payload`/`config`/nested JSON object keys to keep their original
+# order rather than the crate's default alphabetical (BTreeMap) ordering.
+serde_json = { version = "=1.0.151", features = ["preserve_order"] }
+thiserror = "=2.0.20"
+tokio = { version = "=1.53.1", features = ["rt", "time", "sync", "macros", "net"] }
+tracing = "=0.1.44"
+chrono = { version = "=0.4.45", features = ["serde"] }
+uuid = { version = "=1.26.1", features = ["v4"] }
+# PEM pre-validation of VALKEY_CA_FILE only (rustls::pki_types), never a TLS
+# handshake path -- redis's own `tls-rustls` feature owns that. No crypto
+# provider feature needed for pure PEM parsing.
+rustls = { version = "=0.23.45", default-features = false, features = ["std"] }
+# D30 envelope binding MAC (spec Sec5.11): HMAC-SHA256 over the tenant/
+# community/workstream_id/event_id/trace_id tuple, constant-time verified.
+hmac = "=0.12.1"
+sha2 = "=0.10.9"
+subtle = "=2.6.1"
+hex = "=0.4.3"
+
+[dev-dependencies]
+tokio = { version = "=1.53.1", features = ["full", "test-util"] }
+rstest = "=0.27.0"
+criterion = { version = "=0.8.2", features = ["async_tokio"] }
+# YAML parsing for the ACL-matrix conformance test only (Task 12) -- never a
+# runtime dependency of the published library.
+serde-saphyr = "=1.2.0"
+
+[[bench]]
+name = "spine_bench"
+harness = false
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
