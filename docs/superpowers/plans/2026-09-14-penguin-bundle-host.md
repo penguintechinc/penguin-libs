@@ -284,6 +284,10 @@ subtle = "=2.6.1"
 governor = "=0.10.4"
 sqlparser = { version = "=0.63.0", features = ["visitor"] }
 chrono = { version = "=0.4.45", features = ["serde"] }
+# D30 (spec Sec5.11): InvocationScope.trace reuses penguin-spine's Trace
+# type verbatim rather than duplicating {traceparent, tracestate} here --
+# penguin-spine is M1a's crate and the type's single defining source.
+penguin-spine = "=0.1.0"
 futures = { version = "=0.3.34", default-features = false, features = ["std", "async-await"] }
 bytes = "=1.12.1"
 async-trait = "=0.1.92"
@@ -620,7 +624,7 @@ git push -u origin docs/plan-penguin-bundle-host
 
 **Interfaces:**
 - Consumes: nothing new.
-- Produces: `wire::message::{Frame, Message, ExportKind, CapabilityKind, ErrorCode, SandboxInfo, HelloLimits, LoadLimits}` — every later task (host `server.rs`, executor `wire_client.rs`/`remote_host_impl.rs`) matches on `Message` variants by these exact names/fields.
+- Produces: `wire::message::{Frame, Message, ExportKind, CapabilityKind, ErrorCode, SandboxInfo, HelloLimits, LoadLimits, InvocationScope}` — every later task (host `server.rs`/`router.rs`/the capability guards, executor `wire_client.rs`/`remote_host_impl.rs`/`invoke.rs`) matches on `Message` variants by these exact names/fields, and every host-call-adjacent task reads scope from `InvocationScope` (D30, spec §5.11/§6.6) rather than from a bundle-supplied argument -- no WIT interface (`db`/`kv`/`http`/`relay`) accepts a tenant or community parameter, by design.
 
 - [ ] **Step 1: Write the WIT world verbatim from spec §6.5**
 
@@ -852,7 +856,8 @@ Note in a comment at the top of the file (above `package waddle:bundle@1.0.0;`):
 ```rust
 #![allow(clippy::unwrap_used, clippy::panic)]
 use penguin_bundle_host::wire::message::{
-    CapabilityKind, ErrorCode, ExportKind, Frame, HelloLimits, LoadLimits, Message, SandboxInfo,
+    CapabilityKind, ErrorCode, ExportKind, Frame, HelloLimits, InvocationScope, LoadLimits, Message,
+    SandboxInfo,
 };
 
 #[test]
@@ -888,13 +893,26 @@ fn hello_frame_round_trips_with_expected_json_shape() {
     }
 }
 
+fn sample_scope(app_id: &str) -> InvocationScope {
+    InvocationScope {
+        tenant_id: "acme".to_string(),
+        community_id: Some("main".to_string()),
+        workstream_id: "8f14e45f-ceea-467e-adde-3fb5c9752730".to_string(),
+        app_id: app_id.to_string(),
+        trace: Some(penguin_spine::Trace {
+            traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_string(),
+            tracestate: None,
+        }),
+    }
+}
+
 #[test]
 fn host_call_frame_carries_call_id_distinct_from_frame_id() {
     let frame = Frame {
         v: 1,
         id: 7,
         message: Message::HostCall {
-            app_id: "waddles.socials.music.default".to_string(),
+            scope: sample_scope("waddles.socials.music.default"),
             capability: CapabilityKind::Http,
             op: "send".to_string(),
             args: serde_json::json!({"method": "GET", "url": "https://api.spotify.com/v1"}),
@@ -906,6 +924,32 @@ fn host_call_frame_carries_call_id_distinct_from_frame_id() {
     assert_eq!(json["id"], 7);
     assert_eq!(json["call_id"], 3);
     assert_eq!(json["capability"], "http");
+    assert_eq!(json["scope"]["app_id"], "waddles.socials.music.default");
+    assert_eq!(json["scope"]["tenant_id"], "acme");
+}
+
+#[test]
+fn host_call_scope_carries_workstream_id_and_trace_never_a_bare_tenant_argument() {
+    // D30 (spec §5.11): no WIT capability accepts a tenant/community
+    // argument -- scope travels only via InvocationScope on the frame.
+    let frame = Frame {
+        v: 1,
+        id: 8,
+        message: Message::HostCall {
+            scope: sample_scope("waddles.bot.commands.default"),
+            capability: CapabilityKind::Db,
+            op: "execute".to_string(),
+            args: serde_json::json!({"statement": "SELECT 1", "params": []}),
+            call_id: 1,
+        },
+    };
+    let json = serde_json::to_value(&frame).unwrap();
+    assert_eq!(json["scope"]["workstream_id"], "8f14e45f-ceea-467e-adde-3fb5c9752730");
+    assert_eq!(
+        json["scope"]["trace"]["traceparent"],
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+    );
+    assert!(json["args"].get("tenant").is_none(), "args must never carry a tenant/community key");
 }
 
 #[test]
@@ -944,16 +988,16 @@ fn load_and_invoke_frames_match_spec_field_names() {
     assert_eq!(json["limits"]["timeout_ms"], 2000);
 
     let invoke = Message::Invoke {
-        app_id: "waddles.bot.commands.default".to_string(),
         digest: "sha256:abc".to_string(),
         export: ExportKind::Transform,
         payload: serde_json::json!({"platform": "twitch"}),
         deadline_ms: 2000,
-        trace_context: None,
+        scope: sample_scope("waddles.bot.commands.default"),
     };
     let json = serde_json::to_value(&invoke).unwrap();
     assert_eq!(json["kind"], "invoke");
     assert_eq!(json["export"], "transform");
+    assert_eq!(json["scope"]["app_id"], "waddles.bot.commands.default");
 }
 
 #[test]
@@ -977,7 +1021,7 @@ fn every_stage_to_executor_and_executor_to_stage_kind_round_trips() {
         Message::Unloaded { app_id: "a".into(), digest: "sha256:1".into() },
         Message::Result { payload: serde_json::json!(null), duration_ms: 1, fuel_used: 0 },
         Message::HostCall {
-            app_id: "a".into(), capability: CapabilityKind::Kv, op: "get".into(),
+            scope: sample_scope("a"), capability: CapabilityKind::Kv, op: "get".into(),
             args: serde_json::json!({"key": "x"}), call_id: 1,
         },
         Message::Error { code: ErrorCode::FrameTooLarge, message: "m".into(), detail: None },
@@ -993,8 +1037,8 @@ fn every_stage_to_executor_and_executor_to_stage_kind_round_trips() {
         },
         Message::Unload { app_id: "a".into(), digest: "sha256:1".into() },
         Message::Invoke {
-            app_id: "a".into(), digest: "sha256:1".into(), export: ExportKind::Dispatch,
-            payload: serde_json::json!(null), deadline_ms: 2000, trace_context: None,
+            digest: "sha256:1".into(), export: ExportKind::Dispatch,
+            payload: serde_json::json!(null), deadline_ms: 2000, scope: sample_scope("a"),
         },
         Message::HostResult { result: Some(serde_json::json!(true)), error: None },
         Message::Ping,
@@ -1028,8 +1072,30 @@ Expected: FAIL — `error[E0432]: unresolved import 'penguin_bundle_host::wire::
 //! struct serialized as UTF-8 JSON. `kind` is the internally-tagged enum
 //! discriminant; every other field is a direct sibling in the JSON object
 //! via `#[serde(flatten)]`.
+//!
+//! **D30 (spec §5.11, §6.6):** `Message::Invoke` and `Message::HostCall`
+//! both carry an [`InvocationScope`] -- the tenant/community/workstream
+//! scope of the invocation in flight, set by the stage when it builds an
+//! `invoke` frame from a binding-verified `StageEnvelope` and echoed back
+//! by the executor on every `host-call` frame issued while executing that
+//! invocation. No WIT interface (`db`, `kv`, `http`, `relay`) accepts a
+//! tenant or community parameter -- scope is wire-carried, never
+//! bundle-supplied.
 
 use serde::{Deserialize, Serialize};
+
+/// The tenant/community/workstream/app/trace scope of the invocation
+/// currently in flight (spec §5.11 D30). Reuses [`penguin_spine::Trace`]
+/// verbatim rather than duplicating `{traceparent, tracestate}` here --
+/// `penguin-spine` (M1a) is that type's single defining crate.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InvocationScope {
+    pub tenant_id: String,
+    pub community_id: Option<String>,
+    pub workstream_id: String,
+    pub app_id: String,
+    pub trace: Option<penguin_spine::Trace>,
+}
 
 /// One frame: protocol version, correlation id, and the message itself.
 ///
@@ -1077,7 +1143,9 @@ pub enum Message {
         fuel_used: u64,
     },
     HostCall {
-        app_id: String,
+        /// The invocation's full scope (D30, spec §5.11/§6.6) -- includes
+        /// `app_id`, so no separate top-level `app_id` field exists here.
+        scope: InvocationScope,
         capability: CapabilityKind,
         op: String,
         args: serde_json::Value,
@@ -1108,12 +1176,14 @@ pub enum Message {
         digest: String,
     },
     Invoke {
-        app_id: String,
         digest: String,
         export: ExportKind,
         payload: serde_json::Value,
         deadline_ms: u64,
-        trace_context: Option<String>,
+        /// The invocation's full scope (D30, spec §5.11/§6.6) --
+        /// supersedes the pre-D30 standalone `app_id`/`trace_context`
+        /// fields: `scope.app_id` and `scope.trace` carry both.
+        scope: InvocationScope,
     },
     HostResult {
         result: Option<serde_json::Value>,
@@ -1206,7 +1276,7 @@ pub mod message;
 - [ ] **Step 6: Run the test to verify it passes**
 
 Run: `make test`
-Expected: PASS — `test result: ok. 5 passed; 0 failed` for `wire_codec_tests`.
+Expected: PASS — `test result: ok. 6 passed; 0 failed` for `wire_codec_tests`.
 
 - [ ] **Step 7: Commit**
 
@@ -1218,6 +1288,10 @@ feat(bundle-host): commit WIT world and wire message types
 wit/waddle-bundle-stage.wit is this crate's committed copy of
 waddle:bundle/stage@1.0.0 (spec §6.5); wire::message::{Frame,Message,...}
 implements the exact JSON shape of the host-API frame protocol (§6.6).
+Message::Invoke/HostCall carry InvocationScope (D30, spec §5.11) --
+tenant_id/community_id/workstream_id/app_id/trace, reusing
+penguin-spine's Trace type -- superseding the pre-D30 standalone
+app_id/trace_context fields.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
@@ -3378,7 +3452,15 @@ git push
       /// Called only after `host::db_guard` has already parsed and
       /// table-allowlist-checked `statement` -- this trait executes a
       /// pre-approved statement under the bundle's own Postgres role.
-      async fn execute(&self, app_id: &str, statement: &str, params: &[DbValue]) -> Result<DbRows, DbBackendError>;
+      /// `scope.tenant_id`/`scope.community_id` (D30, spec §5.11/§7.4)
+      /// come from a binding-MAC-verified envelope upstream, never from
+      /// the bundle -- the implementation MUST run `statement` inside a
+      /// transaction that first issues `SET LOCAL waddles.tenant = scope.tenant_id`
+      /// and `SET LOCAL waddles.community = scope.community_id.unwrap_or("_tenant")`,
+      /// so Postgres row-level-security policies scope every row this
+      /// call can see or write to that tenant/community, independent of
+      /// which table the bundle's own role can otherwise reach.
+      async fn execute(&self, scope: &crate::wire::message::InvocationScope, statement: &str, params: &[DbValue]) -> Result<DbRows, DbBackendError>;
   }
   #[derive(Debug, Clone)] pub enum DbValue { Null, Bool(bool), Int(i64), Float(f64), Text(String), Bytes(Vec<u8>) }
   #[derive(Debug, Clone)] pub struct DbRows { pub columns: Vec<String>, pub rows: Vec<Vec<DbValue>>, pub rows_affected: u64 }
@@ -3539,6 +3621,8 @@ Expected: FAIL — `host::capability` module does not exist.
 use async_trait::async_trait;
 use thiserror::Error;
 
+use crate::wire::message::InvocationScope;
+
 // -- http --
 
 #[async_trait]
@@ -3604,7 +3688,18 @@ pub trait DbExecutor: Send + Sync {
     /// `statement` -- executes a pre-approved statement under the
     /// bundle's own Postgres role (spec §7.4, §11.10: the executor
     /// itself never holds this role; only the service does).
-    async fn execute(&self, app_id: &str, statement: &str, params: &[DbValue]) -> Result<DbRows, DbBackendError>;
+    ///
+    /// **D30 (spec §5.11):** `scope.tenant_id`/`scope.community_id` come
+    /// from a binding-MAC-verified envelope upstream, never from the
+    /// bundle. The implementation MUST run `statement` inside a
+    /// transaction that first issues `SET LOCAL waddles.tenant` and
+    /// `SET LOCAL waddles.community` from those two fields, so Postgres
+    /// row-level-security scopes every row this call can see or write --
+    /// two independent layers, deliberately: this trait's caller
+    /// (`db_guard`) already checked the table allowlist; RLS catches a
+    /// table-allowlist bug or a compromised bundle role from the other
+    /// side.
+    async fn execute(&self, scope: &InvocationScope, statement: &str, params: &[DbValue]) -> Result<DbRows, DbBackendError>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -4633,8 +4728,11 @@ git push
       /// not a denylist -- see the design note in Task 13's implementation
       /// step), extracts every referenced table name, and checks each one
       /// against `approved.tables` with the correct read/write direction
-      /// before ever calling `executor.execute(...)`.
-      pub async fn execute(&self, approved: &ApprovedPermissions, statement: &str, params: &[DbValue]) -> DbOutcome;
+      /// before ever calling `executor.execute(scope, ...)`. `scope`
+      /// (D30, spec §5.11) is forwarded to `DbExecutor::execute` unchanged
+      /// so the implementation can drive RLS from it -- this guard never
+      /// reads `scope.tenant_id`/`community_id` itself, only relays them.
+      pub async fn execute(&self, approved: &ApprovedPermissions, scope: &InvocationScope, statement: &str, params: &[DbValue]) -> DbOutcome;
   }
   ```
   Task 16 (host-call router) calls `DbGuard::execute()` for every `capability == Db` host-call.
@@ -4648,8 +4746,19 @@ git push
 use penguin_bundle_host::host::approvals::ApprovedPermissions;
 use penguin_bundle_host::host::capability::{DbBackendError, DbExecutor, DbRows, DbValue};
 use penguin_bundle_host::host::db_guard::{DbGuard, DbOutcome};
+use penguin_bundle_host::wire::message::InvocationScope;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
+
+fn sample_scope() -> InvocationScope {
+    InvocationScope {
+        tenant_id: "acme".to_string(),
+        community_id: None,
+        workstream_id: "8f14e45f-ceea-467e-adde-3fb5c9752730".to_string(),
+        app_id: "a".to_string(),
+        trace: None,
+    }
+}
 
 fn approved_with_tables(tables: serde_json::Value) -> ApprovedPermissions {
     ApprovedPermissions::from_json(
@@ -4668,7 +4777,7 @@ struct RecordingExecutor {
 }
 #[async_trait::async_trait]
 impl DbExecutor for RecordingExecutor {
-    async fn execute(&self, _app_id: &str, statement: &str, _params: &[DbValue]) -> Result<DbRows, DbBackendError> {
+    async fn execute(&self, _scope: &InvocationScope, statement: &str, _params: &[DbValue]) -> Result<DbRows, DbBackendError> {
         self.calls.lock().unwrap().push(statement.to_string());
         Ok(DbRows { columns: vec![], rows: vec![], rows_affected: 0 })
     }
@@ -4683,7 +4792,7 @@ fn guard() -> (DbGuard<RecordingExecutor>, Arc<RecordingExecutor>) {
 async fn select_on_a_granted_readable_table_reaches_the_executor() {
     let approved = approved_with_tables(json!([{"name": "music_queue", "read": true, "write": false}]));
     let (g, exec) = guard();
-    let outcome = g.execute(&approved, "SELECT * FROM music_queue WHERE id = $1", &[DbValue::Int(1)]).await;
+    let outcome = g.execute(&approved, &sample_scope(), "SELECT * FROM music_queue WHERE id = $1", &[DbValue::Int(1)]).await;
     assert!(matches!(outcome, DbOutcome::Rows(_)));
     assert_eq!(exec.calls.lock().unwrap().len(), 1);
 }
@@ -4692,7 +4801,7 @@ async fn select_on_a_granted_readable_table_reaches_the_executor() {
 async fn insert_on_a_read_only_table_is_denied_before_reaching_the_executor() {
     let approved = approved_with_tables(json!([{"name": "music_queue", "read": true, "write": false}]));
     let (g, exec) = guard();
-    let outcome = g.execute(&approved, "INSERT INTO music_queue (id) VALUES ($1)", &[DbValue::Int(1)]).await;
+    let outcome = g.execute(&approved, &sample_scope(), "INSERT INTO music_queue (id) VALUES ($1)", &[DbValue::Int(1)]).await;
     assert!(matches!(outcome, DbOutcome::Denied(_)), "got {outcome:?}");
     assert_eq!(exec.calls.lock().unwrap().len(), 0);
 }
@@ -4701,7 +4810,7 @@ async fn insert_on_a_read_only_table_is_denied_before_reaching_the_executor() {
 async fn statement_referencing_an_ungranted_table_is_denied() {
     let approved = approved_with_tables(json!([{"name": "music_queue", "read": true, "write": true}]));
     let (g, exec) = guard();
-    let outcome = g.execute(&approved, "SELECT * FROM users", &[]).await;
+    let outcome = g.execute(&approved, &sample_scope(), "SELECT * FROM users", &[]).await;
     assert!(matches!(outcome, DbOutcome::Denied(_)));
     assert_eq!(exec.calls.lock().unwrap().len(), 0);
 }
@@ -4710,7 +4819,7 @@ async fn statement_referencing_an_ungranted_table_is_denied() {
 async fn multi_statement_batches_are_denied() {
     let approved = approved_with_tables(json!([{"name": "music_queue", "read": true, "write": true}]));
     let (g, exec) = guard();
-    let outcome = g.execute(&approved, "SELECT * FROM music_queue; DROP TABLE music_queue;", &[]).await;
+    let outcome = g.execute(&approved, &sample_scope(), "SELECT * FROM music_queue; DROP TABLE music_queue;", &[]).await;
     assert!(matches!(outcome, DbOutcome::Denied(_)));
     assert_eq!(exec.calls.lock().unwrap().len(), 0);
 }
@@ -4726,7 +4835,7 @@ async fn ddl_and_grant_statements_are_denied_by_the_allowlist() {
         "GRANT ALL ON music_queue TO someone",
         "COPY music_queue TO STDOUT",
     ] {
-        let outcome = g.execute(&approved, stmt, &[]).await;
+        let outcome = g.execute(&approved, &sample_scope(), stmt, &[]).await;
         assert!(matches!(outcome, DbOutcome::Denied(_)), "expected {stmt} to be denied, got {outcome:?}");
     }
 }
@@ -4735,7 +4844,7 @@ async fn ddl_and_grant_statements_are_denied_by_the_allowlist() {
 async fn unparseable_sql_is_denied_with_a_syntax_reason() {
     let approved = approved_with_tables(json!([{"name": "music_queue", "read": true, "write": true}]));
     let (g, exec) = guard();
-    let outcome = g.execute(&approved, "SELEKT * FRUM music_queue", &[]).await;
+    let outcome = g.execute(&approved, &sample_scope(), "SELEKT * FRUM music_queue", &[]).await;
     assert!(matches!(outcome, DbOutcome::Denied(_)));
     assert_eq!(exec.calls.lock().unwrap().len(), 0);
 }
@@ -4744,9 +4853,53 @@ async fn unparseable_sql_is_denied_with_a_syntax_reason() {
 async fn update_and_delete_on_a_read_write_table_both_reach_the_executor() {
     let approved = approved_with_tables(json!([{"name": "music_queue", "read": true, "write": true}]));
     let (g, exec) = guard();
-    assert!(matches!(g.execute(&approved, "UPDATE music_queue SET x = 1 WHERE id = $1", &[DbValue::Int(1)]).await, DbOutcome::Rows(_)));
-    assert!(matches!(g.execute(&approved, "DELETE FROM music_queue WHERE id = $1", &[DbValue::Int(1)]).await, DbOutcome::Rows(_)));
+    assert!(matches!(g.execute(&approved, &sample_scope(), "UPDATE music_queue SET x = 1 WHERE id = $1", &[DbValue::Int(1)]).await, DbOutcome::Rows(_)));
+    assert!(matches!(g.execute(&approved, &sample_scope(), "DELETE FROM music_queue WHERE id = $1", &[DbValue::Int(1)]).await, DbOutcome::Rows(_)));
     assert_eq!(exec.calls.lock().unwrap().len(), 2);
+}
+
+/// D30 (spec §5.11): DbGuard must forward `scope` to `DbExecutor::execute`
+/// completely unmodified -- tenant_id/community_id are what the
+/// implementation's `SET LOCAL waddles.tenant`/`waddles.community` (a
+/// service concern, M3/M4, out of this crate's scope -- see Global
+/// Constraints "no Postgres connection pool") drives its RLS policies
+/// from. This crate's own contract-level guarantee ends at "the exact
+/// scope handed to `DbGuard::execute` is the exact scope `DbExecutor::
+/// execute` receives" -- proving that RLS actually refuses a
+/// cross-tenant row is a live-Postgres integration test that belongs
+/// with the service crate that owns the connection.
+struct ScopeRecordingExecutor {
+    scopes: Mutex<Vec<InvocationScope>>,
+}
+#[async_trait::async_trait]
+impl DbExecutor for ScopeRecordingExecutor {
+    async fn execute(&self, scope: &InvocationScope, _statement: &str, _params: &[DbValue]) -> Result<DbRows, DbBackendError> {
+        self.scopes.lock().unwrap().push(scope.clone());
+        Ok(DbRows { columns: vec![], rows: vec![], rows_affected: 0 })
+    }
+}
+
+#[tokio::test]
+async fn db_execute_forwards_the_full_invocation_scope_unmodified() {
+    let approved = approved_with_tables(json!([{"name": "music_queue", "read": true, "write": true}]));
+    let exec = Arc::new(ScopeRecordingExecutor { scopes: Mutex::new(vec![]) });
+    let g = DbGuard::new(exec.clone());
+    let scope_a = InvocationScope {
+        tenant_id: "tenant-a".to_string(),
+        community_id: Some("main".to_string()),
+        workstream_id: "8f14e45f-ceea-467e-adde-3fb5c9752730".to_string(),
+        app_id: "a".to_string(),
+        trace: None,
+    };
+
+    let outcome = g.execute(&approved, &scope_a, "SELECT * FROM music_queue", &[]).await;
+    assert!(matches!(outcome, DbOutcome::Rows(_)));
+
+    let recorded = exec.scopes.lock().unwrap();
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].tenant_id, "tenant-a");
+    assert_eq!(recorded[0].community_id.as_deref(), Some("main"));
+    assert_eq!(recorded[0].workstream_id, "8f14e45f-ceea-467e-adde-3fb5c9752730");
 }
 ```
 
@@ -4777,6 +4930,7 @@ use sqlparser::parser::Parser;
 
 use super::approvals::ApprovedPermissions;
 use super::capability::{DbBackendError, DbExecutor, DbRows, DbValue};
+use crate::wire::message::InvocationScope;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DbDenial {
@@ -4800,7 +4954,7 @@ impl<T: DbExecutor> DbGuard<T> {
         Self { executor }
     }
 
-    pub async fn execute(&self, approved: &ApprovedPermissions, statement: &str, params: &[DbValue]) -> DbOutcome {
+    pub async fn execute(&self, approved: &ApprovedPermissions, scope: &InvocationScope, statement: &str, params: &[DbValue]) -> DbOutcome {
         let statements = match Parser::parse_sql(&PostgreSqlDialect {}, statement) {
             Ok(s) => s,
             Err(e) => return DbOutcome::Denied(DbDenial::Syntax(e.to_string())),
@@ -4840,7 +4994,7 @@ impl<T: DbExecutor> DbGuard<T> {
             }
         }
 
-        match self.executor.execute(&approved.app_id, statement, params).await {
+        match self.executor.execute(scope, statement, params).await {
             Ok(rows) => DbOutcome::Rows(rows),
             Err(DbBackendError::Timeout) => DbOutcome::Timeout,
             Err(e) => DbOutcome::Denied(DbDenial::Denied(e.to_string())),
@@ -4861,7 +5015,7 @@ pub mod egress;
 - [ ] **Step 5: Run to verify pass**
 
 Run: `make test`
-Expected: PASS — all 7 `db_guard_tests` green.
+Expected: PASS — all 8 `db_guard_tests` green (D30 adds `db_execute_forwards_the_full_invocation_scope_unmodified`).
 
 - [ ] **Step 6: Commit**
 
@@ -4875,7 +5029,11 @@ other sqlparser::ast::Statement variant is denied by one catch-all arm,
 which is a strict superset of spec §7.4's named denial list without
 enumerating sqlparser's AST by hand. Table references are extracted via
 sqlparser::ast::visit_relations and checked against the approved
-read/write grant before ever reaching DbExecutor.
+read/write grant before ever reaching DbExecutor. DbGuard::execute and
+DbExecutor::execute both take the D30 InvocationScope (spec §5.11) so a
+tenant/community-scoped SET LOCAL/RLS implementation (M3/M4, this
+crate's Postgres connection boundary) has the exact scope to drive it
+from -- forwarded unmodified, proven by a dedicated test.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
@@ -4903,7 +5061,7 @@ git push
 - Consumes: `host::approvals::{ApprovedPermissions, Capability}` (Task 9), `host::capability::{KvStore, RelayPush, Flags, Logger, Clock, LogLevel}` (Task 10).
 - Produces:
   ```rust
-  #[derive(Debug, Clone, PartialEq, Eq)] pub enum GuardDenial { NotGranted(&'static str), TooLarge(u64) }
+  #[derive(Debug, Clone, PartialEq, Eq)] pub enum GuardDenial { NotGranted(&'static str), TooLarge(u64), Backend(String), InvalidKey(String) }
 
   pub struct KvGuard<T: KvStore> { /* ... */ }
   impl<T: KvStore> KvGuard<T> {
@@ -5015,6 +5173,28 @@ async fn kv_set_rejects_a_value_over_the_max_size() {
     assert!(matches!(err, penguin_bundle_host::host::kv_guard::GuardDenial::TooLarge(100)));
 }
 
+/// D30 defense-in-depth (spec §5.11 spirit): a guest key that is empty,
+/// looks absolute, or looks like a path-traversal attempt is refused
+/// before it is ever namespaced under the bundle's own state key.
+#[tokio::test]
+async fn kv_rejects_empty_absolute_and_path_traversal_keys() {
+    let fake = Arc::new(FakeKv(Mutex::new(HashMap::new())));
+    let guard = KvGuard::new(fake, 65536, 2_592_000);
+    let approved = approved(json!(["kv"]));
+    let base_key = "waddles:t:acme:c:_tenant:app:a:state";
+
+    let mut examined = 0;
+    for bad_key in ["", "/etc/passwd", "../../other-bundle-secret", "a/../../b"] {
+        let err = guard.get(&approved, base_key, bad_key).await.unwrap_err();
+        assert!(
+            matches!(err, penguin_bundle_host::host::kv_guard::GuardDenial::InvalidKey(_)),
+            "expected {bad_key:?} to be rejected as InvalidKey, got {err:?}"
+        );
+        examined += 1;
+    }
+    assert_eq!(examined, 4, "expected exactly 4 malformed-key cases examined");
+}
+
 struct FakeRelay;
 #[async_trait::async_trait]
 impl RelayPush for FakeRelay {
@@ -5118,12 +5298,35 @@ pub enum GuardDenial {
     NotGranted(&'static str),
     TooLarge(u64),
     Backend(String),
+    /// D30 defense-in-depth (spec §5.11's "no bundle host call accepts a
+    /// tenant or community argument" spirit extended to key hygiene):
+    /// empty, absolute-looking (`/...`), or path-traversal-looking
+    /// (containing `..`) guest keys are refused before namespacing, even
+    /// though a Valkey hash field has no hierarchical meaning and so
+    /// cannot literally "escape" -- refusing defensively costs nothing
+    /// and removes an entire class of guest input from ever reaching the
+    /// backend unexamined.
+    InvalidKey(String),
 }
 
 pub struct KvGuard<T: KvStore> {
     store: Arc<T>,
     max_value_bytes: usize,
     max_ttl_seconds: u32,
+}
+
+/// Rejects empty, absolute-looking, or path-traversal-looking guest keys.
+fn validate_guest_key(key: &str) -> Result<(), GuardDenial> {
+    if key.is_empty() {
+        return Err(GuardDenial::InvalidKey("key must not be empty".to_string()));
+    }
+    if key.starts_with('/') {
+        return Err(GuardDenial::InvalidKey(format!("key {key:?} must not look like an absolute path")));
+    }
+    if key.contains("..") {
+        return Err(GuardDenial::InvalidKey(format!("key {key:?} must not contain '..'")));
+    }
+    Ok(())
 }
 
 impl<T: KvStore> KvGuard<T> {
@@ -5136,6 +5339,7 @@ impl<T: KvStore> KvGuard<T> {
     }
 
     pub async fn get(&self, _approved: &ApprovedPermissions, base_key: &str, key: &str) -> Result<Option<Vec<u8>>, GuardDenial> {
+        validate_guest_key(key)?;
         self.store
             .get(&Self::namespaced(base_key, key))
             .await
@@ -5143,6 +5347,7 @@ impl<T: KvStore> KvGuard<T> {
     }
 
     pub async fn set(&self, _approved: &ApprovedPermissions, base_key: &str, key: &str, value: &[u8], ttl_seconds: u32) -> Result<(), GuardDenial> {
+        validate_guest_key(key)?;
         if value.len() > self.max_value_bytes {
             return Err(GuardDenial::TooLarge(value.len() as u64));
         }
@@ -5154,6 +5359,7 @@ impl<T: KvStore> KvGuard<T> {
     }
 
     pub async fn delete(&self, _approved: &ApprovedPermissions, base_key: &str, key: &str) -> Result<(), GuardDenial> {
+        validate_guest_key(key)?;
         self.store
             .delete(&Self::namespaced(base_key, key))
             .await
@@ -5161,6 +5367,7 @@ impl<T: KvStore> KvGuard<T> {
     }
 
     pub async fn increment(&self, _approved: &ApprovedPermissions, base_key: &str, key: &str, delta: i64, ttl_seconds: u32) -> Result<i64, GuardDenial> {
+        validate_guest_key(key)?;
         let ttl = ttl_seconds.min(self.max_ttl_seconds);
         self.store
             .increment(&Self::namespaced(base_key, key), delta, ttl)
@@ -5368,7 +5575,9 @@ KvGuard namespaces every guest key under b:{key}; RelayGuard is action-
 stage-only via has_capability(Relay) plus a known-provider check;
 LogGuard ports python-utils' SENSITIVE_KEYS rule verbatim and clamps a
 guest's requested level down to the stage's configured LOG_LEVEL;
-Flags/Clock guards are always-granted pass-throughs.
+Flags/Clock guards are always-granted pass-throughs. KvGuard also
+rejects empty, absolute-looking, or path-traversal-looking guest keys
+before namespacing (D30 defense in depth, spec §5.11's spirit).
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
@@ -5649,12 +5858,27 @@ git push
       pub app_id: String,
       pub digest: String,
       pub approved: std::sync::Arc<ApprovedPermissions>,
-      pub bundle_context: BundleContextInfo,  // {tenant, community, feature, version, message_id, config_json} -- synthesized by the caller from the envelope, spec §7.4 "context"
+      pub bundle_context: BundleContextInfo,  // {tenant, community, feature, version, message_id, config_json, workstream_id, trace} -- synthesized by the caller from a binding-MAC-verified envelope, spec §7.4 "context", §5.11 D30
   }
-  pub struct BundleContextInfo { pub tenant: String, pub community: Option<String>, pub feature: String, pub version: String, pub message_id: String, pub config_json: String }
+  pub struct BundleContextInfo { pub tenant: String, pub community: Option<String>, pub feature: String, pub version: String, pub message_id: String, pub config_json: String, pub workstream_id: String, pub trace: Option<penguin_spine::Trace> }
+  impl HostCallContext {
+      /// Builds the D30 `InvocationScope` (spec §5.11) this context
+      /// implies -- the single place `tenant_id`/`community_id`/
+      /// `workstream_id`/`app_id`/`trace` are assembled from a
+      /// `HostCallContext`, so `DbGuard`/usage-metering call sites never
+      /// duplicate the field mapping.
+      pub fn scope(&self) -> crate::wire::message::InvocationScope;
+  }
 
   pub struct HostCallRouter<Http: HttpEgress, Kv: KvStore, Db: DbExecutor, Relay: RelayPush, Fl: Flags, Lg: Logger, Ck: Clock> {
-      pub fn new(egress: EgressGuard<Http>, kv: KvGuard<Kv>, db: DbGuard<Db>, relay: RelayGuard<Relay>, flags: FlagsGuard<Fl>, log: LogGuard<Lg>, clock: ClockGuard<Ck>, trips: std::sync::Arc<TripTracker>, secrets: std::sync::Arc<dyn SecretResolver>) -> Self;
+      /// `usage` (D31, spec §5.12): when present, every successful
+      /// dispatch increments the matching `HostCallKind` counter on a
+      /// `UsageDelta` keyed by this call's scope and batches it via
+      /// `UsageBatcher::record` -- the caller (the stage, M4/M5) owns
+      /// flushing the batcher onto `waddles:usage` via `SpineClient::
+      /// append_usage`. `None` disables usage recording entirely
+      /// (`metering.enabled=false`, spec §12.3).
+      pub fn new(egress: EgressGuard<Http>, kv: KvGuard<Kv>, db: DbGuard<Db>, relay: RelayGuard<Relay>, flags: FlagsGuard<Fl>, log: LogGuard<Lg>, clock: ClockGuard<Ck>, trips: std::sync::Arc<TripTracker>, secrets: std::sync::Arc<dyn SecretResolver>, usage: Option<std::sync::Arc<penguin_spine::UsageBatcher>>, stage: impl Into<String>) -> Self;
       /// Routes one `(capability, op, args)` triple to the matching
       /// guard and returns the `host-result` payload shape (`Ok(json)`
       /// or `Err({code, message})`), incrementing the trip tracker on the
@@ -5716,7 +5940,7 @@ impl KvStore for FakeKv {
 struct FakeDb;
 #[async_trait::async_trait]
 impl DbExecutor for FakeDb {
-    async fn execute(&self, _a: &str, _s: &str, _p: &[DbValue]) -> Result<DbRows, DbBackendError> {
+    async fn execute(&self, _scope: &penguin_bundle_host::wire::message::InvocationScope, _s: &str, _p: &[DbValue]) -> Result<DbRows, DbBackendError> {
         Ok(DbRows { columns: vec![], rows: vec![], rows_affected: 0 })
     }
 }
@@ -5749,6 +5973,8 @@ fn router() -> HostCallRouter<FakeHttp, FakeKv, FakeDb, FakeRelay, FakeFlags, Fa
         ClockGuard::new(Arc::new(FakeClock)),
         Arc::new(TripTracker::new(3, Duration::from_secs(300))),
         Arc::new(NoSecrets),
+        None,
+        "process",
     )
 }
 
@@ -5762,7 +5988,11 @@ fn ctx(capabilities: serde_json::Value) -> HostCallContext {
         app_id: "waddles.test.fixture.hello".to_string(),
         digest: "sha256:1".to_string(),
         approved: Arc::new(approved),
-        bundle_context: BundleContextInfo { tenant: "t".into(), community: None, feature: "f".into(), version: "0.1.0".into(), message_id: "m1".into(), config_json: "{}".into() },
+        bundle_context: BundleContextInfo {
+            tenant: "t".into(), community: None, feature: "f".into(), version: "0.1.0".into(),
+            message_id: "m1".into(), config_json: "{}".into(),
+            workstream_id: "8f14e45f-ceea-467e-adde-3fb5c9752730".into(), trace: None,
+        },
     }
 }
 
@@ -5852,6 +6082,7 @@ use super::log_guard::LogGuard;
 use super::relay_guard::RelayGuard;
 use super::trip::{TripLimit, TripTracker};
 use crate::wire::message::{CapabilityKind, HostResultError};
+use tracing::Instrument;
 
 #[derive(Debug, Clone)]
 pub struct BundleContextInfo {
@@ -5861,6 +6092,12 @@ pub struct BundleContextInfo {
     pub version: String,
     pub message_id: String,
     pub config_json: String,
+    /// D30 (spec §5.11, §6.11): the workstream this invocation belongs
+    /// to, sourced from a binding-MAC-verified envelope, never guessed.
+    pub workstream_id: String,
+    /// D30 (spec §5.11, §13.2): the envelope's trace context, propagated
+    /// into every host-call frame and span this invocation produces.
+    pub trace: Option<penguin_spine::Trace>,
 }
 
 pub struct HostCallContext {
@@ -5868,6 +6105,21 @@ pub struct HostCallContext {
     pub digest: String,
     pub approved: Arc<ApprovedPermissions>,
     pub bundle_context: BundleContextInfo,
+}
+
+impl HostCallContext {
+    /// Builds the D30 `InvocationScope` (spec §5.11) this context
+    /// implies. `DbGuard::execute` and usage-metering call sites use
+    /// this rather than re-deriving the same five fields by hand.
+    pub fn scope(&self) -> crate::wire::message::InvocationScope {
+        crate::wire::message::InvocationScope {
+            tenant_id: self.bundle_context.tenant.clone(),
+            community_id: self.bundle_context.community.clone(),
+            workstream_id: self.bundle_context.workstream_id.clone(),
+            app_id: self.app_id.clone(),
+            trace: self.bundle_context.trace.clone(),
+        }
+    }
 }
 
 pub struct HostCallRouter<Http: HttpEgress, Kv: KvStore, Db: DbExecutor, Relay: RelayPush, Fl: Flags, Lg: Logger, Ck: Clock> {
@@ -5880,6 +6132,26 @@ pub struct HostCallRouter<Http: HttpEgress, Kv: KvStore, Db: DbExecutor, Relay: 
     clock: ClockGuard<Ck>,
     trips: Arc<TripTracker>,
     secrets: Arc<dyn SecretResolver>,
+    /// D31 (spec §5.12): `None` when `metering.enabled=false`.
+    usage: Option<Arc<penguin_spine::UsageBatcher>>,
+    /// `"process"` or `"action"` -- this router is instantiated once per
+    /// stage process (spec §5.12's `UsageDelta.stage`), never shared
+    /// between the two.
+    stage: String,
+}
+
+/// The subset of `CapabilityKind` spec §5.12 counts as "host calls by
+/// kind" -- `Context` and `Clock` are local/free and never counted.
+fn usage_kind_for(capability: CapabilityKind) -> Option<penguin_spine::HostCallKind> {
+    match capability {
+        CapabilityKind::Http => Some(penguin_spine::HostCallKind::Http),
+        CapabilityKind::Kv => Some(penguin_spine::HostCallKind::Kv),
+        CapabilityKind::Db => Some(penguin_spine::HostCallKind::Db),
+        CapabilityKind::Relay => Some(penguin_spine::HostCallKind::Relay),
+        CapabilityKind::Flags => Some(penguin_spine::HostCallKind::Flags),
+        CapabilityKind::Log => Some(penguin_spine::HostCallKind::Log),
+        CapabilityKind::Context | CapabilityKind::Clock => None,
+    }
 }
 
 fn denied(reason: &str) -> HostResultError {
@@ -5904,8 +6176,28 @@ impl<Http: HttpEgress, Kv: KvStore, Db: DbExecutor, Relay: RelayPush, Fl: Flags,
         clock: ClockGuard<Ck>,
         trips: Arc<TripTracker>,
         secrets: Arc<dyn SecretResolver>,
+        usage: Option<Arc<penguin_spine::UsageBatcher>>,
+        stage: impl Into<String>,
     ) -> Self {
-        Self { egress, kv, db, relay, flags, log, clock, trips, secrets }
+        Self { egress, kv, db, relay, flags, log, clock, trips, secrets, usage, stage: stage.into() }
+    }
+
+    /// D31 (spec §5.12): records one successful host call of `capability`'s
+    /// kind against `ctx`'s scope. A no-op when usage recording is
+    /// disabled, or for a capability spec §5.12 does not count
+    /// (`context`, `clock`).
+    fn record_usage(&self, ctx: &HostCallContext, capability: CapabilityKind) {
+        let Some(usage) = &self.usage else { return };
+        let Some(kind) = usage_kind_for(capability) else { return };
+        let mut delta = penguin_spine::UsageDelta::zero(
+            ctx.bundle_context.tenant.clone(),
+            ctx.bundle_context.community.clone(),
+            ctx.bundle_context.workstream_id.clone(),
+            self.stage.clone(),
+            Some(ctx.app_id.clone()),
+        );
+        delta.host_calls.increment(kind);
+        usage.record(delta);
     }
 
     pub fn trips(&self) -> &TripTracker {
@@ -5924,7 +6216,23 @@ impl<Http: HttpEgress, Kv: KvStore, Db: DbExecutor, Relay: RelayPush, Fl: Flags,
         op: &str,
         args: Value,
     ) -> Result<Value, HostResultError> {
-        match capability {
+        // D30 (spec §5.11, §13.2): one span per host call, carrying the
+        // same four ids as the owning bundle.invoke span (Task 22).
+        // Built with `Instrument` on the future below, never
+        // `span.enter()` -- an `Entered` guard held across `.await`
+        // attaches to whatever task the runtime resumes next.
+        let community_label = ctx.bundle_context.community.as_deref().unwrap_or("_tenant").to_string();
+        let span = tracing::info_span!(
+            "host.call",
+            capability = ?capability,
+            op,
+            waddles.tenant_id = %ctx.bundle_context.tenant,
+            waddles.community_id = %community_label,
+            waddles.workstream_id = %ctx.bundle_context.workstream_id,
+            waddles.app_id = %ctx.app_id,
+        );
+        async move {
+        let result = match capability {
             CapabilityKind::Context => match op {
                 "get_context" => Ok(json!({
                     "tenant": ctx.bundle_context.tenant,
@@ -6010,7 +6318,7 @@ impl<Http: HttpEgress, Kv: KvStore, Db: DbExecutor, Relay: RelayPush, Fl: Flags,
                     return Err(failed(&format!("unknown db op '{op}'")));
                 }
                 let statement = args["statement"].as_str().unwrap_or_default();
-                match self.db.execute(&ctx.approved, statement, &[]).await {
+                match self.db.execute(&ctx.approved, &ctx.scope(), statement, &[]).await {
                     DbOutcome::Rows(rows) => Ok(json!({"columns": rows.columns, "rows_affected": rows.rows_affected})),
                     DbOutcome::Denied(reason) => {
                         self.record_denial_trip(ctx);
@@ -6058,7 +6366,14 @@ impl<Http: HttpEgress, Kv: KvStore, Db: DbExecutor, Relay: RelayPush, Fl: Flags,
                     EgressOutcome::TooLarge(n) => Err(HostResultError { code: "HOST_CALL_FAILED".to_string(), message: format!("response too large: {n} bytes") }),
                 }
             }
+        };
+        if result.is_ok() {
+            self.record_usage(ctx, capability);
         }
+        result
+        }
+        .instrument(span)
+        .await
     }
 }
 ```
@@ -6572,6 +6887,16 @@ impl ExecutorConnection {
         ctx: HostCallContextTemplate,
     ) -> Result<serde_json::Value, HostApiError> {
         let id = self.transport.next_id();
+        // D30 (spec §5.11, §6.6): built from ctx.bundle_context BEFORE it
+        // moves into InFlightInvoke below -- scope.app_id/.trace supersede
+        // the pre-D30 standalone app_id/trace_context frame fields.
+        let scope = crate::wire::message::InvocationScope {
+            tenant_id: ctx.bundle_context.tenant.clone(),
+            community_id: ctx.bundle_context.community.clone(),
+            workstream_id: ctx.bundle_context.workstream_id.clone(),
+            app_id: app_id.to_string(),
+            trace: ctx.bundle_context.trace.clone(),
+        };
         self.pending_contexts.lock().await.insert(
             id,
             InFlightInvoke { digest: digest.to_string(), approved: ctx.approved, bundle_context: ctx.bundle_context },
@@ -6582,12 +6907,11 @@ impl ExecutorConnection {
             .call_with_id(
                 id,
                 Message::Invoke {
-                    app_id: app_id.to_string(),
                     digest: digest.to_string(),
                     export,
                     payload,
                     deadline_ms,
-                    trace_context: None,
+                    scope,
                 },
             )
             .await;
@@ -6649,9 +6973,19 @@ impl ExecutorConnection {
                     Ok(f) => f,
                     Err(_) => break,
                 };
-                let Message::HostCall { app_id, capability, op, args, call_id } = frame.message else {
+                // D30 (spec §5.11): `scope` on the incoming frame is the
+                // credential-less, untrusted executor's own echo -- only
+                // `scope.app_id` (a label, exactly as the pre-D30 bare
+                // `app_id` field was) is taken from it. tenant_id/
+                // community_id/workstream_id/trace are never read from
+                // here; `bundle_context` below (looked up by call_id from
+                // `pending_contexts`, populated by THIS stage from a
+                // binding-MAC-verified envelope) is the only authoritative
+                // source those four ever have.
+                let Message::HostCall { scope: incoming_scope, capability, op, args, call_id } = frame.message else {
                     continue;
                 };
+                let app_id = incoming_scope.app_id;
 
                 let in_flight = self.pending_contexts.lock().await.get(&call_id).map(|i| {
                     (i.digest.clone(), i.approved.clone(), i.bundle_context.clone())
@@ -8376,7 +8710,11 @@ git push
   ```rust
   pub struct RemoteHostWire {
       pub transport: std::sync::Arc<FrameTransport>,
-      pub app_id: String,
+      /// The full D30 scope (spec §5.11) of the `invoke` this instance's
+      /// whole lifetime is bound to -- attached verbatim to every
+      /// `host-call` frame this instance sends (`scope.app_id` supersedes
+      /// the pre-D30 standalone `app_id` field).
+      pub scope: crate::wire::message::InvocationScope,
       /// The frame id of the `invoke` this instance's whole lifetime is
       /// scoped to -- becomes `call_id` on every `host-call` frame this
       /// instance sends, so the stage's `pending_contexts` lookup
@@ -8407,7 +8745,7 @@ git push
   pub trait StageRequestHandler: Send + Sync {
       async fn on_load(&self, app_id: &str, version: &str, digest: &str, component_key: &str, sidecar_key: &str, capabilities: Vec<String>, limits: crate::wire::message::LoadLimits) -> Result<(String, u64, Vec<String>), String>;
       async fn on_unload(&self, app_id: &str, digest: &str) -> Result<(), String>;
-      async fn on_invoke(&self, app_id: &str, digest: &str, export: crate::wire::message::ExportKind, payload: serde_json::Value, deadline_ms: u64, invoke_frame_id: u64) -> Result<serde_json::Value, String>;
+      async fn on_invoke(&self, scope: crate::wire::message::InvocationScope, digest: &str, export: crate::wire::message::ExportKind, payload: serde_json::Value, deadline_ms: u64, invoke_frame_id: u64) -> Result<serde_json::Value, String>;
   }
   ```
   Task 22 (`bundle-executor` binary) implements `StageRequestHandler` against `BucketLoader`/`InstancePool`/`BundleRuntime` and calls `ExecutorClient::dial` + `serve`.
@@ -8519,9 +8857,19 @@ This changes `call_transform`'s and `call_dispatch`'s public signatures from Tas
 ```rust
 #![allow(clippy::unwrap_used, clippy::panic)]
 use penguin_bundle_host::executor::remote_host_impl::RemoteHostWire;
-use penguin_bundle_host::wire::message::{CapabilityKind, Frame, HostResultError, Message};
+use penguin_bundle_host::wire::message::{CapabilityKind, Frame, HostResultError, InvocationScope, Message};
 use penguin_bundle_host::wire::transport::FrameTransport;
 use std::sync::Arc;
+
+fn sample_scope(app_id: &str) -> InvocationScope {
+    InvocationScope {
+        tenant_id: "acme".to_string(),
+        community_id: None,
+        workstream_id: "8f14e45f-ceea-467e-adde-3fb5c9752730".to_string(),
+        app_id: app_id.to_string(),
+        trace: None,
+    }
+}
 
 #[tokio::test]
 async fn remote_host_wire_forwards_a_call_and_returns_the_result() {
@@ -8545,7 +8893,7 @@ async fn remote_host_wire_forwards_a_call_and_returns_the_result() {
         }
     });
 
-    let wire = RemoteHostWire { transport: client_transport, app_id: "waddles.test.a".to_string(), invoke_frame_id: 42 };
+    let wire = RemoteHostWire { transport: client_transport, scope: sample_scope("waddles.test.a"), invoke_frame_id: 42 };
     let result = wire.call(CapabilityKind::Kv, "get", serde_json::json!({"key": "x"})).await.unwrap();
     assert_eq!(result, serde_json::json!(null));
     server_task.await.unwrap();
@@ -8565,7 +8913,7 @@ async fn remote_host_wire_surfaces_a_denial_as_an_error() {
             .unwrap();
     });
 
-    let wire = RemoteHostWire { transport: client_transport, app_id: "a".to_string(), invoke_frame_id: 1 };
+    let wire = RemoteHostWire { transport: client_transport, scope: sample_scope("a"), invoke_frame_id: 1 };
     let err = wire.call(CapabilityKind::Http, "send", serde_json::json!({})).await.unwrap_err();
     assert_eq!(err.code, "HOST_CALL_DENIED");
     server_task.await.unwrap();
@@ -8596,7 +8944,10 @@ use crate::wire::transport::FrameTransport;
 #[derive(Clone)]
 pub struct RemoteHostWire {
     pub transport: std::sync::Arc<FrameTransport>,
-    pub app_id: String,
+    /// D30 (spec §5.11): the full scope of the invocation this wire
+    /// belongs to, attached to every `host-call` frame -- `scope.app_id`
+    /// supersedes the pre-D30 standalone `app_id` field.
+    pub scope: crate::wire::message::InvocationScope,
     pub invoke_frame_id: u64,
 }
 
@@ -8607,7 +8958,7 @@ impl RemoteHostWire {
             .transport
             .call_with_id(
                 id,
-                Message::HostCall { app_id: self.app_id.clone(), capability, op: op.to_string(), args, call_id: self.invoke_frame_id },
+                Message::HostCall { scope: self.scope.clone(), capability, op: op.to_string(), args, call_id: self.invoke_frame_id },
             )
             .await
             .map_err(|e| HostResultError { code: "HOST_CALL_FAILED".to_string(), message: e.to_string() })?;
@@ -8797,9 +9148,13 @@ pub trait StageRequestHandler: Send + Sync {
         limits: LoadLimits,
     ) -> Result<(String, u64, Vec<String>), String>;
     async fn on_unload(&self, app_id: &str, digest: &str) -> Result<(), String>;
+    /// D30 (spec §5.11): `scope` is the invocation's full tenant/
+    /// community/workstream scope, taken from `Message::Invoke.scope` --
+    /// `scope.app_id` supersedes the pre-D30 standalone `app_id`
+    /// parameter this method used to take.
     async fn on_invoke(
         &self,
-        app_id: &str,
+        scope: crate::wire::message::InvocationScope,
         digest: &str,
         export: ExportKind,
         payload: serde_json::Value,
@@ -8875,9 +9230,9 @@ impl ExecutorClient {
                     };
                     self.transport.send(frame.id, reply).await?;
                 }
-                Message::Invoke { app_id, digest, export, payload, deadline_ms, .. } => {
+                Message::Invoke { digest, export, payload, deadline_ms, scope } => {
                     let started = std::time::Instant::now();
-                    let reply = match handler.on_invoke(&app_id, &digest, export, payload, deadline_ms, frame.id).await {
+                    let reply = match handler.on_invoke(scope, &digest, export, payload, deadline_ms, frame.id).await {
                         Ok(result_payload) => Message::Result { payload: result_payload, duration_ms: started.elapsed().as_millis() as u64, fuel_used: 0 },
                         Err(message) => Message::Error { code: crate::wire::message::ErrorCode::ExecutorDeadline, message, detail: None },
                     };
@@ -8925,7 +9280,9 @@ invoke's frame id as call_id, so the stage's context lookup (Task 17)
 resolves correctly. ExecutorClient dials the stage first (spec §7.1),
 completes the hello/hello-ok handshake, and serves load/unload/invoke/
 ping/shutdown via a StageRequestHandler the bundle-executor binary
-implements.
+implements. RemoteHostWire/on_invoke now carry the D30 InvocationScope
+(spec §5.11) end to end -- scope.app_id supersedes the pre-D30
+standalone app_id field on every affected type.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
@@ -9184,6 +9541,12 @@ pub const BUNDLE_INVOCATIONS: &str = "waddles_bundle_invocations_total";
 pub const BUNDLE_TRIPS: &str = "waddles_bundle_trips_total";
 /// Currently-loaded bundles.
 pub const BUNDLES_LOADED: &str = "waddles_bundles_loaded";
+/// D30 (spec §5.11): a Sec5.11 hop-verification failure or a
+/// bundle-output identity-field tamper attempt, labelled by stage and
+/// reason. Shared with `penguin-spine`'s `SpineMetrics::
+/// tenant_boundary_violation` -- same metric name, same label set,
+/// whichever layer first observes the violation increments it.
+pub const TENANT_BOUNDARY_VIOLATIONS: &str = "waddles_tenant_boundary_violations_total";
 /// Age in seconds of the newest successful bucket reconciliation --
 /// how stale the served bundle set is (README "Offline" note).
 pub const BUNDLE_STALE_AGE_S: &str = "waddles_bundle_stale_age_seconds";
@@ -9248,6 +9611,22 @@ pub fn record_host_call(capability: &'static str, millis: f64) {
 /// Record a sandbox trip (deadline, memory cap, trap, or three denials).
 pub fn record_trip(reason: &'static str) {
     penguin_logging::metrics::counter_add(BUNDLE_TRIPS, 1, &[KeyValue::new("reason", reason)]);
+}
+
+/// Record one D30 tenant-boundary violation this executor observed
+/// directly -- currently only `bundle_set_identity` (a process bundle's
+/// transform output tried to set a reserved envelope-identity field).
+/// The remaining `BoundaryError` reasons (`mac_mismatch`, `unknown_kid`,
+/// `tenant_mismatch`, `community_mismatch`) are observed and counted by
+/// the stage binary (M4/M5) via `penguin-spine`'s own
+/// `SpineMetrics::tenant_boundary_violation`, not here -- this executor
+/// never sees an envelope, only a bundle's transform output.
+pub fn record_tenant_boundary_violation(stage: &'static str, reason: &'static str) {
+    penguin_logging::metrics::counter_add(
+        TENANT_BOUNDARY_VIOLATIONS,
+        1,
+        &[KeyValue::new("stage", stage), KeyValue::new("reason", reason)],
+    );
 }
 
 /// Mark the stage connection up or down on `/health` in one call, so the
@@ -9378,7 +9757,7 @@ impl StageRequestHandler for Handler {
 
     async fn on_invoke(
         &self,
-        app_id: &str,
+        scope: crate::wire::message::InvocationScope,
         digest: &str,
         export: ExportKind,
         payload: serde_json::Value,
@@ -9386,9 +9765,10 @@ impl StageRequestHandler for Handler {
         invoke_frame_id: u64,
     ) -> Result<serde_json::Value, String> {
         let started = std::time::Instant::now();
+        let app_id = scope.app_id.as_str();
         let runtimes = self.runtimes.read().await;
         let (_loaded_digest, runtime) = runtimes.get(app_id).ok_or_else(|| "UNKNOWN_BUNDLE".to_string())?;
-        let wire = RemoteHostWire { transport: self.transport.clone(), app_id: app_id.to_string(), invoke_frame_id };
+        let wire = RemoteHostWire { transport: self.transport.clone(), scope: scope.clone(), invoke_frame_id };
 
         // One span per invocation: the unit of work every trace of this
         // service is built around. It is applied with `Instrument` on the
@@ -9396,15 +9776,55 @@ impl StageRequestHandler for Handler {
         // across an `.await` attaches the span to whatever task the
         // executor resumes next, which silently corrupts every trace in a
         // multi-threaded runtime.
-        let span = tracing::info_span!("bundle.invoke", app_id, digest, ?export);
+        //
+        // D30 (spec §5.11, §13.2): every span carries waddles.tenant_id/
+        // .community_id/.workstream_id/.app_id -- ids only, never PII or
+        // message bodies. community_id renders as the literal "_tenant"
+        // sentinel (matching the Valkey key segment) when the workstream
+        // is tenant-wide, so a span field is never simply absent.
+        let community_label = scope.community_id.as_deref().unwrap_or("_tenant");
+        let span = tracing::info_span!(
+            "bundle.invoke",
+            app_id,
+            digest,
+            ?export,
+            waddles.tenant_id = %scope.tenant_id,
+            waddles.community_id = %community_label,
+            waddles.workstream_id = %scope.workstream_id,
+            waddles.app_id = app_id,
+        );
         let outcome = async {
             match export {
                 ExportKind::Transform => {
                     let event: PlatformEventDto = serde_json::from_value(payload).map_err(|e| e.to_string())?;
-                    let result = runtime
+                    let mut result = runtime
                         .call_transform(&self.pool, app_id, digest, deadline_ms, 64, event, wire)
                         .await
                         .map_err(|e| e.to_string())?;
+
+                    // D30 (spec §5.11 "Bundles cannot move a workstream"):
+                    // a process bundle's transform output is read for its
+                    // event.payload only -- tenant/community/workstream_id/
+                    // event_id/trace are never read from it, and a
+                    // bundle-supplied field of the same name is dropped
+                    // and counted, never silently accepted. The stage
+                    // (M4, out of this crate's scope) still copies the
+                    // *input* envelope's identity fields onto the outgoing
+                    // envelope unconditionally; this is the one place that
+                    // guest-controlled JSON (payload_json) could otherwise
+                    // smuggle a same-named key back in.
+                    if let Some(out_event) = result.as_mut() {
+                        if let Ok(mut payload_map) =
+                            serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&out_event.payload_json)
+                        {
+                            if let Some(field) = penguin_spine::strip_bundle_identity_fields(&mut payload_map) {
+                                crate::telemetry::record_tenant_boundary_violation("process", "bundle_set_identity");
+                                tracing::warn!(app_id, field, "process bundle output attempted to set a reserved identity field; dropped");
+                                out_event.payload_json = serde_json::to_string(&payload_map).map_err(|e| e.to_string())?;
+                            }
+                        }
+                    }
+
                     serde_json::to_value(result).map_err(|e| e.to_string())
                 }
                 ExportKind::Dispatch => {
@@ -9687,16 +10107,17 @@ impl StageRequestHandler for HandlerUnderTest {
 
     async fn on_invoke(
         &self,
-        app_id: &str,
+        scope: penguin_bundle_host::wire::message::InvocationScope,
         digest: &str,
         export: ExportKind,
         payload: serde_json::Value,
         deadline_ms: u64,
         invoke_frame_id: u64,
     ) -> Result<serde_json::Value, String> {
+        let app_id = scope.app_id.as_str();
         let runtimes = self.runtimes.read().await;
         let (_loaded_digest, runtime) = runtimes.get(app_id).ok_or_else(|| "UNKNOWN_BUNDLE".to_string())?;
-        let wire = RemoteHostWire { transport: self.transport.clone(), app_id: app_id.to_string(), invoke_frame_id };
+        let wire = RemoteHostWire { transport: self.transport.clone(), scope: scope.clone(), invoke_frame_id };
         assert_eq!(export, ExportKind::Transform, "this test only exercises transform");
         let event: PlatformEventDto = serde_json::from_value(payload).map_err(|e| e.to_string())?;
         let result = runtime.call_transform(&self.pool, app_id, digest, deadline_ms, 64, event, wire).await.map_err(|e| e.to_string())?;
@@ -9767,6 +10188,7 @@ async fn hello_frame_load_invoke_round_trips_end_to_end() {
             ).unwrap()),
             bundle_context: penguin_bundle_host::host::router::BundleContextInfo {
                 tenant: "t".into(), community: None, feature: "f".into(), version: "0.1.0".into(), message_id: "m1".into(), config_json: "{}".into(),
+                workstream_id: "8f14e45f-ceea-467e-adde-3fb5c9752730".into(), trace: None,
             },
         };
         let result = conn.invoke("waddles.test.fixture.hello", &digest_for_stage, ExportKind::Transform, event, 2000, ctx).await.unwrap();
@@ -9893,26 +10315,27 @@ expression and the second immediately after it:
             CapabilityKind::Context => "context",
         };
 
-        // Bind the existing `match capability { ... }` expression from Task 16
-        // to `outcome` instead of returning it directly: change the `match`'s
-        // opening line from
-        //     match capability {
-        // to
-        //     let outcome = match capability {
-        // and its closing `}` to `};`. Every arm body is untouched; the two
-        // early `return Err(denied(...))` statements inside the arms stay
-        // early returns (a denial that trips the breaker is reported by
-        // `record_denial_trip` on that path already, and skipping the
-        // histogram for it is correct -- it never reached a guard).
-        let outcome = match capability {
-
+        // D30's Task 16 already wraps the dispatch body in
+        // `async move { let result = match capability { ... }; if
+        // result.is_ok() { self.record_usage(ctx, capability); } result }
+        // .instrument(span).await` (the span carries waddles.tenant_id/
+        // .community_id/.workstream_id/.app_id). This task's timing/
+        // histogram code is inserted around that same `result` binding,
+        // not a fresh `outcome` -- reusing Task 16's variable name rather
+        // than introducing a second one for the same value. `started`/
+        // `capability_label` (defined just above this fragment, unchanged
+        // from this step's own setup) move to right after `async move {`
+        // so they're captured inside the instrumented future; the timing/
+        // logging block below goes immediately after Task 16's
+        // `let result = match capability { ... };` line and before its
+        // `if result.is_ok() { self.record_usage(ctx, capability); }`.
         let millis = started.elapsed().as_secs_f64() * 1000.0;
         penguin_logging::metrics::record_latency_ms(
             HOST_CALL_MS,
             millis,
             &[KeyValue::new("capability", capability_label)],
         );
-        if outcome.is_err() {
+        if result.is_err() {
             penguin_logging::metrics::counter_add(
                 HOST_CALL_DENIALS,
                 1,
@@ -9924,10 +10347,44 @@ expression and the second immediately after it:
             capability = capability_label,
             op,
             millis,
-            ok = outcome.is_ok(),
+            ok = result.is_ok(),
             "host call dispatched"
         );
-        outcome
+        // (Task 16's own `if result.is_ok() { self.record_usage(...); }
+        // result` follows immediately after, unchanged.)
+```
+
+The net effect on `dispatch`'s body, after both this task's and Task 16's
+edits are applied together, is:
+
+```rust
+        let community_label = ctx.bundle_context.community.as_deref().unwrap_or("_tenant").to_string();
+        let span = tracing::info_span!(
+            "host.call", capability = ?capability, op,
+            waddles.tenant_id = %ctx.bundle_context.tenant,
+            waddles.community_id = %community_label,
+            waddles.workstream_id = %ctx.bundle_context.workstream_id,
+            waddles.app_id = %ctx.app_id,
+        );
+        async move {
+        let started = std::time::Instant::now();
+        let capability_label: &'static str = match capability { /* ... as above ... */ };
+        let result = match capability {
+            /* every Task 16 arm, unchanged */
+        };
+        let millis = started.elapsed().as_secs_f64() * 1000.0;
+        penguin_logging::metrics::record_latency_ms(HOST_CALL_MS, millis, &[KeyValue::new("capability", capability_label)]);
+        if result.is_err() {
+            penguin_logging::metrics::counter_add(HOST_CALL_DENIALS, 1, &[KeyValue::new("capability", capability_label)]);
+        }
+        tracing::debug!(app_id = %ctx.app_id, capability = capability_label, op, millis, ok = result.is_ok(), "host call dispatched");
+        if result.is_ok() {
+            self.record_usage(ctx, capability);
+        }
+        result
+        }
+        .instrument(span)
+        .await
 ```
 
 The `tracing::debug!` is deliberately generous (`critical-rules.md`:
@@ -10692,6 +11149,22 @@ Cross-checked every `Produces` declaration against every later `Consumes` and ca
 - Task 18's Interfaces block now carries a forward note that Task 21 changes `call_transform`/`call_dispatch` once more (adding the `wire` parameter), so an implementer doesn't read the two versions as a contradiction.
 
 No remaining mismatch was found between any task's `Produces` and a later task's `Consumes` or call sites, or between this plan and M1b/M2a.
+
+### 4a. D30/D31 addendum (this amendment)
+
+Spec §16's M1 table row for this crate: *"(M1c) `penguin-bundle-host::host::db` / `::kv`: tenant-scoped host calls wired to the binding-verified envelope: `SET LOCAL waddles.tenant`/`waddles.community` and KV/config/state key scoping proven to reject a mismatched-tenant invocation (§7.4, §6.2, D30)."*
+
+| D30/D31 requirement | Task(s) | Status |
+|---|---|---|
+| `InvocationScope {tenant_id, community_id, workstream_id, app_id, trace}` carried on every `invoke`/`host-call` frame (§6.6) | 2 | Done — supersedes the pre-D30 standalone `app_id`/`trace_context` fields; reuses `penguin_spine::Trace` verbatim (never duplicated) |
+| `DbExecutor::execute` takes `&InvocationScope` so the implementation's transaction can `SET LOCAL waddles.tenant`/`waddles.community` before running the statement | 10, 13 | Done — signature + documented RLS contract; `DbGuard::execute` forwards `scope` unmodified, proven by `db_execute_forwards_the_full_invocation_scope_unmodified` |
+| `KvStore` keys prefixed `t:{tenant}:c:{community}:...` | 14, 16 (pre-existing) | Already satisfied pre-D30 — `HostCallRouter::dispatch`'s `Db`/`Kv` arms already built `base_key` from `ctx.bundle_context.tenant`/`.community`, never guest input. This amendment adds `KvGuard` key-hygiene validation (empty/absolute/`..`) as defense in depth, spec §5.11's spirit extended to key input, not a scoping fix |
+| Bundle transform output cannot set `tenant_id`/`community_id`/`workstream_id`/`event_id`/`trace` — dropped and counted | 22 | Done — `Handler::on_invoke`'s `Transform` arm calls `penguin_spine::strip_bundle_identity_fields` on the decoded `payload_json` and increments `waddles_tenant_boundary_violations_total{stage="process",reason="bundle_set_identity"}` on a hit |
+| Spans per host call carry `waddles.tenant_id`/`.community_id`/`.workstream_id`/`.app_id`; `bundle.invoke` span likewise | 16, 22 | Done — `HostCallRouter::dispatch`'s `host.call` span and `Handler::on_invoke`'s `bundle.invoke` span both carry all four, via `Instrument` on the future (never `.entered()` across an `.await`) |
+| Trace propagated into and out of executor frames | 2, 17, 21 | Done structurally — `scope.trace` rides both `Invoke` (stage→executor) and `HostCall` (executor→stage); the executor never re-derives or forges it, only echoes what `ExecutorConnection::invoke` sent |
+| Host-call usage counted into the M1a `UsageDelta` (bundle invocations, fuel/CPU-ms, host calls by kind) | 16 | Partial — `HostCallRouter` gains an optional `UsageBatcher` and records one `HostCallKind` increment per successful dispatch (the "host calls by kind" half). Bundle-invocation counts and fuel/CPU-ms are executor-side (Task 22's `on_invoke`/`fuel_used`) and are **not yet wired to `UsageBatcher`** in this amendment — flagged as follow-up, since threading a batcher into the executor binary's own config/wiring (Task 22) is a larger change this pass did not make; the type-level contract (`UsageDelta`, `HostCallCounts`) is already in place from M1a |
+| Negative test: a DB host call scoped to tenant A cannot read tenant B rows (Postgres RLS fixture) | — | **Not implemented in this crate.** `penguin-bundle-host` has no Postgres connection pool by design (Global Constraints "Boundary"); `DbExecutor`'s only implementation lives in the service (M3/M4, out of every M1 library plan's scope). This crate's own test (`db_execute_forwards_the_full_invocation_scope_unmodified`, Task 13) proves the contract-level guarantee — the exact scope handed to the guard is the exact scope the executor implementation receives, unmodified. The live-Postgres RLS proof belongs with the service crate that owns the connection |
+| Negative test: KV key from bundle cannot escape its prefix (`../`, absolute, empty) | 14 | Done — `kv_rejects_empty_absolute_and_path_traversal_keys`, 4 cases, counted |
 
 ### 4. Task sizing
 
