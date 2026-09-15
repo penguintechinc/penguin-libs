@@ -330,6 +330,13 @@ futures-util = "=0.3.31"
 url = "=2.5.8"
 rstest = "=0.23.0"
 wiremock = "=0.6.5"
+# D30 (spec Sec5.11): TraceContext re-exports penguin-spine's Trace type
+# verbatim rather than duplicating {traceparent, tracestate} here --
+# penguin-spine (M1a) is that type's single defining crate. Pins its own
+# serde/serde_json/thiserror slightly ahead of this workspace's; Cargo
+# resolves both exact versions side by side in one lockfile without
+# conflict (a small, accepted duplication, not a version conflict).
+penguin-spine = "=0.1.0"
 
 [profile.release]
 strip = true
@@ -363,6 +370,7 @@ async-trait = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }
 subtle = { workspace = true }
+penguin-spine = { workspace = true }
 hex = { workspace = true }
 governor = { workspace = true }
 backoff = { workspace = true }
@@ -741,14 +749,14 @@ git push
 
 ---
 
-### Task 4: `penguin-connector-core` — `PlatformEvent`, `ActionConfig`, `IngestSource`, `ActionSender`, error types
+### Task 4: `penguin-connector-core` — `PlatformEvent`, `ActionConfig`, `IngestSource`, `ActionSender`, error types (D30 adds `TraceContext`)
 
 **Files:**
 - Create: `packages/rust-connectors/crates/penguin-connector-core/src/event.rs`, `.../src/outcome.rs`, `.../src/traits.rs`
-- Modify: `packages/rust-connectors/crates/penguin-connector-core/src/lib.rs`
+- Modify: `packages/rust-connectors/crates/penguin-connector-core/src/lib.rs`, `packages/rust-connectors/Cargo.toml` (add `penguin-spine = "=0.1.0"` to `[workspace.dependencies]`), `packages/rust-connectors/crates/penguin-connector-core/Cargo.toml` (add `penguin-spine = { workspace = true }`)
 
 **Interfaces:**
-- Consumes: nothing new.
+- Consumes: `penguin_spine::Trace` (M1a) — re-exported as `TraceContext` under this crate's own name, never duplicated (D30, spec §5.11).
 - Produces (the shapes every later task in this plan, and M3/M5's plans, depend on verbatim):
   ```rust
   pub struct EventSource { pub platform: String, pub account_id: String, pub channel_id: Option<String> }
@@ -761,6 +769,10 @@ git push
       pub source: Option<EventSource>,
   }
   pub type ActionConfig = std::collections::HashMap<String, serde_json::Value>;
+  /// D30 (spec §5.11): the envelope's W3C trace context, propagated onto
+  /// every outbound platform call this plan's senders make -- a type
+  /// alias for `penguin_spine::Trace` (M1a), never duplicated locally.
+  pub type TraceContext = penguin_spine::Trace;  // {traceparent: String, tracestate: Option<String>}
 
   pub enum RetryClass { Retryable { retry_after: Option<std::time::Duration> }, NonRetryable }
   pub struct SendOutcome { pub transport: String, pub detail: String, pub http_status: Option<u16> }
@@ -785,7 +797,7 @@ git push
 
   #[async_trait::async_trait]
   pub trait ActionSender: Send + Sync {
-      async fn send(&self, event: &PlatformEvent, config: &ActionConfig) -> Result<SendOutcome, SendError>;
+      async fn send(&self, event: &PlatformEvent, config: &ActionConfig, trace: Option<&TraceContext>) -> Result<SendOutcome, SendError>;
   }
   ```
   `PlatformEvent`/`EventSource` field-for-field match design spec §6.1.1 and **must match `penguin-spine`'s `PlatformEvent`** (plan M1a) — see Global Constraints.
@@ -844,6 +856,13 @@ pub struct PlatformEvent {
 /// Python's `config: Mapping[str, Any]` parameter on every
 /// `*_send_action.py::send_message`.
 pub type ActionConfig = HashMap<String, serde_json::Value>;
+
+/// D30 (spec §5.11): the envelope's W3C trace context, propagated onto
+/// every outbound platform call this crate's `ActionSender`s make.
+/// Re-exports `penguin-spine`'s `Trace` type verbatim under this crate's
+/// own name rather than duplicating `{traceparent, tracestate}` --
+/// `penguin-spine` (M1a) is that type's single defining crate.
+pub type TraceContext = penguin_spine::Trace;
 
 /// Read a required string field from `config`, or `None` if absent/not a
 /// string/empty -- the common `config.get("x")` + `isinstance(..., str)` +
@@ -1036,7 +1055,7 @@ mod tests {
 //! cancels the token the moment the lease is lost, and `run` must return
 //! `Ok(())` within one reconnect cycle of that happening.
 
-use crate::event::{ActionConfig, PlatformEvent};
+use crate::event::{ActionConfig, PlatformEvent, TraceContext};
 use crate::outcome::{SendError, SendOutcome};
 use tokio::sync::mpsc::Sender;
 use tokio_util::sync::CancellationToken;
@@ -1092,7 +1111,7 @@ pub trait IngestSource: Send {
 pub trait ActionSender: Send + Sync {
     /// Dispatch one outbound message; classify any failure `Retryable`/
     /// `NonRetryable` via [`SendError`].
-    async fn send(&self, event: &PlatformEvent, config: &ActionConfig) -> Result<SendOutcome, SendError>;
+    async fn send(&self, event: &PlatformEvent, config: &ActionConfig, trace: Option<&TraceContext>) -> Result<SendOutcome, SendError>;
 }
 
 #[cfg(test)]
@@ -1157,7 +1176,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ActionSender for EchoSender {
-        async fn send(&self, event: &PlatformEvent, _config: &ActionConfig) -> Result<SendOutcome, SendError> {
+        async fn send(&self, event: &PlatformEvent, _config: &ActionConfig, _trace: Option<&TraceContext>) -> Result<SendOutcome, SendError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(SendOutcome {
                 transport: "bundle".to_string(),
@@ -1184,7 +1203,7 @@ mod tests {
             }),
         };
         let config = ActionConfig::new();
-        let outcome = sender.send(&event, &config).await.expect("send ok");
+        let outcome = sender.send(&event, &config, None).await.expect("send ok");
         assert_eq!(outcome.detail, "echoed twitch");
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
@@ -1215,7 +1234,7 @@ mod outcome;
 mod secret;
 mod traits;
 
-pub use event::{config_str, payload_str, ActionConfig, EventSource, PlatformEvent};
+pub use event::{config_str, payload_str, ActionConfig, EventSource, PlatformEvent, TraceContext};
 pub use hmac_util::{constant_time_eq_str, hmac_sha256_hex};
 pub use outcome::{RetryClass, SendError, SendOutcome};
 pub use secret::Secret;
@@ -1259,8 +1278,8 @@ git push
 - Modify: `packages/rust-connectors/crates/penguin-connector-core/src/lib.rs`
 
 **Interfaces:**
-- Consumes: `SendError`, `RetryClass` (Task 4).
-- Produces: `pub fn classify_status(status: u16) -> RetryClass`, `pub fn build_http_client(timeout: std::time::Duration) -> Result<reqwest::Client, ConnectorError>`, `pub fn network_error_to_send_error(err: &reqwest::Error) -> SendError`. **Deliberately not SSRF-guarded** — see Global Constraints; every platform crate's REST calls go to a fixed, compiled-in host, not a bundle-declared one.
+- Consumes: `SendError`, `RetryClass`, `TraceContext` (Task 4).
+- Produces: `pub fn classify_status(status: u16) -> RetryClass`, `pub fn build_http_client(timeout: std::time::Duration) -> Result<reqwest::Client, ConnectorError>`, `pub fn network_error_to_send_error(err: &reqwest::Error) -> SendError`, `pub fn with_traceparent(builder: reqwest::RequestBuilder, trace: Option<&TraceContext>) -> reqwest::RequestBuilder` (D30, spec §5.11/§13.2). **Deliberately not SSRF-guarded** — see Global Constraints; every platform crate's REST calls go to a fixed, compiled-in host, not a bundle-declared one.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1274,6 +1293,7 @@ git push
 //! DNS-rebind-pinning guard lives in `penguin-bundle-host::host::http`
 //! (a different crate, out of this plan's scope).
 
+use crate::event::TraceContext;
 use crate::outcome::{RetryClass, SendError};
 use crate::traits::ConnectorError;
 use std::time::Duration;
@@ -1305,6 +1325,21 @@ pub fn build_http_client(timeout: Duration) -> Result<reqwest::Client, Connector
         .timeout(timeout)
         .build()
         .map_err(|e| ConnectorError::Connection(format!("failed to build HTTP client: {e}")))
+}
+
+/// D30 (spec §5.11, §13.2): attaches the envelope's W3C trace context to
+/// an outbound request builder as the standard `traceparent`/`tracestate`
+/// headers, so a chat message's trace continues onto the platform call
+/// spec §13.2's continuity test asserts. A no-op when `trace` is `None`
+/// -- an envelope with no parent span sends no trace headers, never a
+/// fabricated one.
+pub fn with_traceparent(builder: reqwest::RequestBuilder, trace: Option<&TraceContext>) -> reqwest::RequestBuilder {
+    let Some(trace) = trace else { return builder };
+    let builder = builder.header("traceparent", trace.traceparent.as_str());
+    match &trace.tracestate {
+        Some(tracestate) => builder.header("tracestate", tracestate.as_str()),
+        None => builder,
+    }
 }
 
 /// Map a `reqwest::Error` (timeout, connect failure, DNS, ...) to a
@@ -1339,6 +1374,30 @@ mod tests {
         let client = build_http_client(Duration::from_secs(5));
         assert!(client.is_ok());
     }
+
+    #[test]
+    fn with_traceparent_attaches_both_headers_when_trace_is_some() {
+        let client = build_http_client(Duration::from_secs(5)).unwrap();
+        let builder = client.get("https://api.example.invalid/v1");
+        let trace = TraceContext {
+            traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_string(),
+            tracestate: Some("congo=t61rcWkgMzE".to_string()),
+        };
+        let request = with_traceparent(builder, Some(&trace)).build().unwrap();
+        assert_eq!(
+            request.headers().get("traceparent").unwrap(),
+            "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+        );
+        assert_eq!(request.headers().get("tracestate").unwrap(), "congo=t61rcWkgMzE");
+    }
+
+    #[test]
+    fn with_traceparent_is_a_no_op_when_trace_is_none() {
+        let client = build_http_client(Duration::from_secs(5)).unwrap();
+        let builder = client.get("https://api.example.invalid/v1");
+        let request = with_traceparent(builder, None).build().unwrap();
+        assert!(request.headers().get("traceparent").is_none());
+    }
 }
 ```
 
@@ -1352,13 +1411,13 @@ Expected: FAIL — `http` module not declared.
 Add to `lib.rs`:
 ```rust
 mod http;
-pub use http::{build_http_client, classify_status, network_error_to_send_error};
+pub use http::{build_http_client, classify_status, network_error_to_send_error, with_traceparent};
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `make rust-connectors-test-pkg PKG=penguin-connector-core`
-Expected: all pass, 9 new tests (`rstest` expands the 9-case table individually).
+Expected: all pass, 11 new tests (`rstest` expands the 9-case table individually, plus the 2 D30 `with_traceparent` tests).
 
 - [ ] **Step 5: Commit**
 
@@ -1372,7 +1431,9 @@ classify_status() is the single source of truth every platform sender
 (Discord/Slack/YouTube/Kick REST, Twitch Helix) uses for 429/401/403/4xx/
 5xx classification, ported from the shared pattern across
 core/svc_action/bundles/*_send_action.py. Deliberately not SSRF-guarded
--- see design spec §8.5 and this plan's Global Constraints.
+-- see design spec §8.5 and this plan's Global Constraints. Adds
+with_traceparent (D30, spec §5.11/§13.2): attaches the envelope's W3C
+trace context to an outbound request builder, a no-op when absent.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
@@ -2746,6 +2807,16 @@ pub struct TwitchIrcSender {
 impl TwitchIrcSender {
     /// Send one PRIVMSG to `message.channel`. Network/connect failures are
     /// `Retryable`; a missing/unresolvable OAuth token is `NonRetryable`.
+    ///
+    /// **D30 (spec §5.11/§13.2) deliberately does not apply here.** IRC's
+    /// `PRIVMSG` has no header slot to carry a `traceparent` on, and
+    /// `TwitchRelayMessage` (the wire shape on the outbound relay queue,
+    /// design spec §6.2/§10.2) is already reduced to `{channel, text}` by
+    /// the time it reaches this sender -- the envelope's trace context
+    /// never survives the relay hop to begin with. Trace continuity for
+    /// this leg is attribute-only: the caller's own span (the relay
+    /// `LPUSH`/`BRPOP` hop, M3/M5) carries `waddles.workstream_id` etc.,
+    /// it is never carried on this wire.
     pub async fn send(&self, message: &TwitchRelayMessage) -> Result<SendOutcome, SendError> {
         let oauth_token = Secret::resolve(&self.oauth_token_ref)
             .map_err(|e| SendError::non_retryable(format!("twitch relay token resolution failed: {e}"), None))?;
@@ -4023,7 +4094,8 @@ git push
 use async_trait::async_trait;
 use penguin_connector_core::{
     build_http_client, classify_status, config_str, network_error_to_send_error, payload_str,
-    ActionConfig, ActionSender, PlatformEvent, RetryClass, SendError, SendOutcome, Secret,
+    with_traceparent, ActionConfig, ActionSender, PlatformEvent, RetryClass, SendError,
+    SendOutcome, Secret, TraceContext,
 };
 use std::time::Duration;
 
@@ -4052,7 +4124,7 @@ impl DiscordRestSender {
 
 #[async_trait]
 impl ActionSender for DiscordRestSender {
-    async fn send(&self, event: &PlatformEvent, config: &ActionConfig) -> Result<SendOutcome, SendError> {
+    async fn send(&self, event: &PlatformEvent, config: &ActionConfig, trace: Option<&TraceContext>) -> Result<SendOutcome, SendError> {
         let channel_id = payload_str(event, "channel_id")
             .or_else(|| config_str(config, "channel_id"))
             .ok_or_else(|| {
@@ -4080,12 +4152,15 @@ impl ActionSender for DiscordRestSender {
         }
 
         let url = format!("{}/channels/{}/messages", self.api_base, channel_id);
-        let response = self
+        let request = self
             .client
             .post(&url)
             .header("Authorization", format!("Bot {}", bot_token.expose()))
             .header("Content-Type", "application/json")
-            .json(&body)
+            .json(&body);
+        // D30 (spec §5.11/§13.2): propagate the envelope's trace context
+        // onto the outbound platform call.
+        let response = with_traceparent(request, trace)
             .send()
             .await
             .map_err(|e| network_error_to_send_error(&e))?;
@@ -4161,7 +4236,7 @@ mod tests {
 
         let sender = DiscordRestSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"channel_id": "123", "text": "hello"}));
-        let outcome = sender.send(&event, &config_with_token()).await.expect("send ok");
+        let outcome = sender.send(&event, &config_with_token(), None).await.expect("send ok");
         assert!(outcome.detail.contains("channel=123"));
     }
 
@@ -4178,7 +4253,7 @@ mod tests {
         let event = event_with_payload(json!({"text": "hello"}));
         let mut config = config_with_token();
         config.insert("channel_id".to_string(), json!("456"));
-        let outcome = sender.send(&event, &config).await.expect("send ok");
+        let outcome = sender.send(&event, &config, None).await.expect("send ok");
         assert!(outcome.detail.contains("channel=456"));
     }
 
@@ -4192,7 +4267,7 @@ mod tests {
 
         let sender = DiscordRestSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"channel_id": "123", "text": "hello"}));
-        let err = sender.send(&event, &config_with_token()).await.expect_err("rate limited");
+        let err = sender.send(&event, &config_with_token(), None).await.expect_err("rate limited");
         assert_eq!(err.class, RetryClass::Retryable { retry_after: None });
     }
 
@@ -4203,7 +4278,7 @@ mod tests {
 
         let sender = DiscordRestSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"channel_id": "123", "text": "hello"}));
-        let err = sender.send(&event, &config_with_token()).await.expect_err("forbidden");
+        let err = sender.send(&event, &config_with_token(), None).await.expect_err("forbidden");
         assert_eq!(err.class, RetryClass::NonRetryable);
         assert_eq!(err.http_status, Some(403));
     }
@@ -4215,7 +4290,7 @@ mod tests {
 
         let sender = DiscordRestSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"channel_id": "123", "text": "hello"}));
-        let err = sender.send(&event, &config_with_token()).await.expect_err("server error");
+        let err = sender.send(&event, &config_with_token(), None).await.expect_err("server error");
         assert_eq!(err.class, RetryClass::Retryable { retry_after: None });
     }
 
@@ -4223,8 +4298,33 @@ mod tests {
     async fn send_fails_closed_with_no_channel_id() {
         let sender = DiscordRestSender::with_api_base("http://127.0.0.1:1").expect("builds");
         let event = event_with_payload(json!({"text": "hello"}));
-        let err = sender.send(&event, &config_with_token()).await.expect_err("no channel");
+        let err = sender.send(&event, &config_with_token(), None).await.expect_err("no channel");
         assert!(err.message.contains("could not resolve a channel_id"));
+    }
+
+    /// D30 (spec §5.11/§13.2): the envelope's trace context must ride the
+    /// outbound Discord call as the standard `traceparent` header. The
+    /// mock only matches a request carrying the exact expected value, so
+    /// a successful send proves the header went out, not just that
+    /// `with_traceparent` compiles.
+    #[tokio::test]
+    async fn send_propagates_the_traceparent_header() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/channels/123/messages"))
+            .and(header("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id": "msg-3"})))
+            .mount(&mock_server)
+            .await;
+
+        let sender = DiscordRestSender::with_api_base(mock_server.uri()).expect("builds");
+        let event = event_with_payload(json!({"channel_id": "123", "text": "hello"}));
+        let trace = TraceContext {
+            traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_string(),
+            tracestate: None,
+        };
+        let outcome = sender.send(&event, &config_with_token(), Some(&trace)).await.expect("send ok");
+        assert!(outcome.detail.contains("channel=123"));
     }
 }
 ```
@@ -4295,7 +4395,10 @@ feat(connectors): add Discord REST action sender; finalize crate docs
 penguin-connector-discord is now feature-complete for M1d: Gateway
 ingest + REST send, reply-in-place channel resolution, 429/401/403/4xx/
 5xx classification against wiremock -- ports
-core/svc_action/bundles/discord_send_action.py exactly.
+core/svc_action/bundles/discord_send_action.py exactly. ActionSender::
+send takes the D30 trace parameter and propagates it as the outbound
+traceparent header (spec §5.11/§13.2), proven against a wiremock header
+matcher, not just that with_traceparent compiles.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
@@ -4738,7 +4841,7 @@ git push
 - Create: `packages/rust-connectors/crates/penguin-connector-slack/README.md`, `.../CHANGELOG.md`
 
 **Interfaces:**
-- Consumes: `penguin_connector_core::{ActionSender, PlatformEvent, ActionConfig, SendOutcome, SendError, RetryClass, payload_str, config_str, build_http_client, network_error_to_send_error, Secret}`.
+- Consumes: `penguin_connector_core::{ActionSender, PlatformEvent, ActionConfig, SendOutcome, SendError, RetryClass, payload_str, config_str, build_http_client, network_error_to_send_error, with_traceparent, Secret, TraceContext}`.
 - Produces: `pub struct SlackChatSender { client: reqwest::Client, api_base: String }`, `impl SlackChatSender { pub fn new() -> Result<Self, SendError>; pub fn with_api_base(api_base: impl Into<String>) -> Result<Self, SendError>; }`, `impl ActionSender for SlackChatSender`.
 
 - [ ] **Step 1: Write the failing test**
@@ -4753,8 +4856,9 @@ git push
 
 use async_trait::async_trait;
 use penguin_connector_core::{
-    build_http_client, config_str, network_error_to_send_error, payload_str, ActionConfig,
-    ActionSender, PlatformEvent, RetryClass, SendError, SendOutcome, Secret,
+    build_http_client, config_str, network_error_to_send_error, payload_str, with_traceparent,
+    ActionConfig, ActionSender, PlatformEvent, RetryClass, SendError, SendOutcome, Secret,
+    TraceContext,
 };
 use std::collections::BTreeSet;
 use std::sync::LazyLock;
@@ -4787,24 +4891,30 @@ impl SlackChatSender {
         Ok(Self { client, api_base: api_base.into() })
     }
 
-    async fn post_with_one_retry(&self, url: &str, token: &str, body: &serde_json::Value) -> Result<reqwest::Response, SendError> {
-        let response = self
-            .client
-            .post(url)
-            .header("Authorization", format!("Bearer {token}"))
-            .header("Content-Type", "application/json; charset=utf-8")
-            .json(body)
+    async fn post_with_one_retry(
+        &self,
+        url: &str,
+        token: &str,
+        body: &serde_json::Value,
+        trace: Option<&TraceContext>,
+    ) -> Result<reqwest::Response, SendError> {
+        let build_request = || {
+            self.client
+                .post(url)
+                .header("Authorization", format!("Bearer {token}"))
+                .header("Content-Type", "application/json; charset=utf-8")
+                .json(body)
+        };
+        // D30 (spec §5.11/§13.2): propagate the envelope's trace context
+        // onto both the initial attempt and the one-retry-on-429 request.
+        let response = with_traceparent(build_request(), trace)
             .send()
             .await
             .map_err(|e| network_error_to_send_error(&e))?;
         if response.status().as_u16() != 429 {
             return Ok(response);
         }
-        self.client
-            .post(url)
-            .header("Authorization", format!("Bearer {token}"))
-            .header("Content-Type", "application/json; charset=utf-8")
-            .json(body)
+        with_traceparent(build_request(), trace)
             .send()
             .await
             .map_err(|e| network_error_to_send_error(&e))
@@ -4813,7 +4923,7 @@ impl SlackChatSender {
 
 #[async_trait]
 impl ActionSender for SlackChatSender {
-    async fn send(&self, event: &PlatformEvent, config: &ActionConfig) -> Result<SendOutcome, SendError> {
+    async fn send(&self, event: &PlatformEvent, config: &ActionConfig, trace: Option<&TraceContext>) -> Result<SendOutcome, SendError> {
         let channel_id = payload_str(event, "channel_id")
             .or_else(|| config_str(config, "channel_id"))
             .ok_or_else(|| {
@@ -4839,7 +4949,7 @@ impl ActionSender for SlackChatSender {
         }
 
         let url = format!("{}/chat.postMessage", self.api_base);
-        let response = self.post_with_one_retry(&url, bot_token.expose(), &body).await?;
+        let response = self.post_with_one_retry(&url, bot_token.expose(), &body, trace).await?;
         let status = response.status().as_u16();
 
         if status == 401 || status == 403 {
@@ -4885,7 +4995,7 @@ impl ActionSender for SlackChatSender {
 mod tests {
     use super::*;
     use serde_json::json;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn event_with_payload(payload: serde_json::Value) -> PlatformEvent {
@@ -4917,7 +5027,7 @@ mod tests {
 
         let sender = SlackChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"channel_id": "C1", "text": "hi"}));
-        let outcome = sender.send(&event, &config_with_token()).await.expect("send ok");
+        let outcome = sender.send(&event, &config_with_token(), None).await.expect("send ok");
         assert!(outcome.detail.contains("ts=123.456"));
     }
 
@@ -4932,7 +5042,7 @@ mod tests {
 
         let sender = SlackChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"channel_id": "C1", "text": "hi"}));
-        let err = sender.send(&event, &config_with_token()).await.expect_err("bad auth");
+        let err = sender.send(&event, &config_with_token(), None).await.expect_err("bad auth");
         assert_eq!(err.class, RetryClass::NonRetryable);
         assert!(err.message.contains("invalid_auth"));
     }
@@ -4948,7 +5058,7 @@ mod tests {
 
         let sender = SlackChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"channel_id": "C1", "text": "hi"}));
-        let err = sender.send(&event, &config_with_token()).await.expect_err("channel not found");
+        let err = sender.send(&event, &config_with_token(), None).await.expect_err("channel not found");
         assert!(err.message.contains("isn't in that Slack channel"));
     }
 
@@ -4969,7 +5079,7 @@ mod tests {
 
         let sender = SlackChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"channel_id": "C1", "text": "hi"}));
-        let outcome = sender.send(&event, &config_with_token()).await.expect("retried and succeeded");
+        let outcome = sender.send(&event, &config_with_token(), None).await.expect("retried and succeeded");
         assert!(outcome.detail.contains("ts=999"));
     }
 
@@ -4980,8 +5090,30 @@ mod tests {
 
         let sender = SlackChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"channel_id": "C1", "text": "hi"}));
-        let err = sender.send(&event, &config_with_token()).await.expect_err("still rate limited");
+        let err = sender.send(&event, &config_with_token(), None).await.expect_err("still rate limited");
         assert_eq!(err.class, RetryClass::Retryable { retry_after: None });
+    }
+
+    /// D30 (spec §5.11/§13.2): the envelope's trace context must ride the
+    /// outbound Slack call as the standard `traceparent` header.
+    #[tokio::test]
+    async fn send_propagates_the_traceparent_header() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/chat.postMessage"))
+            .and(header("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true, "ts": "1000"})))
+            .mount(&mock_server)
+            .await;
+
+        let sender = SlackChatSender::with_api_base(mock_server.uri()).expect("builds");
+        let event = event_with_payload(json!({"channel_id": "C1", "text": "hi"}));
+        let trace = TraceContext {
+            traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_string(),
+            tracestate: None,
+        };
+        let outcome = sender.send(&event, &config_with_token(), Some(&trace)).await.expect("send ok");
+        assert!(outcome.detail.contains("ts=1000"));
     }
 }
 ```
@@ -5062,7 +5194,10 @@ feat(connectors): add Slack chat.postMessage action sender; finalize docs
 penguin-connector-slack is now feature-complete for M1d: Socket Mode
 ingest + chat.postMessage send, one-retry-on-429, body-level ok:false
 error classification -- ports
-core/svc_action/bundles/slack_send_action.py exactly.
+core/svc_action/bundles/slack_send_action.py exactly. ActionSender::send
+takes the D30 trace parameter and propagates it as the outbound
+traceparent header on both the initial attempt and the 429 retry (spec
+§5.11/§13.2), proven against a wiremock header matcher.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
@@ -5562,7 +5697,7 @@ git push
 - Create: `packages/rust-connectors/crates/penguin-connector-youtube/README.md`, `.../CHANGELOG.md`
 
 **Interfaces:**
-- Consumes: `penguin_connector_core::{ActionSender, PlatformEvent, ActionConfig, SendOutcome, SendError, RetryClass, payload_str, config_str, build_http_client, network_error_to_send_error, Secret}`.
+- Consumes: `penguin_connector_core::{ActionSender, PlatformEvent, ActionConfig, SendOutcome, SendError, RetryClass, payload_str, config_str, build_http_client, network_error_to_send_error, with_traceparent, Secret, TraceContext}`.
 - Produces: `pub struct YouTubeChatSender { client: reqwest::Client, api_base: String }`, `impl YouTubeChatSender { pub fn new() -> Result<Self, SendError>; pub fn with_api_base(api_base: impl Into<String>) -> Result<Self, SendError>; }`, `impl ActionSender for YouTubeChatSender`.
 
 - [ ] **Step 1: Write the failing test**
@@ -5577,8 +5712,9 @@ git push
 
 use async_trait::async_trait;
 use penguin_connector_core::{
-    build_http_client, config_str, network_error_to_send_error, payload_str, ActionConfig,
-    ActionSender, PlatformEvent, RetryClass, SendError, SendOutcome, Secret,
+    build_http_client, config_str, network_error_to_send_error, payload_str, with_traceparent,
+    ActionConfig, ActionSender, PlatformEvent, RetryClass, SendError, SendOutcome, Secret,
+    TraceContext,
 };
 use std::collections::BTreeSet;
 use std::sync::LazyLock;
@@ -5632,7 +5768,7 @@ impl YouTubeChatSender {
 
 #[async_trait]
 impl ActionSender for YouTubeChatSender {
-    async fn send(&self, event: &PlatformEvent, config: &ActionConfig) -> Result<SendOutcome, SendError> {
+    async fn send(&self, event: &PlatformEvent, config: &ActionConfig, trace: Option<&TraceContext>) -> Result<SendOutcome, SendError> {
         let text = payload_str(event, "text")
             .ok_or_else(|| SendError::non_retryable("action envelope event.payload missing required 'text' string", None))?;
         let text = truncate_for_youtube(text);
@@ -5654,7 +5790,10 @@ impl ActionSender for YouTubeChatSender {
             }
         });
 
-        let response = self.client.post(&url).json(&body).send().await.map_err(|e| network_error_to_send_error(&e))?;
+        // D30 (spec §5.11/§13.2): propagate the envelope's trace context
+        // onto the outbound platform call.
+        let request = with_traceparent(self.client.post(&url).json(&body), trace);
+        let response = request.send().await.map_err(|e| network_error_to_send_error(&e))?;
         let status = response.status().as_u16();
 
         if (200..300).contains(&status) {
@@ -5699,7 +5838,7 @@ impl ActionSender for YouTubeChatSender {
 mod tests {
     use super::*;
     use serde_json::json;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn event_with_payload(payload: serde_json::Value) -> PlatformEvent {
@@ -5740,7 +5879,7 @@ mod tests {
 
         let sender = YouTubeChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"text": "hi", "live_chat_id": "chat1"}));
-        let outcome = sender.send(&event, &config_with_key()).await.expect("send ok");
+        let outcome = sender.send(&event, &config_with_key(), None).await.expect("send ok");
         assert!(outcome.detail.contains("chat1"));
     }
 
@@ -5753,7 +5892,7 @@ mod tests {
 
         let sender = YouTubeChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"text": "hi", "live_chat_id": "chat1"}));
-        let err = sender.send(&event, &config_with_key()).await.expect_err("quota exceeded");
+        let err = sender.send(&event, &config_with_key(), None).await.expect_err("quota exceeded");
         assert_eq!(err.class, RetryClass::NonRetryable);
         assert!(err.message.contains("quota"));
     }
@@ -5767,7 +5906,7 @@ mod tests {
 
         let sender = YouTubeChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"text": "hi", "live_chat_id": "chat1"}));
-        let err = sender.send(&event, &config_with_key()).await.expect_err("chat ended");
+        let err = sender.send(&event, &config_with_key(), None).await.expect_err("chat ended");
         assert!(err.message.contains("ended"));
     }
 
@@ -5778,7 +5917,7 @@ mod tests {
 
         let sender = YouTubeChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"text": "hi", "live_chat_id": "chat1"}));
-        let err = sender.send(&event, &config_with_key()).await.expect_err("rate limited");
+        let err = sender.send(&event, &config_with_key(), None).await.expect_err("rate limited");
         assert_eq!(err.class, RetryClass::Retryable { retry_after: None });
     }
 
@@ -5789,8 +5928,30 @@ mod tests {
 
         let sender = YouTubeChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"text": "hi", "live_chat_id": "chat1"}));
-        let err = sender.send(&event, &config_with_key()).await.expect_err("server error");
+        let err = sender.send(&event, &config_with_key(), None).await.expect_err("server error");
         assert_eq!(err.class, RetryClass::Retryable { retry_after: None });
+    }
+
+    /// D30 (spec §5.11/§13.2): the envelope's trace context must ride the
+    /// outbound YouTube call as the standard `traceparent` header.
+    #[tokio::test]
+    async fn send_propagates_the_traceparent_header() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/liveChat/messages"))
+            .and(header("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id": "m2"})))
+            .mount(&mock_server)
+            .await;
+
+        let sender = YouTubeChatSender::with_api_base(mock_server.uri()).expect("builds");
+        let event = event_with_payload(json!({"text": "hi", "live_chat_id": "chat1"}));
+        let trace = TraceContext {
+            traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_string(),
+            tracestate: None,
+        };
+        let outcome = sender.send(&event, &config_with_key(), Some(&trace)).await.expect("send ok");
+        assert!(outcome.detail.contains("chat1"));
     }
 }
 ```
@@ -5872,7 +6033,10 @@ feat(connectors): add YouTube liveChatMessages.insert sender; finalize docs
 penguin-connector-youtube is now feature-complete for M1d's API-key
 credential scope: poll ingest + send, 200-char truncation, 403 reason/
 404/429/5xx classification against wiremock. OAuth refresh-token mode is
-a flagged, documented follow-up, not silently dropped.
+a flagged, documented follow-up, not silently dropped. ActionSender::
+send takes the D30 trace parameter and propagates it as the outbound
+traceparent header (spec §5.11/§13.2), proven against a wiremock header
+matcher.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
@@ -6591,7 +6755,7 @@ git push
 - Create: `packages/rust-connectors/crates/penguin-connector-kick/README.md`, `.../CHANGELOG.md`
 
 **Interfaces:**
-- Consumes: `penguin_connector_core::{ActionSender, PlatformEvent, ActionConfig, SendOutcome, SendError, RetryClass, payload_str, config_str, build_http_client, network_error_to_send_error, Secret}`.
+- Consumes: `penguin_connector_core::{ActionSender, PlatformEvent, ActionConfig, SendOutcome, SendError, RetryClass, payload_str, config_str, build_http_client, network_error_to_send_error, with_traceparent, Secret, TraceContext}`.
 - Produces: `pub struct KickChatSender { client: reqwest::Client, api_base: String }`, `impl KickChatSender { pub fn new() -> Result<Self, SendError>; pub fn with_api_base(api_base: impl Into<String>) -> Result<Self, SendError>; }`, `impl ActionSender for KickChatSender`. Access-token resolution mode only (`access_token_ref`) — the client-credentials exchange fallback (`client_id_ref`/`client_secret_ref`) from `kick_send_action.py` is a flagged follow-up, matching Task 16/17's YouTube OAuth scoping decision.
 
 - [ ] **Step 1: Write the failing test**
@@ -6608,8 +6772,9 @@ git push
 
 use async_trait::async_trait;
 use penguin_connector_core::{
-    build_http_client, config_str, network_error_to_send_error, payload_str, ActionConfig,
-    ActionSender, PlatformEvent, RetryClass, SendError, SendOutcome, Secret,
+    build_http_client, config_str, network_error_to_send_error, payload_str, with_traceparent,
+    ActionConfig, ActionSender, PlatformEvent, RetryClass, SendError, SendOutcome, Secret,
+    TraceContext,
 };
 use std::time::Duration;
 
@@ -6635,12 +6800,22 @@ impl KickChatSender {
         Ok(Self { client, api_base: api_base.into() })
     }
 
-    async fn post_message(&self, url: &str, token: &str, body: &serde_json::Value) -> Result<reqwest::Response, SendError> {
-        self.client
+    // D30 (spec §5.11/§13.2): propagate the envelope's trace context onto
+    // every outbound call this sender makes, including the 401/429 retries.
+    async fn post_message(
+        &self,
+        url: &str,
+        token: &str,
+        body: &serde_json::Value,
+        trace: Option<&TraceContext>,
+    ) -> Result<reqwest::Response, SendError> {
+        let request = self
+            .client
             .post(url)
             .header("Authorization", format!("Bearer {token}"))
             .header("Content-Type", "application/json")
-            .json(body)
+            .json(body);
+        with_traceparent(request, trace)
             .send()
             .await
             .map_err(|e| network_error_to_send_error(&e))
@@ -6649,7 +6824,7 @@ impl KickChatSender {
 
 #[async_trait]
 impl ActionSender for KickChatSender {
-    async fn send(&self, event: &PlatformEvent, config: &ActionConfig) -> Result<SendOutcome, SendError> {
+    async fn send(&self, event: &PlatformEvent, config: &ActionConfig, trace: Option<&TraceContext>) -> Result<SendOutcome, SendError> {
         let chatroom_id = payload_str(event, "chatroom_id")
             .or_else(|| config_str(config, "chatroom_id"))
             .ok_or_else(|| {
@@ -6671,13 +6846,13 @@ impl ActionSender for KickChatSender {
         let url = format!("{}/messages/send/{}", self.api_base, chatroom_id);
         let body = serde_json::json!({ "content": text, "type": "message" });
 
-        let mut response = self.post_message(&url, access_token.expose(), &body).await?;
+        let mut response = self.post_message(&url, access_token.expose(), &body, trace).await?;
         if response.status().as_u16() == 401 {
             // One forced-refresh retry -- in stored-access-token mode
             // (this MVP's only mode) this is a no-op re-send with the
             // same token, matching kick_send_action.py's own documented
             // behaviour for that mode.
-            response = self.post_message(&url, access_token.expose(), &body).await?;
+            response = self.post_message(&url, access_token.expose(), &body, trace).await?;
             if response.status().as_u16() == 401 {
                 return Err(SendError::non_retryable("kick oauth token didn't work (401)", Some(401)));
             }
@@ -6688,7 +6863,7 @@ impl ActionSender for KickChatSender {
             return Err(SendError::non_retryable("kick chat send forbidden (403)", Some(403)));
         }
         if status == 429 {
-            let retry_response = self.post_message(&url, access_token.expose(), &body).await?;
+            let retry_response = self.post_message(&url, access_token.expose(), &body, trace).await?;
             let retry_status = retry_response.status().as_u16();
             if retry_status == 429 {
                 return Err(SendError::retryable("kick api rate limited (429)", Some(429)));
@@ -6717,7 +6892,7 @@ fn finish(status: u16, chatroom_id: String, text: &str) -> Result<SendOutcome, S
 mod tests {
     use super::*;
     use serde_json::json;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn event_with_payload(payload: serde_json::Value) -> PlatformEvent {
@@ -6745,7 +6920,7 @@ mod tests {
 
         let sender = KickChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"chatroom_id": "123", "text": "hi"}));
-        let outcome = sender.send(&event, &config_with_token()).await.expect("send ok");
+        let outcome = sender.send(&event, &config_with_token(), None).await.expect("send ok");
         assert!(outcome.detail.contains("chatroom=123"));
     }
 
@@ -6756,7 +6931,7 @@ mod tests {
 
         let sender = KickChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"chatroom_id": "123", "text": "hi"}));
-        let err = sender.send(&event, &config_with_token()).await.expect_err("still unauthorized");
+        let err = sender.send(&event, &config_with_token(), None).await.expect_err("still unauthorized");
         assert_eq!(err.class, RetryClass::NonRetryable);
         assert_eq!(err.http_status, Some(401));
     }
@@ -6768,7 +6943,7 @@ mod tests {
 
         let sender = KickChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"chatroom_id": "123", "text": "hi"}));
-        let err = sender.send(&event, &config_with_token()).await.expect_err("forbidden");
+        let err = sender.send(&event, &config_with_token(), None).await.expect_err("forbidden");
         assert_eq!(err.class, RetryClass::NonRetryable);
     }
 
@@ -6779,7 +6954,7 @@ mod tests {
 
         let sender = KickChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"chatroom_id": "123", "text": "hi"}));
-        let err = sender.send(&event, &config_with_token()).await.expect_err("still rate limited");
+        let err = sender.send(&event, &config_with_token(), None).await.expect_err("still rate limited");
         assert_eq!(err.class, RetryClass::Retryable { retry_after: None });
     }
 
@@ -6790,8 +6965,30 @@ mod tests {
 
         let sender = KickChatSender::with_api_base(mock_server.uri()).expect("builds");
         let event = event_with_payload(json!({"chatroom_id": "123", "text": "hi"}));
-        let err = sender.send(&event, &config_with_token()).await.expect_err("server error");
+        let err = sender.send(&event, &config_with_token(), None).await.expect_err("server error");
         assert_eq!(err.class, RetryClass::Retryable { retry_after: None });
+    }
+
+    /// D30 (spec §5.11/§13.2): the envelope's trace context must ride the
+    /// outbound Kick call as the standard `traceparent` header.
+    #[tokio::test]
+    async fn send_propagates_the_traceparent_header() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/messages/send/123"))
+            .and(header("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&mock_server)
+            .await;
+
+        let sender = KickChatSender::with_api_base(mock_server.uri()).expect("builds");
+        let event = event_with_payload(json!({"chatroom_id": "123", "text": "hi"}));
+        let trace = TraceContext {
+            traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_string(),
+            tracestate: None,
+        };
+        let outcome = sender.send(&event, &config_with_token(), Some(&trace)).await.expect("send ok");
+        assert!(outcome.detail.contains("chatroom=123"));
     }
 }
 ```
@@ -6881,7 +7078,10 @@ penguin-connector-kick is now feature-complete for M1d: Pusher ingest,
 webhook verify, REST send with 401/403/429/5xx classification against
 wiremock -- ports core/svc_action/bundles/kick_send_action.py's
 stored-access-token mode exactly. Client-credentials fallback is a
-flagged, documented follow-up.
+flagged, documented follow-up. ActionSender::send takes the D30 trace
+parameter and propagates it as the outbound traceparent header on every
+retry attempt (spec §5.11/§13.2), proven against a wiremock header
+matcher.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
@@ -7328,6 +7528,8 @@ Expected: the `publish-rust-licensing` job succeeds; verify at `https://crates.i
 | §16 M1 table: "penguin-licensing: build+publish jobs, 0.1.0 on crates.io" | 22, 23, 24 |
 | §17 Standards: exact pins, `unsafe_code`/`missing_docs`/`unwrap_used` deny, ≥90% coverage, no PRC crates | Global Constraints, every task's Cargo.toml/deny.toml |
 | §17 Standards: docs (2-3 line doc comments, no ASCII dividers) | every task's code |
+| §5.11 D30: outbound credential resolution never takes a tenant/community argument from a bundle | Already satisfied pre-D30 — `Secret::resolve` (Task 2) takes only an env-var name; the *caller* (the stage, out of this plan's scope) is what resolves which env var applies to the current envelope's scope. No change needed |
+| §5.11/§13.2 D30: outbound calls carry `traceparent` | 4 (`TraceContext` type alias for `penguin_spine::Trace`), 5 (`with_traceparent` helper), 13/15/17/20 (every REST sender propagates it, including every retry attempt) |
 
 ### Placeholder scan
 
@@ -7336,7 +7538,7 @@ Searched this plan's own text for `TBD`, `TODO`, "implement later", "similar to 
 ### Signature/type consistency check
 
 - `IngestSource::RawEvent` is a distinct, named type per platform crate (`TwitchIrcMessage`, `TwitchEventSubRawEvent`, `DiscordRawMessage`, `SlackRawEvent`, `YouTubeRawMessage`, `KickChatMessage`, `KickStreamLifecycleRawEvent`) — never `PlatformEvent` itself, consistently across Tasks 4/7/8/10/12/14/16/18/19.
-- `ActionSender::send(&self, event: &PlatformEvent, config: &ActionConfig) -> Result<SendOutcome, SendError>` is identical across Tasks 13 (Discord), 15 (Slack), 17 (YouTube), 20 (Kick) — verified by re-reading each `impl ActionSender` block's signature line while writing this checklist.
+- `ActionSender::send(&self, event: &PlatformEvent, config: &ActionConfig, trace: Option<&TraceContext>) -> Result<SendOutcome, SendError>` (D30 adds `trace`, spec §5.11/§13.2) is identical across Tasks 13 (Discord), 15 (Slack), 17 (YouTube), 20 (Kick) — verified by re-reading each `impl ActionSender` block's signature line while writing this checklist.
 - `SendError::{retryable, retryable_after, non_retryable}` constructor names and argument order (`message`, then `http_status` or `retry_after`+`http_status`) are used identically in every platform crate — no task introduces a fourth spelling.
 - `config_str`/`payload_str` (Task 4) are used for every "reply in place, fall back to config" resolution (Tasks 9, 13, 15, 20) with the same argument order (`event`/`config` first, key second).
 - `Secret::resolve`/`Secret::expose` names are unchanged from Task 2 through every later task that reads a credential.
@@ -7346,3 +7548,11 @@ Searched this plan's own text for `TBD`, `TODO`, "implement later", "similar to 
 
 - Reworded Task 9's Interfaces block (originally implied `TwitchIrcSender` reuses `TwitchIrcConfig` directly) to state plainly that the two structs are independently constructed, avoiding a false expectation for an implementer reading Task 9 without Task 8 in front of them.
 - Confirmed Task 4's `ConnectorError` re-export path (`traits.rs` owning the enum, `lib.rs` re-exporting it) doesn't break Task 2's `secret.rs`, which references `crate::ConnectorError::SecretUnresolved` — the variant survives the move unchanged, documented explicitly in Task 4 Step 3.
+
+### D30/D31 addendum (this amendment)
+
+D31 (workstream usage metering) has no surface in this crate — `penguin-connector-core`'s traits never see a tenant/community/workstream scope at all (that's the stage's job, M3/M4), so there is nothing here for a connector to meter. D30's two applicable items:
+
+- **Credential resolution never takes a tenant/community argument from a bundle.** Already true pre-D30: recorded as "no change" in the spec coverage table above.
+- **Outbound calls carry `traceparent`.** A real, then-missing capability, now added: `TraceContext` (Task 4) is a type alias for `penguin_spine::Trace`, never a duplicate of it (per the cross-plan "import from the defining crate" rule); `with_traceparent` (Task 5) attaches it to a `reqwest::RequestBuilder`, a no-op when absent; every `ActionSender::send` implementation (Discord/Slack/YouTube/Kick, Tasks 13/15/17/20) takes the new `trace` parameter and propagates it on every attempt, including retries (Slack's 429 retry, Kick's 401/429 retries) — each proven against a wiremock `header(...)` matcher, not just that the code compiles. `TwitchIrcSender::send` (Task 9) is the one sender this does not reach: it does not implement `ActionSender` at all (its caller already reduced the message to `{channel, text}` before this hop), and IRC's `PRIVMSG` has no header slot regardless — documented in place as a deliberate exemption, not a silent gap.
+- Adding `penguin-spine = "=0.1.0"` as a dependency (workspace + `penguin-connector-core`) pins slightly different exact `serde`/`serde_json`/`thiserror` versions than this workspace's own pins; Cargo resolves both side by side in one lockfile without conflict — a small, accepted duplication, not a version error.
