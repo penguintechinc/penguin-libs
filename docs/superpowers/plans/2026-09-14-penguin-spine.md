@@ -17,7 +17,7 @@
 - **Cross-repo artifact note (read before Task 12).** Spec §11.10/D28 names `config/valkey/acl-matrix.yaml` as a *repo-root* path in whichever service repo deploys the chart (`waddlebot`, per D22) — this plan cannot create that file there (out of scope, see Location above). Task 12 ships the crate's own canonical copy at `packages/rust-spine/config/valkey/acl-matrix.yaml` (same relative suffix, rooted in this crate instead) plus the renderer and a **crate-local** live-container conformance test using this crate's own pinned Valkey container. The spec's `make test-rbac-valkey` gate (§14.5), which runs against the deployed alpha stack, is an M6/deployment gate that copies this exact file and renderer into the chart repo — that copy step is out of this plan's scope, and Task 12 says so again at the point it matters.
 - **Dependency pinning.** Every `Cargo.toml` dependency is an exact `=x.y.z` version (no `^`/`~`/bare `*`); `Cargo.lock` is committed. Every version below was looked up with `cargo search` run *inside* the pinned `rust:1.97.1` container (never on the host) on 2026-09-14; each task's Cargo.toml edit states the exact string to write, no re-verification needed by the implementer. Docker images pinned by tag **and** SHA-256 digest. GitHub Actions pinned by full commit SHA (values below are reused verbatim from `waddlebot`'s already-vetted `.github/workflows/rust-svc-streaming.yml` and this repo's own `ci.yml`).
 - **Rust lints (every module, from Task 1 onward).** `#![forbid(unsafe_code)]`, `#![deny(missing_docs)]`, `[lints.clippy] unwrap_used = "deny"` — every fallible call in non-test code uses `?` or an explicit `match`, never `.unwrap()`/`.expect()`. `[lints]` in `Cargo.toml` applies to every target including `tests/`, so test code needs a local, scoped opt-out rather than tripping the crate-wide deny: every inline `#[cfg(test)] mod tests { ... }` block starts with `#![allow(clippy::unwrap_used)]` as its first line (already applied to every such block in Tasks 2-6; every later task's own inline test module does the same), and every standalone file under `tests/` starts with `#![allow(clippy::unwrap_used, clippy::panic)]` — the exact convention already used in `packages/rust-licensing/tests/client_tests.rs`. `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` must pass after every task.
-- **Coverage.** `cargo llvm-cov --fail-under-lines 90` gates CI (Task 19). Every task that adds non-trivial logic adds tests in the same task — no "add tests later" tasks.
+- **Coverage.** `cargo llvm-cov --fail-under-lines 90` gates CI (Task 21). Every task that adds non-trivial logic adds tests in the same task — no "add tests later" tasks.
 - **Docs.** Every `struct`/`enum`/`fn`/`trait` gets a 2-3 line doc comment (godoc-style: what it does and why, not a line-by-line walkthrough). No ASCII-art section dividers.
 - **Least User Access via RBAC (D28, spec §11.10).** Every Valkey ACL user this plan defines gets exactly the commands and key patterns its role uses — never a category grant "because it was easier". The single normative source is `packages/rust-spine/config/valkey/acl-matrix.yaml` (Task 12); `users.acl` is *rendered* from it by `packages/rust-spine/config/valkey/render_acl.py` and is never hand-edited. The executor gets no Valkey user at all, and the matrix says so explicitly rather than by omission.
 - **Commits.** Conventional-commit prefixes `feat(spine):` / `test(spine):` / `chore(spine):` / `docs(spine):`. Every commit message ends with these two trailer lines, each on its own line:
@@ -60,6 +60,8 @@ packages/rust-spine/
     config.rs                   # SpineConfig, ProbeClass, ProbeResult, classify_connect, validate_block_timeout
     client.rs                   # Grant, Delivered, GroupStats, SpineClient
     reader.rs                   # GroupReader
+    binding.rs                  # BindingKeyring, BindingInput, compute_binding_mac, verify_binding, ScopeCheck, BoundaryError (D30, Task 19)
+    usage.rs                    # UsageDelta, HostCallCounts, UsageBatcher, USAGE_STREAM_KEY (D31, Task 20)
   benches/
     spine_bench.rs
   tests/
@@ -124,6 +126,12 @@ uuid = { version = "=1.26.1", features = ["v4"] }
 # handshake path -- redis's own `tls-rustls` feature owns that. No crypto
 # provider feature needed for pure PEM parsing.
 rustls = { version = "=0.23.45", default-features = false, features = ["std"] }
+# D30 envelope binding MAC (spec Sec5.11): HMAC-SHA256 over the tenant/
+# community/workstream_id/event_id/trace_id tuple, constant-time verified.
+hmac = "=0.12.1"
+sha2 = "=0.10.9"
+subtle = "=2.6.1"
+hex = "=0.4.3"
 
 [dev-dependencies]
 tokio = { version = "=1.53.1", features = ["full", "test-util"] }
@@ -151,7 +159,7 @@ unwrap_used = "deny"
 # cargo-deny configuration for penguin-spine.
 #
 # Run locally with: cargo deny check
-# CI wiring: .github/workflows/rust-spine.yml (Task 19)
+# CI wiring: .github/workflows/rust-spine.yml (Task 21)
 
 [graph]
 all-features = true
@@ -252,7 +260,7 @@ Do the same (single doc-comment line, no code) for `envelope.rs`, `dlq.rs`, `err
 Run: `docker run --rm -v "$(pwd)/packages/rust-spine:/work" -w /work rust:1.97.1 cargo build`
 Expected: `Compiling penguin-spine v0.1.0 (/work)` then `Finished` with no errors (warnings about unused stub modules are fine at this stage — later tasks remove them as real code lands).
 
-- [ ] **Step 7: Write `packages/rust-spine/README.md`** (stub, expanded fully in Task 19):
+- [ ] **Step 7: Write `packages/rust-spine/README.md`** (stub, expanded fully in Task 21):
 
 ```markdown
 # penguin-spine
@@ -263,7 +271,7 @@ two client connection-separation rules (spec §5.7). See
 `docs/superpowers/plans/2026-09-14-penguin-spine.md` for the implementation
 plan this crate was built from.
 
-Full documentation lands in Task 19.
+Full documentation lands in Task 21.
 ```
 
 - [ ] **Step 8: Write `packages/rust-spine/CHANGELOG.md`:**
@@ -866,16 +874,16 @@ EOF
 
 ---
 
-### Task 4: `StageEnvelope`, `PROCESS_TARGET_APP_ID_KEY`
+### Task 4: `StageEnvelope`, `Trace`, `Binding`, `PROCESS_TARGET_APP_ID_KEY` (D30 workstream identity + trace)
 
 **Files:**
 - Modify: `packages/rust-spine/src/envelope.rs`, `packages/rust-spine/src/lib.rs`
 
 **Interfaces:**
 - Consumes: `PlatformEvent`, `EnvelopeError`, `env_err`, `validate_rfc3339_millis_z` (all from Task 3, same file).
-- Produces: `StageEnvelope { tenant, community: Option<String>, app_id, stage, event: PlatformEvent, ts, target_app_id: Option<String>, trace_context: Option<String> }`, `PROCESS_TARGET_APP_ID_KEY: &str`. Task 5's `DlqRecord::from_delivered` reads `StageEnvelope` fields directly. Task 8's golden fixtures deserialize into this type. Task 13's `SpineClient::append` takes `&StageEnvelope`. Task 16's `Delivered.env: StageEnvelope`.
+- Produces: `StageEnvelope { schema_version, tenant, community: Option<String>, app_id, stage, event: PlatformEvent, ts, target_app_id: Option<String>, workstream_id, event_id, session_id: Option<String>, trace: Option<Trace>, binding: Binding }`, `Trace { traceparent: String, tracestate: Option<String> }`, `Binding { kid: String, mac: String }`, `PROCESS_TARGET_APP_ID_KEY: &str`. Task 5's `DlqRecord::from_delivered` reads `StageEnvelope` fields directly, including `workstream_id` and `trace`. Task 8's golden fixtures deserialize into this type. Task 13's `SpineClient::append` takes `&StageEnvelope`. Task 16's `Delivered.env: StageEnvelope`. Task 19's `binding` module consumes `StageEnvelope`, `Trace` and `Binding` to compute/verify `binding.mac` and build `ScopeCheck`.
 
-Spec: §6.1.2 (full field table, strictness rules, reserved payload key), §3.3 (`_target_app_id` invariant preserved bit for bit).
+Spec: §6.1.2 (full field table, strictness rules, reserved payload key, `schema_version` bumped to `2` — D3, D30), §5.11 (workstream identity, `event_id`, `session_id`, `trace`, `binding.mac` — D30), §3.3 (`_target_app_id` invariant preserved bit for bit).
 
 - [ ] **Step 1: Write the failing tests.** Append to `packages/rust-spine/src/envelope.rs` (after the existing `PlatformEvent`/`Deserialize` impl, before the `#[cfg(test)] mod tests` block — move the existing `mod tests` block's closing brace down so this new code sits above it, or simplest: insert everything below directly above the existing `#[cfg(test)] mod tests {` line, then add the new test functions **inside** that same `mod tests` block, right after `round_trips_through_serialize_and_deserialize`):
 
@@ -885,6 +893,11 @@ Spec: §6.1.2 (full field table, strictness rules, reserved payload key), §3.3 
 /// payload before enqueuing, so it never reaches an action bundle or a
 /// chat reply (spec Sec6.1.2, Sec5.9).
 pub const PROCESS_TARGET_APP_ID_KEY: &str = "_target_app_id";
+
+/// The only `StageEnvelope.schema_version` this crate accepts. No
+/// dual-read (D3, D30): a `1` or absent value is the pre-D30 shape and is
+/// rejected outright rather than interpreted (spec Sec6.1.2).
+pub const ENVELOPE_SCHEMA_VERSION: u32 = 2;
 
 const BUNDLE_STAGES: [&str; 3] = ["ingest", "process", "action"];
 
@@ -918,9 +931,134 @@ fn is_valid_traceparent(s: &str) -> bool {
         && parts[3].chars().all(|c| c.is_ascii_hexdigit())
 }
 
+/// Extracts the 32-hex trace-id segment from a validated `traceparent`
+/// (spec Sec5.11: `binding.mac`'s input is this segment, not the full
+/// `traceparent` string). Returns `None` if `s` is not a valid traceparent.
+pub fn trace_id_from_traceparent(s: &str) -> Option<&str> {
+    if !is_valid_traceparent(s) {
+        return None;
+    }
+    s.split('-').nth(1)
+}
+
+fn is_valid_uuid(s: &str) -> bool {
+    uuid::Uuid::parse_str(s).is_ok()
+}
+
+/// `event_id` must be UUID **v4** specifically (spec Sec6.1.2, Sec5.11) --
+/// stricter than `workstream_id`, which is any valid UUID minted by
+/// hub-api.
+fn is_valid_uuid_v4(s: &str) -> bool {
+    uuid::Uuid::parse_str(s)
+        .map(|u| u.get_version() == Some(uuid::Version::Random))
+        .unwrap_or(false)
+}
+
+/// `binding.mac` is the lowercase-hex HMAC-SHA256 output (spec Sec5.11):
+/// exactly 64 lowercase hex characters, never uppercase (a mixed-case
+/// value is treated as malformed rather than case-normalized, since a
+/// verifier that silently normalizes case could be tricked into comparing
+/// two differently-cased representations of a byte-identical forgery).
+fn is_lowercase_hex_64(s: &str) -> bool {
+    s.len() == 64 && s.chars().all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTrace {
+    traceparent: String,
+    #[serde(default)]
+    tracestate: Option<String>,
+}
+
+/// The W3C trace context carried on every envelope (spec Sec5.11,
+/// Sec6.1.2) -- **supersedes the pre-D30 single-field `trace_context`**.
+/// Absent means "no parent span"; when present, `traceparent` has already
+/// passed the Sec6.1.2 shape check.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Trace {
+    /// The W3C `traceparent` string (`00-<32 hex>-<16 hex>-<2 hex>`).
+    pub traceparent: String,
+    /// The W3C `tracestate` string, or `None`.
+    pub tracestate: Option<String>,
+}
+
+impl TryFrom<RawTrace> for Trace {
+    type Error = EnvelopeError;
+
+    fn try_from(raw: RawTrace) -> Result<Self, EnvelopeError> {
+        if !is_valid_traceparent(&raw.traceparent) {
+            return Err(env_err(format!(
+                "'trace.traceparent' {:?} is not a valid W3C traceparent",
+                raw.traceparent
+            )));
+        }
+        Ok(Trace { traceparent: raw.traceparent, tracestate: raw.tracestate })
+    }
+}
+
+impl<'de> Deserialize<'de> for Trace {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = RawTrace::deserialize(deserializer)?;
+        Trace::try_from(raw).map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawBinding {
+    kid: String,
+    mac: String,
+}
+
+/// `{kid, mac}` -- `kid` names the active HMAC key version, `mac` is the
+/// lowercase-hex `HMAC-SHA256` of spec Sec5.11's formula. Required on
+/// every envelope; there is no unsigned shape (D30). Verified by every
+/// stage on every read, before any other processing -- see the `binding`
+/// module (Task 19) for `compute_binding_mac`/`verify_binding`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Binding {
+    /// Names the HMAC key version under which `mac` was computed.
+    pub kid: String,
+    /// Lowercase-hex HMAC-SHA256 output (64 hex chars, spec Sec5.11).
+    pub mac: String,
+}
+
+impl TryFrom<RawBinding> for Binding {
+    type Error = EnvelopeError;
+
+    fn try_from(raw: RawBinding) -> Result<Self, EnvelopeError> {
+        if raw.kid.is_empty() {
+            return Err(env_err("'binding.kid' must be a non-empty string, got \"\""));
+        }
+        if !is_lowercase_hex_64(&raw.mac) {
+            return Err(env_err(format!(
+                "'binding.mac' {:?} must be exactly 64 lowercase hex characters",
+                raw.mac
+            )));
+        }
+        Ok(Binding { kid: raw.kid, mac: raw.mac })
+    }
+}
+
+impl<'de> Deserialize<'de> for Binding {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = RawBinding::deserialize(deserializer)?;
+        Binding::try_from(raw).map_err(serde::de::Error::custom)
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawStageEnvelope {
+    schema_version: u32,
     tenant: String,
     community: Option<String>,
     app_id: String,
@@ -929,8 +1067,13 @@ struct RawStageEnvelope {
     ts: String,
     #[serde(default)]
     target_app_id: Option<String>,
+    workstream_id: String,
+    event_id: String,
     #[serde(default)]
-    trace_context: Option<String>,
+    session_id: Option<String>,
+    #[serde(default)]
+    trace: Option<Trace>,
+    binding: Binding,
 }
 
 /// One pipeline queue message routed between stages. `event` (a
@@ -939,8 +1082,18 @@ struct RawStageEnvelope {
 /// structurally impossible (spec Sec6.1.2). `target_app_id` is the one
 /// sanctioned cross-app routing escape hatch (spec Sec5.9); it changes
 /// only the destination key's `app_id` segment.
+///
+/// `workstream_id`, `event_id`, `session_id`, `trace` and `binding` are
+/// the D30 workstream-identity/trace/tenant-wall fields (spec Sec5.11):
+/// minted once by svc-ingest from its own `intake_sources`/`workstreams`
+/// cache, never from payload, and copied verbatim by every later stage --
+/// a bundle's output is never read for them (spec Sec5.11 "Bundles cannot
+/// move a workstream"). Field order matches the spec Sec6.1.2 JSON example
+/// exactly, so golden-fixture round-trips (Task 8) are byte-identical.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct StageEnvelope {
+    /// Must equal [`ENVELOPE_SCHEMA_VERSION`] (`2`) -- no dual-read (D3, D30).
+    pub schema_version: u32,
     /// Non-empty tenant slug; equals the `t:` segment of the key it came from.
     pub tenant: String,
     /// `None` iff the key's `c:` segment is the literal `_tenant`.
@@ -955,14 +1108,33 @@ pub struct StageEnvelope {
     pub ts: String,
     /// The cross-app routing target, when a process bundle set one.
     pub target_app_id: Option<String>,
-    /// W3C `traceparent` for the entry's parent span, when present.
-    pub trace_context: Option<String>,
+    /// UUID; minted by svc-ingest from `intake_sources`/`workstreams`
+    /// (spec Sec5.11, Sec6.11), never from payload; copied verbatim by
+    /// every later stage, never accepted from bundle output.
+    pub workstream_id: String,
+    /// UUID v4, minted once by svc-ingest per inbound event; distinct from
+    /// the platform's own message id and the Valkey stream entry id.
+    pub event_id: String,
+    /// The platform connection/broadcast session, when the platform has
+    /// one; absent otherwise (spec Sec5.11).
+    pub session_id: Option<String>,
+    /// W3C trace context for the entry's parent span, when present.
+    /// Supersedes the pre-D30 `trace_context` field.
+    pub trace: Option<Trace>,
+    /// `{kid, mac}` -- the Sec5.11 tenant-binding MAC. Required.
+    pub binding: Binding,
 }
 
 impl TryFrom<RawStageEnvelope> for StageEnvelope {
     type Error = EnvelopeError;
 
     fn try_from(raw: RawStageEnvelope) -> Result<Self, EnvelopeError> {
+        if raw.schema_version != ENVELOPE_SCHEMA_VERSION {
+            return Err(env_err(format!(
+                "'schema_version' must equal {ENVELOPE_SCHEMA_VERSION}, got {} -- no dual-read of the pre-D30 shape",
+                raw.schema_version
+            )));
+        }
         if raw.tenant.is_empty() {
             return Err(env_err("'tenant' must be a non-empty string, got \"\""));
         }
@@ -979,14 +1151,25 @@ impl TryFrom<RawStageEnvelope> for StageEnvelope {
             )));
         }
         validate_rfc3339_millis_z("ts", &raw.ts)?;
-        if let Some(tc) = &raw.trace_context {
-            if !is_valid_traceparent(tc) {
-                return Err(env_err(format!(
-                    "'trace_context' {tc:?} is not a valid W3C traceparent"
-                )));
+        if !is_valid_uuid(&raw.workstream_id) {
+            return Err(env_err(format!(
+                "'workstream_id' {:?} is not a valid UUID",
+                raw.workstream_id
+            )));
+        }
+        if !is_valid_uuid_v4(&raw.event_id) {
+            return Err(env_err(format!(
+                "'event_id' {:?} is not a valid UUID v4",
+                raw.event_id
+            )));
+        }
+        if let Some(session_id) = &raw.session_id {
+            if session_id.is_empty() {
+                return Err(env_err("'session_id' must be a non-empty string when present, got \"\""));
             }
         }
         Ok(StageEnvelope {
+            schema_version: raw.schema_version,
             tenant: raw.tenant,
             community: raw.community,
             app_id: raw.app_id,
@@ -994,7 +1177,11 @@ impl TryFrom<RawStageEnvelope> for StageEnvelope {
             event: raw.event,
             ts: raw.ts,
             target_app_id: raw.target_app_id,
-            trace_context: raw.trace_context,
+            workstream_id: raw.workstream_id,
+            event_id: raw.event_id,
+            session_id: raw.session_id,
+            trace: raw.trace,
+            binding: raw.binding,
         })
     }
 }
@@ -1015,6 +1202,7 @@ Then, inside the existing `mod tests` block, add:
 ```rust
     fn valid_stage_envelope_json() -> Value {
         json!({
+            "schema_version": 2,
             "tenant": "global",
             "community": null,
             "app_id": "waddles.bot.commands.default",
@@ -1022,22 +1210,37 @@ Then, inside the existing `mod tests` block, add:
             "event": valid_event_json(),
             "ts": "2026-09-14T12:00:00.123Z",
             "target_app_id": null,
-            "trace_context": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+            "workstream_id": "8f14e45f-ceea-467e-adde-3fb5c9752730",
+            "event_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "session_id": null,
+            "trace": {
+                "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+                "tracestate": null
+            },
+            "binding": {
+                "kid": "2026-09",
+                "mac": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+            }
         })
     }
 
     #[test]
     fn deserializes_a_fully_populated_stage_envelope() {
         let env: StageEnvelope = serde_json::from_value(valid_stage_envelope_json()).unwrap();
+        assert_eq!(env.schema_version, 2);
         assert_eq!(env.tenant, "global");
         assert_eq!(env.community, None);
         assert_eq!(env.app_id, "waddles.bot.commands.default");
         assert_eq!(env.stage, "process");
         assert_eq!(env.target_app_id, None);
+        assert_eq!(env.workstream_id, "8f14e45f-ceea-467e-adde-3fb5c9752730");
+        assert_eq!(env.event_id, "3fa85f64-5717-4562-b3fc-2c963f66afa6");
+        assert_eq!(env.session_id, None);
         assert_eq!(
-            env.trace_context.as_deref(),
+            env.trace.as_ref().map(|t| t.traceparent.as_str()),
             Some("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
         );
+        assert_eq!(env.binding.kid, "2026-09");
     }
 
     #[test]
@@ -1054,11 +1257,19 @@ Then, inside the existing `mod tests` block, add:
     }
 
     #[test]
-    fn trace_context_absent_deserializes_to_none() {
+    fn trace_absent_deserializes_to_none() {
         let mut v = valid_stage_envelope_json();
-        v.as_object_mut().unwrap().remove("trace_context");
+        v.as_object_mut().unwrap().remove("trace");
         let env: StageEnvelope = serde_json::from_value(v).unwrap();
-        assert_eq!(env.trace_context, None);
+        assert_eq!(env.trace, None);
+    }
+
+    #[test]
+    fn session_id_present_round_trips() {
+        let mut v = valid_stage_envelope_json();
+        v["session_id"] = json!("gw-session-abc123");
+        let env: StageEnvelope = serde_json::from_value(v).unwrap();
+        assert_eq!(env.session_id.as_deref(), Some("gw-session-abc123"));
     }
 
     #[test]
@@ -1105,9 +1316,9 @@ Then, inside the existing `mod tests` block, add:
     }
 
     #[test]
-    fn rejects_malformed_trace_context() {
+    fn rejects_malformed_traceparent() {
         let mut v = valid_stage_envelope_json();
-        v["trace_context"] = json!("not-a-traceparent");
+        v["trace"] = json!({"traceparent": "not-a-traceparent", "tracestate": null});
         assert!(serde_json::from_value::<StageEnvelope>(v).is_err());
     }
 
@@ -1116,6 +1327,95 @@ Then, inside the existing `mod tests` block, add:
         let mut v = valid_stage_envelope_json();
         v["extra"] = json!("nope");
         assert!(serde_json::from_value::<StageEnvelope>(v).is_err());
+    }
+
+    #[test]
+    fn rejects_schema_version_1() {
+        let mut v = valid_stage_envelope_json();
+        v["schema_version"] = json!(1);
+        let err = serde_json::from_value::<StageEnvelope>(v).unwrap_err();
+        assert!(err.to_string().contains("schema_version"));
+    }
+
+    #[test]
+    fn rejects_missing_schema_version() {
+        let mut v = valid_stage_envelope_json();
+        v.as_object_mut().unwrap().remove("schema_version");
+        assert!(serde_json::from_value::<StageEnvelope>(v).is_err());
+    }
+
+    #[test]
+    fn rejects_missing_workstream_id() {
+        let mut v = valid_stage_envelope_json();
+        v.as_object_mut().unwrap().remove("workstream_id");
+        assert!(serde_json::from_value::<StageEnvelope>(v).is_err());
+    }
+
+    #[test]
+    fn rejects_non_uuid_workstream_id() {
+        let mut v = valid_stage_envelope_json();
+        v["workstream_id"] = json!("not-a-uuid");
+        assert!(serde_json::from_value::<StageEnvelope>(v).is_err());
+    }
+
+    #[test]
+    fn rejects_missing_event_id() {
+        let mut v = valid_stage_envelope_json();
+        v.as_object_mut().unwrap().remove("event_id");
+        assert!(serde_json::from_value::<StageEnvelope>(v).is_err());
+    }
+
+    #[test]
+    fn rejects_event_id_that_is_not_uuid_v4() {
+        let mut v = valid_stage_envelope_json();
+        // A well-formed but v1 (time-based) UUID -- valid UUID, wrong version.
+        v["event_id"] = json!("6ba7b810-9dad-11d1-80b4-00c04fd430c8");
+        let err = serde_json::from_value::<StageEnvelope>(v).unwrap_err();
+        assert!(err.to_string().contains("event_id"));
+    }
+
+    #[test]
+    fn rejects_missing_binding() {
+        let mut v = valid_stage_envelope_json();
+        v.as_object_mut().unwrap().remove("binding");
+        assert!(serde_json::from_value::<StageEnvelope>(v).is_err());
+    }
+
+    #[test]
+    fn rejects_binding_mac_wrong_length() {
+        let mut v = valid_stage_envelope_json();
+        v["binding"]["mac"] = json!("deadbeef");
+        assert!(serde_json::from_value::<StageEnvelope>(v).is_err());
+    }
+
+    #[test]
+    fn rejects_binding_mac_with_uppercase_hex() {
+        let mut v = valid_stage_envelope_json();
+        v["binding"]["mac"] = json!("9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A0");
+        assert!(serde_json::from_value::<StageEnvelope>(v).is_err());
+    }
+
+    #[test]
+    fn rejects_empty_binding_kid() {
+        let mut v = valid_stage_envelope_json();
+        v["binding"]["kid"] = json!("");
+        assert!(serde_json::from_value::<StageEnvelope>(v).is_err());
+    }
+
+    #[test]
+    fn rejects_empty_session_id() {
+        let mut v = valid_stage_envelope_json();
+        v["session_id"] = json!("");
+        assert!(serde_json::from_value::<StageEnvelope>(v).is_err());
+    }
+
+    #[test]
+    fn trace_id_from_traceparent_extracts_the_32_hex_segment() {
+        assert_eq!(
+            trace_id_from_traceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"),
+            Some("4bf92f3577b34da6a3ce929d0e0e4736")
+        );
+        assert_eq!(trace_id_from_traceparent("not-a-traceparent"), None);
     }
 
     #[test]
@@ -1129,13 +1429,14 @@ Then, inside the existing `mod tests` block, add:
 - [ ] **Step 2: Run and fix until green.**
 
 Run: `docker run --rm -v "$(pwd)/packages/rust-spine:/work" -w /work rust:1.97.1 cargo test --lib envelope::`
-Expected: `test result: ok. 25 passed; 0 failed`
+Expected: `test result: ok. 37 passed; 0 failed`
 
 - [ ] **Step 3: Activate the full `lib.rs` envelope export**, replacing both lines from Task 3 with one:
 
 ```rust
 pub use envelope::{
-    EnvelopeError, PlatformEvent, Source, StageEnvelope, PROCESS_TARGET_APP_ID_KEY,
+    trace_id_from_traceparent, Binding, EnvelopeError, PlatformEvent, Source, StageEnvelope,
+    Trace, ENVELOPE_SCHEMA_VERSION, PROCESS_TARGET_APP_ID_KEY,
 };
 ```
 
@@ -1149,19 +1450,20 @@ Expected: `test result: ok.` for both `scope::tests` and `envelope::tests`, no f
 ```bash
 git add packages/rust-spine/src/envelope.rs packages/rust-spine/src/lib.rs
 git commit -m "$(cat <<'EOF'
-feat(spine): add StageEnvelope and PROCESS_TARGET_APP_ID_KEY
+feat(spine): add StageEnvelope D30 workstream/trace/binding fields
 
-Full Sec6.1.2 strictness: app_id shape, fixed stage set, RFC 3339 + Z
-timestamp, W3C traceparent validation for trace_context, and the
-missing-event legacy-shape rejection that makes payload-under-payload
-double-nesting structurally impossible.
+schema_version bumped to 2 (no dual-read, D3/D30). StageEnvelope gains
+workstream_id (UUID), event_id (UUID v4), session_id (optional), trace
+(Trace{traceparent,tracestate}, superseding trace_context) and binding
+(Binding{kid,mac}, required). Full Sec6.1.2 strictness for every new
+field, including the missing-event legacy-shape rejection that makes
+payload-under-payload double-nesting structurally impossible.
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
 EOF
 )"
 ```
-
 ---
 
 ### Task 5: `SpineError`, `DlqRecord`, `DlqErrorDetail`, `DlqError`, `DlqErrorKind`
@@ -1171,9 +1473,9 @@ EOF
 
 **Interfaces:**
 - Consumes: `EnvelopeError` (Task 3).
-- Produces: `SpineError` (replaces Task 2's placeholder — every later task's fallible functions return `Result<_, SpineError>`), `DlqErrorKind` (9 variants, `as_str`), `DlqErrorDetail { kind, code, message, detail: Option<String> }`, `DlqRecord` (full spec §6.3 shape, public fields, no constructor yet), `DlqError { kind, code, message, detail, artifact_digest, consumer_id }` — the type a caller hands to `SpineClient::dead_letter` (Task 16). Task 16 adds `impl DlqRecord { pub fn from_delivered(...) }` once `Delivered` exists (Task 13); this task only defines the data shapes.
+- Produces: `SpineError` (replaces Task 2's placeholder — every later task's fallible functions return `Result<_, SpineError>`), `DlqErrorKind` (10 variants including `TenantBoundary`, `as_str`, `never_retry`), `DlqErrorDetail { kind, code, message, detail: Option<String> }`, `DlqRecord` (full spec §6.3 shape including `workstream_id: Option<String>` and `trace: Option<Trace>` — D30, public fields, no constructor yet), `DlqError { kind, code, message, detail, artifact_digest, consumer_id }` — the type a caller hands to `SpineClient::dead_letter` (Task 16). Task 16 adds `impl DlqRecord { pub fn from_delivered(...) }` once `Delivered` exists (Task 13); this task only defines the data shapes.
 
-Spec: §6.3 (full DLQ record JSON + field table + the nine `error.kind` values), §5.5 (when each is written).
+Spec: §6.3 (full DLQ record JSON + field table + the ten `error.kind` values, D30 adds `tenant_boundary`), §5.5 (when each is written).
 
 - [ ] **Step 1: Replace the Task 2 placeholder in `packages/rust-spine/src/error.rs` with the real type, and write its test:**
 
@@ -1280,10 +1582,11 @@ impl From<serde_json::Error> for EnvelopeError {
 //! The dead-letter record shape (spec Sec6.3) and the caller-supplied
 //! classification `SpineClient::dead_letter` (Task 16) accepts.
 
+use crate::envelope::Trace;
 use serde::{Deserialize, Serialize};
 
 /// The DLQ record's `error.kind` classification (spec Sec6.3) — exactly
-/// nine values, each also the `reason` label on `waddles_spine_dlq_total`.
+/// ten values, each also the `reason` label on `waddles_spine_dlq_total`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DlqErrorKind {
@@ -1301,6 +1604,12 @@ pub enum DlqErrorKind {
     HostCallDenied,
     /// `deliveries` reached `SPINE_MAX_DELIVERIES`.
     MaxDeliveries,
+    /// The Sec5.11 hop verification failed: `binding.mac` mismatch,
+    /// envelope tenant/community disagreeing with the stream key, a
+    /// grant/approval scoped to a different tenant or community, or a
+    /// bundle output that tried to set an identity field (D30). **Never
+    /// retried** — see [`DlqErrorKind::never_retry`].
+    TenantBoundary,
     /// The bundle is disabled after three sandbox trips.
     BundleDisabled,
     /// The executor was unavailable past its ready-timeout.
@@ -1319,9 +1628,19 @@ impl DlqErrorKind {
             DlqErrorKind::MemoryLimit => "memory_limit",
             DlqErrorKind::HostCallDenied => "host_call_denied",
             DlqErrorKind::MaxDeliveries => "max_deliveries",
+            DlqErrorKind::TenantBoundary => "tenant_boundary",
             DlqErrorKind::BundleDisabled => "bundle_disabled",
             DlqErrorKind::ExecutorUnavailable => "executor_unavailable",
         }
+    }
+
+    /// True when an entry classified this way must never be attempted
+    /// again after being DLQ'd — currently only `tenant_boundary` (spec
+    /// Sec5.11, D30): a forged, replayed or cross-tenant envelope is not
+    /// made valid by retrying it. Every other kind is retried up to
+    /// `SPINE_MAX_DELIVERIES` by the stage's normal redelivery path.
+    pub fn never_retry(&self) -> bool {
+        matches!(self, DlqErrorKind::TenantBoundary)
     }
 }
 
@@ -1329,7 +1648,7 @@ impl DlqErrorKind {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DlqErrorDetail {
-    /// The classification (spec Sec6.3's ten^ (nine, see crate docs) values).
+    /// The classification (spec Sec6.3's ten values).
     pub kind: DlqErrorKind,
     /// A short machine-readable code (e.g. `"EXECUTOR_DEADLINE"`).
     pub code: String,
@@ -1363,6 +1682,12 @@ pub struct DlqRecord {
     pub community: Option<String>,
     /// The bundle's `app_id`.
     pub app_id: String,
+    /// Copied from the envelope (spec Sec5.11, D30); present whenever the
+    /// envelope parsed far enough to carry one — including a
+    /// `tenant_boundary` rejection, which is exactly the record an
+    /// operator needs to trace a boundary violation back to its source.
+    /// `None` only for `envelope_invalid`, where no envelope exists yet.
+    pub workstream_id: Option<String>,
     /// `None` when the failure happened before a bundle was selected
     /// (e.g. `envelope_invalid`).
     pub artifact_digest: Option<String>,
@@ -1374,8 +1699,9 @@ pub struct DlqRecord {
     pub failed_at: String,
     /// The classified failure.
     pub error: DlqErrorDetail,
-    /// W3C `traceparent`, when the originating envelope carried one.
-    pub trace_context: Option<String>,
+    /// W3C trace context, when the originating envelope carried one.
+    /// Supersedes the pre-D30 single-field `trace_context`.
+    pub trace: Option<Trace>,
     /// The original envelope JSON, verbatim, as a string — so a malformed
     /// envelope is still replayable/inspectable even though it failed to
     /// parse.
@@ -1418,6 +1744,7 @@ mod tests {
             "tenant": "global",
             "community": null,
             "app_id": "waddles.bot.commands.default",
+            "workstream_id": "8f14e45f-ceea-467e-adde-3fb5c9752730",
             "artifact_digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
             "consumer_id": "svc-process-7d9c4f",
             "deliveries": 5,
@@ -1428,7 +1755,10 @@ mod tests {
                 "message": "bundle call exceeded 2000 ms",
                 "detail": null
             },
-            "trace_context": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "trace": {
+                "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+                "tracestate": null
+            },
             "raw": "{\"tenant\":\"global\",\"community\":null}"
         })
     }
@@ -1439,6 +1769,11 @@ mod tests {
         assert_eq!(rec.schema_version, 1);
         assert_eq!(rec.error.kind, DlqErrorKind::CallTimeout);
         assert_eq!(rec.error.code, "EXECUTOR_DEADLINE");
+        assert_eq!(rec.workstream_id.as_deref(), Some("8f14e45f-ceea-467e-adde-3fb5c9752730"));
+        assert_eq!(
+            rec.trace.as_ref().map(|t| t.traceparent.as_str()),
+            Some("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+        );
     }
 
     #[test]
@@ -1446,6 +1781,17 @@ mod tests {
         let rec: DlqRecord = serde_json::from_value(valid_record_json()).unwrap();
         let out = serde_json::to_value(&rec).unwrap();
         assert_eq!(out, valid_record_json());
+    }
+
+    #[test]
+    fn workstream_id_absent_is_valid_for_envelope_invalid() {
+        let mut v = valid_record_json();
+        v["workstream_id"] = json!(null);
+        v["error"]["kind"] = json!("envelope_invalid");
+        v["error"]["code"] = json!("MALFORMED_ENVELOPE");
+        v["artifact_digest"] = json!(null);
+        let rec: DlqRecord = serde_json::from_value(v).unwrap();
+        assert_eq!(rec.workstream_id, None);
     }
 
     #[test]
@@ -1458,16 +1804,35 @@ mod tests {
             (DlqErrorKind::MemoryLimit, "memory_limit"),
             (DlqErrorKind::HostCallDenied, "host_call_denied"),
             (DlqErrorKind::MaxDeliveries, "max_deliveries"),
+            (DlqErrorKind::TenantBoundary, "tenant_boundary"),
             (DlqErrorKind::BundleDisabled, "bundle_disabled"),
             (DlqErrorKind::ExecutorUnavailable, "executor_unavailable"),
         ];
-        assert_eq!(expected.len(), 9, "spec Sec6.3 enumerates exactly nine error.kind values");
+        assert_eq!(expected.len(), 10, "spec Sec6.3 enumerates exactly ten error.kind values (D30 adds tenant_boundary)");
         for (kind, expected_str) in expected {
             assert_eq!(kind.as_str(), expected_str);
             let round_tripped: DlqErrorKind =
                 serde_json::from_value(json!(expected_str)).unwrap();
             assert_eq!(round_tripped, kind);
         }
+    }
+
+    #[test]
+    fn only_tenant_boundary_is_never_retried() {
+        let all = [
+            DlqErrorKind::EnvelopeInvalid,
+            DlqErrorKind::BundleTrap,
+            DlqErrorKind::BundleError,
+            DlqErrorKind::CallTimeout,
+            DlqErrorKind::MemoryLimit,
+            DlqErrorKind::HostCallDenied,
+            DlqErrorKind::MaxDeliveries,
+            DlqErrorKind::TenantBoundary,
+            DlqErrorKind::BundleDisabled,
+            DlqErrorKind::ExecutorUnavailable,
+        ];
+        let never_retry: Vec<DlqErrorKind> = all.iter().copied().filter(DlqErrorKind::never_retry).collect();
+        assert_eq!(never_retry, vec![DlqErrorKind::TenantBoundary]);
     }
 
     #[test]
@@ -1486,7 +1851,6 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run and fix until green.**
 
 Run: `docker run --rm -v "$(pwd)/packages/rust-spine:/work" -w /work rust:1.97.1 cargo test --lib error:: dlq::`
 Expected: `test result: ok.` for both modules, no failures.
@@ -1512,7 +1876,9 @@ feat(spine): add SpineError and the DLQ record types
 
 SpineError replaces the Task 2 placeholder with the full crate-wide
 error type. DlqRecord/DlqErrorDetail/DlqErrorKind/DlqError match spec
-Sec6.3's record shape and its nine error.kind values exactly.
+Sec6.3's record shape and its ten error.kind values exactly, including
+the D30 tenant_boundary kind and its never_retry() contract, plus the
+D30 workstream_id and trace (superseding trace_context) fields.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
@@ -1566,6 +1932,13 @@ pub trait SpineMetrics: Send + Sync {
     /// or 0 (secure) — `0` must be reported explicitly so "no series" and
     /// "secure" stay distinguishable (spec Sec11.6.4).
     fn insecure_transport(&self, _component: &str, _aspect: &str, _insecure: bool) {}
+    /// `waddles_tenant_boundary_violations_total{stage,reason}` +1 — a
+    /// Sec5.11 hop-verification failure (D30): `reason` is one of
+    /// `mac_mismatch`, `unknown_kid`, `tenant_mismatch`,
+    /// `community_mismatch`, `grant_scope_mismatch`,
+    /// `approval_scope_mismatch`, `bundle_set_identity` (the
+    /// `BoundaryError` variants the `binding` module defines, Task 19).
+    fn tenant_boundary_violation(&self, _stage: &str, _reason: &str) {}
 }
 
 /// A [`SpineMetrics`] implementation that records nothing — the default
@@ -1615,6 +1988,7 @@ mod tests {
         metrics.group_lag("waddles.bot.commands.default", "some-stream", None);
         metrics.group_pending("waddles.bot.commands.default", "some-stream", 0);
         metrics.insecure_transport("valkey", "tls", false);
+        metrics.tenant_boundary_violation("process", "tenant_mismatch");
     }
 
     #[test]
@@ -1664,6 +2038,8 @@ feat(spine): add the SpineMetrics facade and NoopMetrics
 Object-safe callback trait for the spine-owned metric names (Sec13.1)
 so this crate never depends on a Rust OTel/logging crate -- none
 exists yet (penguin-logging is a known gap, backend-rust.md).
+Includes tenant_boundary_violation for waddles_tenant_boundary_
+violations_total{stage,reason} (D30, Sec5.11).
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
@@ -1680,9 +2056,9 @@ EOF
 
 **Interfaces:**
 - Consumes: nothing (pure Python, stdlib only, no dependency on this crate or on the `waddlebot` repo).
-- Produces: the on-disk fixture tree Task 8's Rust tests load and iterate. Counts this task's own script asserts and prints: ≥ 20 valid envelopes, ≥ 25 invalid envelopes, ≥ 1 source-stream key case file, ≥ 1 app-key case file, ≥ 1 entry per valid envelope plus 1 per DLQ record, exactly 9 DLQ records (one per `DlqErrorKind`).
+- Produces: the on-disk fixture tree Task 8's Rust tests load and iterate. Counts this task's own script asserts and prints: ≥ 20 valid envelopes, ≥ 25 invalid envelopes, ≥ 1 source-stream key case file, ≥ 1 app-key case file, ≥ 1 entry per valid envelope plus 1 per DLQ record, exactly 10 DLQ records (one per `DlqErrorKind`, D30 adds `tenant_boundary`).
 
-Spec: §14.1 (the full fixture-family table this task implements) — **note the temporary-tooling caveat**: `flask_core.stream_pipeline.PlatformEvent`/`StageEnvelope` on the `waddlebot` repo's `release/v3.0.X` branch do not implement `source`/`trace_context`/the strict-RFC3339/app_id-shape checks yet (that is the separate, not-yet-scheduled "`flask_core` alignment" line item under spec's M1 table) — this script defines local, spec-shaped dict builders rather than importing the not-yet-aligned Python class, so the fixtures encode the *target* contract §6.1 defines. Once `flask_core` alignment lands its own `to_dict()`, that work should regenerate these exact files by calling the real class and this script should be deleted — noted again in the script's own docstring.
+Spec: §14.1 (the full fixture-family table this task implements — `session_id` set/absent, `binding.mac` tampered, missing `workstream_id`/`event_id`/`binding`), §6.1.2 (`schema_version` bump to `2`, D30 fields), §6.3 (the ten `error.kind` values including `tenant_boundary`) — **note the temporary-tooling caveat**: `flask_core.stream_pipeline.PlatformEvent`/`StageEnvelope` on the `waddlebot` repo's `release/v3.0.X` branch do not implement `source`/the D30 fields/the strict-RFC3339/app_id-shape checks yet (that is the separate, not-yet-scheduled "`flask_core` alignment" line item under spec's M1 table) — this script defines local, spec-shaped dict builders rather than importing the not-yet-aligned Python class, so the fixtures encode the *target* contract §6.1/§6.1.2 define. Once `flask_core` alignment lands its own `to_dict()`, that work should regenerate these exact files by calling the real class and this script should be deleted — noted again in the script's own docstring.
 
 - [ ] **Step 1: Write `packages/rust-spine/tests/golden/generate_fixtures.py`:**
 
@@ -1692,19 +2068,29 @@ Spec: §14.1 (the full fixture-family table this task implements) — **note the
 byte compatibility (spec Sec14.1).
 
 Temporary tooling: mirrors the StageEnvelope/PlatformEvent JSON shape spec
-Sec6.1 defines, including the `source` and `trace_context` fields the
-current `flask_core.stream_pipeline.py` (waddlebot repo, release/v3.0.X)
-does not implement yet -- that is a separate, not-yet-scheduled "flask_core
-alignment" deliverable, not part of this crate. Once that work lands its
-own to_dict()/from_dict() with these fields, the M1/M1.5 Python test suite
-should regenerate these exact files by calling the real class instead of
-this script, and this script should be deleted.
+Sec6.1/Sec6.1.2 defines, including the `source` field and the D30
+workstream-identity/trace/binding fields (`workstream_id`, `event_id`,
+`session_id`, `trace`, `binding`) the current `flask_core.stream_pipeline.py`
+(waddlebot repo, release/v3.0.X) does not implement yet -- that is a
+separate, not-yet-scheduled "flask_core alignment" deliverable, not part
+of this crate. Once that work lands its own to_dict()/from_dict() with
+these fields, the M1/M1.5 Python test suite should regenerate these exact
+files by calling the real class instead of this script, and this script
+should be deleted.
 
 Run: python3 generate_fixtures.py <output-dir>
 """
 import json
 import sys
 from pathlib import Path
+
+DEFAULT_WORKSTREAM_ID = "8f14e45f-ceea-467e-adde-3fb5c9752730"
+DEFAULT_EVENT_ID = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+# A well-formed but v1 (time-based), not v4, UUID -- used only to build the
+# "wrong UUID version" invalid fixture for event_id.
+UUID_V1_NOT_V4 = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+DEFAULT_TRACEPARENT = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+DEFAULT_MAC = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
 
 
 def platform_event(
@@ -1737,11 +2123,25 @@ def stage_envelope(
     event=None,
     ts="2026-09-14T12:00:00.123Z",
     target_app_id=None,
-    trace_context="00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+    schema_version=2,
+    workstream_id=DEFAULT_WORKSTREAM_ID,
+    event_id=DEFAULT_EVENT_ID,
+    session_id=None,
+    trace=DEFAULT_TRACEPARENT,
+    tracestate=None,
+    binding_kid="2026-09",
+    binding_mac=DEFAULT_MAC,
 ):
+    """Builds a spec Sec6.1.2-shaped StageEnvelope dict. `trace=None` omits
+    the `trace` key's `traceparent` entirely (a bare `None` renders the
+    whole `trace` field as JSON `null`, matching "absent (D30)" semantics
+    for the "trace set/absent" fixture pair); pass a string to populate
+    `trace.traceparent`."""
     if event is None:
         event = platform_event()
+    trace_obj = None if trace is None else {"traceparent": trace, "tracestate": tracestate}
     return {
+        "schema_version": schema_version,
         "tenant": tenant,
         "community": community,
         "app_id": app_id,
@@ -1749,7 +2149,11 @@ def stage_envelope(
         "event": event,
         "ts": ts,
         "target_app_id": target_app_id,
-        "trace_context": trace_context,
+        "workstream_id": workstream_id,
+        "event_id": event_id,
+        "session_id": session_id,
+        "trace": trace_obj,
+        "binding": {"kid": binding_kid, "mac": binding_mac},
     }
 
 
@@ -1763,10 +2167,8 @@ def build_valid_envelopes():
     valid["01_tenant_wide"] = stage_envelope(community=None)
     valid["02_community_scoped"] = stage_envelope(community="main")
     valid["03_target_app_id_set"] = stage_envelope(target_app_id="waddles.community.forums.default")
-    valid["04_trace_context_set"] = stage_envelope()
-    no_trace = stage_envelope()
-    del no_trace["trace_context"]
-    valid["05_trace_context_absent"] = no_trace
+    valid["04_trace_set"] = stage_envelope(trace=DEFAULT_TRACEPARENT)
+    valid["05_trace_absent"] = stage_envelope(trace=None)
     valid["06_empty_payload"] = stage_envelope(event=platform_event(payload={}))
     valid["07_unicode_payload"] = stage_envelope(event=platform_event(payload={"text": "こんにちは 🐧 world"}))
     long_segment = "a" * 60
@@ -1824,6 +2226,12 @@ def build_valid_envelopes():
         )
     )
     valid["22_short_app_id_segments"] = stage_envelope(app_id="waddles.a.b.c")
+    valid["23_session_id_set"] = stage_envelope(session_id="gw-session-abc123")
+    valid["24_session_id_absent"] = stage_envelope(session_id=None)
+    valid["25_community_scoped_with_session_and_trace"] = stage_envelope(
+        community="main", session_id="eventsub-ws-session-1", trace=DEFAULT_TRACEPARENT
+    )
+    valid["26_tracestate_present"] = stage_envelope(trace=DEFAULT_TRACEPARENT, tracestate="congo=t61rcWkgMzE")
     return valid
 
 
@@ -1833,7 +2241,7 @@ def build_invalid_envelopes():
     def base():
         return stage_envelope()
 
-    for field in ("tenant", "app_id", "stage", "ts", "event"):
+    for field in ("tenant", "app_id", "stage", "ts", "event", "schema_version", "workstream_id", "event_id", "binding"):
         d = base()
         del d[field]
         invalid[f"missing_field_{field}"] = d
@@ -1912,8 +2320,8 @@ def build_invalid_envelopes():
     invalid["ts_malformed"] = d
 
     d = base()
-    d["trace_context"] = "not-a-traceparent"
-    invalid["trace_context_malformed"] = d
+    d["trace"] = {"traceparent": "not-a-traceparent", "tracestate": None}
+    invalid["trace_malformed"] = d
 
     d = base()
     d["event"]["source"] = {"platform": "discord", "account_id": "x", "channel_id": None}
@@ -1935,25 +2343,83 @@ def build_invalid_envelopes():
     d["community"] = ["not", "a", "string"]
     invalid["community_wrong_type_list"] = d
 
+    # -- D30 workstream-identity / trace / tenant-wall fixtures (spec Sec5.11, Sec6.1.2) --
+
+    d = base()
+    d["schema_version"] = 1
+    invalid["schema_version_1_pre_d30_shape"] = d
+
+    d = base()
+    d["workstream_id"] = "not-a-uuid"
+    invalid["workstream_id_not_a_uuid"] = d
+
+    d = base()
+    d["event_id"] = "not-a-uuid"
+    invalid["event_id_not_a_uuid"] = d
+
+    d = base()
+    d["event_id"] = UUID_V1_NOT_V4
+    invalid["event_id_wrong_uuid_version"] = d
+
+    d = base()
+    d["session_id"] = ""
+    invalid["session_id_empty_string"] = d
+
+    d = base()
+    d["binding"]["mac"] = "deadbeef"
+    invalid["binding_mac_wrong_length"] = d
+
+    d = base()
+    d["binding"]["mac"] = DEFAULT_MAC.upper()
+    invalid["binding_mac_uppercase_hex"] = d
+
+    d = base()
+    d["binding"]["mac"] = "not-hex-at-all-" + "z" * 49
+    invalid["binding_mac_non_hex_characters"] = d
+
+    d = base()
+    d["binding"]["kid"] = ""
+    invalid["binding_kid_empty"] = d
+
+    d = base()
+    del d["binding"]["mac"]
+    invalid["binding_missing_mac"] = d
+
+    d = base()
+    del d["binding"]["kid"]
+    invalid["binding_missing_kid"] = d
+
+    # Deliberately NOT added here: a one-byte-flipped-but-still-64-lowercase-
+    # hex `binding.mac` deserializes successfully -- RawStageEnvelope's
+    # parser checks the MAC's *format*, not its cryptographic validity, so
+    # a tampered-but-well-formed MAC belongs in envelopes/valid/ (added in
+    # main() below as fixture 27), never in this invalid set (which would
+    # break the blanket "every invalid/*.json must fail to deserialize"
+    # assertion, Task 8). Verifying it is the `binding` module's job
+    # (Task 19, spec Sec14.11 test 4), not envelope parsing's.
+
     return invalid
 
 
 def build_dlq_records():
     error_kinds = [
-        ("envelope_invalid", "ENVELOPE_INVALID", "strict deserialization failed", None, None),
-        ("bundle_trap", "BUNDLE_TRAP", "component trapped", None, "sha256:aaaa"),
-        ("bundle_error", "BUNDLE_ERROR", "component returned a terminal error", "retryable=false", "sha256:aaaa"),
-        ("call_timeout", "EXECUTOR_DEADLINE", "bundle call exceeded 2000 ms", None, "sha256:aaaa"),
-        ("memory_limit", "MEMORY_LIMIT", "instance exceeded its memory cap", None, "sha256:aaaa"),
+        ("envelope_invalid", "ENVELOPE_INVALID", "strict deserialization failed", None, None, None),
+        ("bundle_trap", "BUNDLE_TRAP", "component trapped", None, "sha256:aaaa", DEFAULT_WORKSTREAM_ID),
+        ("bundle_error", "BUNDLE_ERROR", "component returned a terminal error", "retryable=false", "sha256:aaaa", DEFAULT_WORKSTREAM_ID),
+        ("call_timeout", "EXECUTOR_DEADLINE", "bundle call exceeded 2000 ms", None, "sha256:aaaa", DEFAULT_WORKSTREAM_ID),
+        ("memory_limit", "MEMORY_LIMIT", "instance exceeded its memory cap", None, "sha256:aaaa", DEFAULT_WORKSTREAM_ID),
         ("host_call_denied", "HOST_CALL_DENIED", "capability check refused the call",
-         "undeclared egress host", "sha256:aaaa"),
-        ("max_deliveries", "MAX_DELIVERIES", "delivery count reached SPINE_MAX_DELIVERIES", None, "sha256:aaaa"),
-        ("bundle_disabled", "BUNDLE_DISABLED", "bundle disabled after three sandbox trips", None, "sha256:aaaa"),
+         "undeclared egress host", "sha256:aaaa", DEFAULT_WORKSTREAM_ID),
+        ("max_deliveries", "MAX_DELIVERIES", "delivery count reached SPINE_MAX_DELIVERIES", None, "sha256:aaaa", DEFAULT_WORKSTREAM_ID),
+        ("tenant_boundary", "TENANT_MISMATCH",
+         "envelope tenant/community disagree with the stream key it was read from",
+         None, "sha256:aaaa", DEFAULT_WORKSTREAM_ID),
+        ("bundle_disabled", "BUNDLE_DISABLED", "bundle disabled after three sandbox trips", None, "sha256:aaaa", DEFAULT_WORKSTREAM_ID),
         ("executor_unavailable", "EXECUTOR_UNAVAILABLE",
-         "executor down past EXECUTOR_UNAVAILABLE_READY_S", None, None),
+         "executor down past EXECUTOR_UNAVAILABLE_READY_S", None, None, DEFAULT_WORKSTREAM_ID),
     ]
     records = {}
-    for kind, code, message, detail, digest in error_kinds:
+    for kind, code, message, detail, digest, workstream_id in error_kinds:
         records[kind] = {
             "schema_version": 1,
             "stage": "process",
@@ -1963,12 +2429,13 @@ def build_dlq_records():
             "tenant": "global",
             "community": None,
             "app_id": "waddles.bot.commands.default",
+            "workstream_id": workstream_id,
             "artifact_digest": digest,
             "consumer_id": "svc-process-7d9c4f",
             "deliveries": 5 if kind == "max_deliveries" else 1,
             "failed_at": "2026-09-14T12:00:01.500Z",
             "error": {"kind": kind, "code": code, "message": message, "detail": detail},
-            "trace_context": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "trace": {"traceparent": DEFAULT_TRACEPARENT, "tracestate": None},
             "raw": json.dumps(stage_envelope()),
         }
     return records
@@ -1979,6 +2446,16 @@ def main(out_dir: str) -> None:
 
     valid = build_valid_envelopes()
     invalid = build_invalid_envelopes()
+
+    # The tampered-but-well-formed binding.mac fixture belongs in `valid/`
+    # (spec Sec14.1: envelopes/valid documents "trace set and absent" etc.,
+    # and a syntactically-valid-but-cryptographically-wrong MAC still
+    # deserializes -- verifying it is the `binding` module's job, Task 19,
+    # not envelope parsing's).
+    tampered = list(DEFAULT_MAC)
+    tampered[0] = "0" if tampered[0] != "0" else "1"
+    valid["27_binding_mac_syntactically_valid_but_tampered"] = stage_envelope(binding_mac="".join(tampered))
+
     assert len(valid) >= 20, f"need >= 20 valid fixtures, have {len(valid)}"
     assert len(invalid) >= 25, f"need >= 25 invalid fixtures, have {len(invalid)}"
     for name, doc in valid.items():
@@ -2014,7 +2491,7 @@ def main(out_dir: str) -> None:
         write(root / "entries" / f"event_{name}.json", {"field": "env", "value": doc})
 
     dlq_records = build_dlq_records()
-    assert len(dlq_records) == 9, f"spec Sec6.3 enumerates exactly 9 error.kind values, generated {len(dlq_records)}"
+    assert len(dlq_records) == 10, f"spec Sec6.3 enumerates exactly 10 error.kind values (D30 adds tenant_boundary), generated {len(dlq_records)}"
     for kind, rec in dlq_records.items():
         write(root / "dlq" / f"{kind}.json", rec)
         write(root / "entries" / f"dlq_{kind}.json", {"field": "rec", "value": rec})
@@ -2046,7 +2523,7 @@ docker run --rm \
 
 (The script is not yet inside `/golden` on the first run — write it to `packages/rust-spine/tests/golden/generate_fixtures.py` on the host first via Step 1, then this bind-mount makes it visible at `/golden/generate_fixtures.py` inside the container.)
 
-Expected stdout: `wrote 22 valid envelopes, 32 invalid envelopes, 4 source-stream key cases, 2 app-key cases, 31 entries, 9 dlq records`
+Expected stdout: `wrote 27 valid envelopes, 34 invalid envelopes, 4 source-stream key cases, 2 app-key cases, 37 entries, 10 dlq records`
 
 - [ ] **Step 3: Verify the on-disk counts independently of the script's own print** (the Verification Integrity rule: don't trust a self-reported count, recount):
 
@@ -2058,11 +2535,11 @@ echo "keys: $(ls packages/rust-spine/tests/golden/keys/*.json | wc -l)"
 echo "entries: $(ls packages/rust-spine/tests/golden/entries/*.json | wc -l)"
 echo "dlq: $(ls packages/rust-spine/tests/golden/dlq/*.json | wc -l)"
 ```
-Expected: `valid: 22`, `invalid: 32`, `keys: 2`, `entries: 31`, `dlq: 9`.
+Expected: `valid: 27`, `invalid: 34`, `keys: 2`, `entries: 37`, `dlq: 10`.
 
 - [ ] **Step 4: Spot-check one file for valid JSON and the expected shape.**
 
-Run: `docker run --rm -v "$(pwd)/packages/rust-spine/tests/golden:/golden" python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285 python3 -c "import json; d=json.load(open('/golden/envelopes/valid/01_tenant_wide.json')); assert d['community'] is None; assert d['event']['platform'] == 'twitch'; print('ok')"`
+Run: `docker run --rm -v "$(pwd)/packages/rust-spine/tests/golden:/golden" python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285 python3 -c "import json; d=json.load(open('/golden/envelopes/valid/01_tenant_wide.json')); assert d['community'] is None; assert d['event']['platform'] == 'twitch'; assert d['schema_version'] == 2; assert d['binding']['kid'] == '2026-09'; print('ok')"`
 Expected: `ok`
 
 - [ ] **Step 5: Commit.**
@@ -2072,18 +2549,21 @@ git add packages/rust-spine/tests/golden
 git commit -m "$(cat <<'EOF'
 test(spine): generate golden fixtures for envelope byte compatibility
 
-22 valid + 32 invalid StageEnvelope fixtures, source-stream/app key
-cases, 31 stream-entry fixtures, and one DLQ record per error.kind (9),
-per spec Sec14.1. Temporary generator (see its own docstring) until the
-separate flask_core alignment work lands source/trace_context support
-and these files can be regenerated from the real Python class.
+27 valid + 34 invalid StageEnvelope fixtures (D30 adds schema_version,
+workstream_id, event_id, session_id, trace, binding coverage,
+including a syntactically-valid-but-cryptographically-tampered MAC
+kept in valid/ since envelope parsing cannot detect that), source-
+stream/app key cases, 37 stream-entry fixtures, and one DLQ record per
+error.kind (10, D30 adds tenant_boundary), per spec Sec14.1. Temporary
+generator (see its own docstring) until the separate flask_core
+alignment work lands source/D30-field support and these files can be
+regenerated from the real Python class.
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
 EOF
 )"
 ```
-
 ---
 
 ### Task 8: Golden-fixture Rust conformance tests
@@ -2263,8 +2743,8 @@ fn dlq_fixtures_cover_every_error_kind_and_round_trip() {
     let files = read_json_files(&dir);
     assert_eq!(
         files.len(),
-        9,
-        "spec Sec6.3 enumerates exactly 9 error.kind values, found {} dlq fixtures in {}",
+        10,
+        "spec Sec6.3 enumerates exactly 10 error.kind values (D30 adds tenant_boundary), found {} dlq fixtures in {}",
         files.len(),
         dir.display()
     );
@@ -2296,8 +2776,10 @@ git commit -m "$(cat <<'EOF'
 test(spine): add golden-fixture conformance tests
 
 Six tests covering every fixture family in spec Sec14.1: valid/invalid
-envelope round-trip and rejection, source-stream/app key builders, the
-single-field entry wrapper shape, and full DLQ error.kind coverage.
+envelope round-trip and rejection (including D30's schema_version/
+workstream_id/event_id/session_id/trace/binding coverage), source-
+stream/app key builders, the single-field entry wrapper shape, and
+full DLQ error.kind coverage (10 kinds, D30 adds tenant_boundary).
 Every test asserts fixtures_examined == fixtures_on_disk and prints
 both counts.
 
@@ -3243,9 +3725,9 @@ EOF
 
 **Interfaces:**
 - Consumes: nothing from earlier Rust tasks (this test file builds its own connections directly, deliberately not reusing `penguin_spine::SpineConfig` — see rationale below).
-- Produces: the crate's canonical least-privilege ACL matrix, referenced by Task 19's README. No later task in this plan consumes new Rust types from this task.
+- Produces: the crate's canonical least-privilege ACL matrix, referenced by Task 21's README. No later task in this plan consumes new Rust types from this task.
 
-Spec: §11.10 (D28 "Least User Access via RBAC"), §11.10.2 (the Valkey ACL matrix: normative path `config/valkey/acl-matrix.yaml`, the `ACL LIST` equality test, the five negative tests), §11.6.1 (the per-service ACL sketch this matrix supersedes with exact, minimal command sets instead of broad categories).
+Spec: §11.10 (D28 "Least User Access via RBAC"), §11.10.2 (the Valkey ACL matrix: normative path `config/valkey/acl-matrix.yaml`, the `ACL LIST` equality test, the five negative tests, plus D31's `waddles:usage` row: every stage user is `+xadd`-only, only hub-api may read), §5.12/§6.2 (the `waddles:usage` key and its D31 usage-metering role), §11.6.1 (the per-service ACL sketch this matrix supersedes with exact, minimal command sets instead of broad categories).
 
 **Cross-repo scope, restated from Global Constraints:** spec §11.10.2 fixes `config/valkey/acl-matrix.yaml` as a path at the root of whichever repo deploys the chart (`waddlebot`, per D22) — this plan cannot create that file there. This task ships the crate's own canonical copy at `packages/rust-spine/config/valkey/acl-matrix.yaml` (same relative suffix, rooted in this crate) plus the renderer, and proves both against this crate's own pinned Valkey container. Copying this exact file and renderer into the `waddlebot` repo's chart, and wiring spec's `make test-rbac-valkey` gate against a deployed alpha stack, is M6 work, out of this plan's scope.
 
@@ -3275,6 +3757,14 @@ users:
       - "waddles:relay:*"
       - "waddles:lease:*"
       - "waddles:intake:*"
+    # D31 usage metering (spec Sec5.12, Sec6.2, Sec11.10.2): every stage is
+    # XADD-only on waddles:usage -- never xrange/xreadgroup/xrevrange, not
+    # even its own writes read back. A dedicated selector, not a root key
+    # pattern, so the root's broader command grants (blmove/set/get/...)
+    # never reach this key.
+    additional_selectors:
+      - key_patterns: ["waddles:usage"]
+        commands: [xadd]
 
   - name: svc-process
     description: >-
@@ -3290,6 +3780,13 @@ users:
       - "waddles:dlq:process"
       - "waddles:t:*:c:*:app:*:cfg"
       - "waddles:t:*:c:*:app:*:state"
+    # D31 usage metering: XADD-only on waddles:usage -- this user's root
+    # grant already includes xreadgroup/xautoclaim, so without a dedicated
+    # selector those would also reach waddles:usage via the root's key
+    # patterns if waddles:usage were added there instead (spec Sec11.10.2).
+    additional_selectors:
+      - key_patterns: ["waddles:usage"]
+        commands: [xadd]
 
   - name: svc-action
     description: >-
@@ -3305,6 +3802,10 @@ users:
       - "waddles:relay:*"
       - "waddles:t:*:c:*:app:*:cfg"
       - "waddles:t:*:c:*:app:*:state"
+    # D31 usage metering: XADD-only on waddles:usage (spec Sec11.10.2).
+    additional_selectors:
+      - key_patterns: ["waddles:usage"]
+        commands: [xadd]
 
   - name: svc-streaming
     description: >-
@@ -3313,6 +3814,12 @@ users:
     category_commands: ["+@read", "+@write", "+@string", "+@hash", "-@admin", "-@dangerous"]
     key_patterns:
       - "waddles:streaming:*"
+    # D31 usage metering: XADD-only on waddles:usage, never covered by the
+    # broad +@read/+@write category grant above, which is scoped only to
+    # waddles:streaming:* (spec Sec5.12, Sec11.10.2).
+    additional_selectors:
+      - key_patterns: ["waddles:usage"]
+        commands: [xadd]
 
   - name: hub-api
     description: >-
@@ -3326,6 +3833,12 @@ users:
     key_patterns:
       - "waddles:t:*:c:*:src:*:*:events"
       - "waddles:t:*:c:*:app:*:action"
+    # D31 usage metering: hub-api's aggregator is the *only* reader of
+    # waddles:usage (spec Sec5.12, Sec11.10.2) -- read-only (xrange/
+    # xrevrange/xlen), never xadd, so hub-api cannot forge a usage delta.
+    additional_selectors:
+      - key_patterns: ["waddles:usage"]
+        commands: [xrange, xrevrange, xlen]
 
   - name: waddles_admin
     description: >-
@@ -3364,6 +3877,19 @@ def user_password(name: str) -> str:
     return f"test-{name}-password"
 
 
+def render_selector(selector: dict) -> str:
+    """Renders one ACL selector (D31, spec Sec11.10.2): a parenthesized
+    `(~pattern ... +cmd ...)` clause scoping extra commands to extra key
+    patterns *without* widening the user's root grant -- e.g. a stage user
+    that already holds xreadgroup/xautoclaim on its root patterns must
+    still be XADD-only on waddles:usage, which a root-pattern addition
+    alone could not express."""
+    tokens = [f"~{p}" for p in selector["key_patterns"]]
+    tokens.append("-@all")
+    tokens.extend(f"+{cmd}" for cmd in selector["commands"])
+    return "(" + " ".join(tokens) + ")"
+
+
 def render_user(user: dict, channels_policy: str) -> str:
     parts = [f"user {user['name']} on >{user_password(user['name'])}", channels_policy]
     for pattern in user["key_patterns"]:
@@ -3373,6 +3899,8 @@ def render_user(user: dict, channels_policy: str) -> str:
     else:
         parts.append("-@all")
         parts.extend(f"+{cmd}" for cmd in user.get("commands", []))
+    for selector in user.get("additional_selectors", []):
+        parts.append(render_selector(selector))
     return " ".join(parts)
 
 
@@ -3497,6 +4025,19 @@ struct AclUser {
     #[serde(default)]
     category_commands: Vec<String>,
     key_patterns: Vec<String>,
+    /// D31 usage-metering selectors (spec Sec11.10.2, Sec5.12): each
+    /// scopes extra commands to extra key patterns *without* widening the
+    /// user's root grant -- e.g. `waddles:usage` is `+xadd`-only for every
+    /// stage user even though several already hold xreadgroup/xautoclaim
+    /// on their root patterns.
+    #[serde(default)]
+    additional_selectors: Vec<AclSelector>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct AclSelector {
+    key_patterns: Vec<String>,
+    commands: Vec<String>,
 }
 
 impl AclUser {
@@ -3553,6 +4094,25 @@ async fn admin_connection() -> redis::aio::MultiplexedConnection {
         .expect("failed to connect as waddles_admin")
 }
 
+/// Removes every balanced `(...)` substring from an `ACL LIST` line --
+/// Valkey renders each additional selector (D31's `waddles:usage` grant,
+/// spec Sec11.10.2) as one parenthesized clause appended after the root
+/// grant. Selectors have no nested parens, so a simple depth counter is
+/// sufficient; this crate never generates one.
+fn strip_selector_clauses(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut depth = 0u32;
+    for c in line.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
+
 #[tokio::test]
 async fn acl_list_matches_the_matrix_exactly() {
     let matrix = load_matrix();
@@ -3580,7 +4140,14 @@ async fn acl_list_matches_the_matrix_exactly() {
             .iter()
             .find(|l| l.split_whitespace().nth(1) == Some(user.name.as_str()))
             .unwrap_or_else(|| panic!("ACL LIST has no entry for user {:?}", user.name));
-        let tokens: Vec<&str> = line.split_whitespace().collect();
+        // Strip any parenthesized additional-selector clauses (D31's
+        // waddles:usage selector, e.g. `(~waddles:usage +xadd)`) before
+        // tokenizing the root clause -- otherwise their `~`/`+` tokens
+        // would be double-counted against the root grant this loop checks.
+        // The selectors themselves are verified separately by
+        // waddles_usage_selector_is_xadd_only_for_every_stage_user below.
+        let root_line = strip_selector_clauses(line);
+        let tokens: Vec<&str> = root_line.split_whitespace().collect();
 
         assert!(tokens.contains(&"on"), "{}: expected 'on'", user.name);
         assert!(tokens.contains(&"resetchannels"), "{}: expected resetchannels", user.name);
@@ -3683,12 +4250,80 @@ async fn no_valkey_user_exists_for_the_executor() {
     let result = connect_as("svc-process-executor", "anything").await;
     assert!(result.is_err(), "no user should exist for an executor identity");
 }
+
+/// D31 (spec Sec5.12, Sec11.10.2): every stage user can XADD its own
+/// usage deltas onto `waddles:usage`, but none of them -- including the
+/// one that wrote the entry -- can read it back, whatever read command is
+/// attempted.
+#[tokio::test]
+async fn waddles_usage_selector_is_xadd_only_for_every_stage_user() {
+    let matrix = load_matrix();
+    let stage_users = ["svc-ingest", "svc-process", "svc-action", "svc-streaming"];
+    let mut examined = 0;
+    for name in stage_users {
+        let user = matrix
+            .users
+            .iter()
+            .find(|u| u.name == name)
+            .unwrap_or_else(|| panic!("matrix has no user named {name:?}"));
+        let mut conn = connect_as(&user.name, &user.password()).await.unwrap();
+
+        let xadd_result: redis::RedisResult<String> =
+            conn.xadd("waddles:usage", "*", &[("env", "{}")]).await;
+        assert!(xadd_result.is_ok(), "{name}: must be able to XADD onto waddles:usage (D31)");
+
+        let xrange_result: redis::RedisResult<Vec<redis::Value>> =
+            redis::cmd("XRANGE").arg("waddles:usage").arg("-").arg("+").query_async(&mut conn).await;
+        assert!(xrange_result.is_err(), "{name}: must not be able to XRANGE waddles:usage");
+
+        let xrevrange_result: redis::RedisResult<Vec<redis::Value>> =
+            redis::cmd("XREVRANGE").arg("waddles:usage").arg("+").arg("-").query_async(&mut conn).await;
+        assert!(xrevrange_result.is_err(), "{name}: must not be able to XREVRANGE waddles:usage");
+
+        let xreadgroup_result: redis::RedisResult<redis::Value> = redis::cmd("XREADGROUP")
+            .arg("GROUP")
+            .arg("some-group")
+            .arg("some-consumer")
+            .arg("STREAMS")
+            .arg("waddles:usage")
+            .arg(">")
+            .query_async(&mut conn)
+            .await;
+        assert!(xreadgroup_result.is_err(), "{name}: must not be able to XREADGROUP waddles:usage");
+
+        examined += 1;
+    }
+    assert_eq!(examined, stage_users.len(), "stage_users_examined must equal stage_users_in_matrix");
+    println!("waddles:usage xadd-only stage users examined: {examined}");
+}
+
+/// D31: only hub-api's ACL user may read `waddles:usage`.
+#[tokio::test]
+async fn only_hub_api_can_read_waddles_usage() {
+    let mut hub_api_conn = connect_as("hub-api", "test-hub-api-password").await.unwrap();
+    let hub_api_result: redis::RedisResult<Vec<redis::Value>> =
+        redis::cmd("XRANGE").arg("waddles:usage").arg("-").arg("+").query_async(&mut hub_api_conn).await;
+    assert!(hub_api_result.is_ok(), "hub-api must be able to XRANGE waddles:usage (D31)");
+
+    let hub_api_xadd_result: redis::RedisResult<String> =
+        hub_api_conn.xadd("waddles:usage", "*", &[("env", "{}")]).await;
+    assert!(hub_api_xadd_result.is_err(), "hub-api must never be able to XADD waddles:usage itself");
+
+    let mut svc_process_conn = connect_as("svc-process", "test-svc-process-password").await.unwrap();
+    let svc_process_result: redis::RedisResult<Vec<redis::Value>> = redis::cmd("XRANGE")
+        .arg("waddles:usage")
+        .arg("-")
+        .arg("+")
+        .query_async(&mut svc_process_conn)
+        .await;
+    assert!(svc_process_result.is_err(), "svc-process must not be able to XRANGE waddles:usage");
+}
 ```
 
 - [ ] **Step 6: Run and fix until green.**
 
 Run: `cd /home/penguin/code/penguin-libs/.worktrees/plan-penguin-spine && make test-integration-spine`
-Expected: the container comes up, `render_acl.py` prints `rendered 6 users to tests/valkey/users.acl`, all 6 tests in `acl_matrix_tests.rs` pass (plus `integration_stream_tests.rs`/`client_rules_tests.rs`, which exist as empty placeholders — `touch packages/rust-spine/tests/integration_stream_tests.rs packages/rust-spine/tests/client_rules_tests.rs` first if they don't exist yet at this point in plan execution, since Tasks 13-17 are what actually fill them in), and the container/network/`.tls/` are removed afterward.
+Expected: the container comes up, `render_acl.py` prints `rendered 6 users to tests/valkey/users.acl`, all 8 tests in `acl_matrix_tests.rs` pass -- including the two D31 tests proving every stage user is XADD-only on `waddles:usage` and only hub-api can read it back (plus `integration_stream_tests.rs`/`client_rules_tests.rs`, which exist as empty placeholders — `touch packages/rust-spine/tests/integration_stream_tests.rs packages/rust-spine/tests/client_rules_tests.rs` first if they don't exist yet at this point in plan execution, since Tasks 13-17 are what actually fill them in), and the container/network/`.tls/` are removed afterward.
 
 - [ ] **Step 7: Commit.**
 
@@ -3704,7 +4339,10 @@ patterns its role uses (no category grant "because it was easier"),
 plus an explicit executors_have_no_user statement. users.acl is
 rendered from it, never hand-edited. acl_matrix_tests.rs proves ACL
 LIST equals the matrix against a live pinned Valkey container, plus
-the five Sec11.10.2 negative tests.
+the five Sec11.10.2 negative tests and two D31 usage-metering tests:
+every stage user is +xadd-only on waddles:usage via a dedicated ACL
+selector (never widening its root grant), and only hub-api can read
+the stream back.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
@@ -3929,7 +4567,11 @@ fn sample_envelope() -> StageEnvelope {
         },
         "ts": "2026-09-14T12:00:00.123Z",
         "target_app_id": null,
-        "trace_context": null
+        "workstream_id": "8f14e45f-ceea-467e-adde-3fb5c9752730",
+        "event_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "session_id": null,
+        "trace": null,
+        "binding": {"kid": "test-kid", "mac": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
     });
     serde_json::from_value(json).unwrap()
 }
@@ -4144,6 +4786,7 @@ Spec: §5.3/§5.4 (`XACK`, `XAUTOCLAIM`, the redelivery cap at `SPINE_MAX_DELIVE
             tenant: d.env.tenant.clone(),
             community: d.env.community.clone(),
             app_id: d.env.app_id.clone(),
+            workstream_id: Some(d.env.workstream_id.clone()),
             artifact_digest: err.artifact_digest.clone(),
             consumer_id: err.consumer_id.clone(),
             deliveries: d.deliveries,
@@ -4154,7 +4797,7 @@ Spec: §5.3/§5.4 (`XACK`, `XAUTOCLAIM`, the redelivery cap at `SPINE_MAX_DELIVE
                 message: err.message.clone(),
                 detail: err.detail.clone(),
             },
-            trace_context: d.env.trace_context.clone(),
+            trace: d.env.trace.clone(),
             raw,
         };
         self.dead_letter_raw(stage, &record, &d.stream, &d.env.app_id, &d.entry_id).await
@@ -4205,6 +4848,7 @@ Spec: §5.3/§5.4 (`XACK`, `XAUTOCLAIM`, the redelivery cap at `SPINE_MAX_DELIVE
             tenant,
             community,
             app_id: app_id.to_string(),
+            workstream_id: None,
             artifact_digest: None,
             consumer_id: self.cfg.consumer_id.clone(),
             deliveries,
@@ -4215,7 +4859,7 @@ Spec: §5.3/§5.4 (`XACK`, `XAUTOCLAIM`, the redelivery cap at `SPINE_MAX_DELIVE
                 message: "strict deserialization failed".to_string(),
                 detail: None,
             },
-            trace_context: None,
+            trace: None,
             raw: raw_field.to_string(),
         };
         self.dead_letter_raw(stage, &record, stream, app_id, entry_id).await
@@ -4870,7 +5514,11 @@ fn sample_envelope() -> penguin_spine::StageEnvelope {
         "stage": "process",
         "event": {"platform": "twitch", "event_type": "chat.message", "actor": "u",
                    "payload": {}, "occurred_at": "2026-09-14T12:00:00.000Z"},
-        "ts": "2026-09-14T12:00:00.123Z", "target_app_id": null, "trace_context": null
+        "ts": "2026-09-14T12:00:00.123Z", "target_app_id": null,
+        "workstream_id": "8f14e45f-ceea-467e-adde-3fb5c9752730",
+        "event_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "session_id": null, "trace": null,
+        "binding": {"kid": "test-kid", "mac": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
     });
     serde_json::from_value(json).unwrap()
 }
@@ -5117,7 +5765,11 @@ fn sample_envelope() -> StageEnvelope {
         },
         "ts": "2026-09-14T12:00:00.123Z",
         "target_app_id": null,
-        "trace_context": null
+        "workstream_id": "8f14e45f-ceea-467e-adde-3fb5c9752730",
+        "event_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "session_id": null,
+        "trace": null,
+        "binding": {"kid": "test-kid", "mac": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
     });
     serde_json::from_value(json).unwrap()
 }
@@ -5222,7 +5874,1070 @@ EOF
 
 ---
 
-### Task 19: CI workflow, full README/CHANGELOG, final verification, self-review
+### Task 19: `binding` module — `BindingKeyring`, `compute_binding_mac`, `verify_binding`, `ScopeCheck`, `BoundaryError` (D30)
+
+**Files:**
+- Create: `packages/rust-spine/src/binding.rs`
+- Modify: `packages/rust-spine/src/lib.rs`
+
+**Interfaces:**
+- Consumes: `StageEnvelope`, `Trace`, `Binding`, `trace_id_from_traceparent` (Task 4), `Grant` (Task 13), `parse_scope_from_key` (Task 2), `DlqErrorKind`, `DlqError` (Task 5).
+- Produces: `BindingKeyEntry { key: Vec<u8>, retired_at: Option<chrono::DateTime<chrono::Utc>> }`, `BindingKeyring`, `BindingKeyring::{from_entries, load, signing_kid_and_key, verify_key_for}`, `BindingInput<'a> { tenant, community, workstream_id, event_id, trace_id }`, `compute_binding_mac(&BindingKeyring, &BindingInput<'_>) -> Binding`, `verify_binding(&BindingKeyring, &StageEnvelope) -> Result<(), BoundaryError>`, `ScopeCheck::{check_against_key, check_against_grant}`, `BoundaryError` (5 variants, `reason()`, `to_dlq_error()`), `RESERVED_IDENTITY_FIELDS`, `strip_bundle_identity_fields`. No later task in this plan consumes these — the stage binaries (M4/M5, out of this plan's scope) wire them into the read/dispatch path.
+
+Spec: §5.11 (full normative text: minting, `binding.mac` formula, verification-at-every-hop's four checks, key rotation with overlap window, "Bundles cannot move a workstream"), §6.1.2 (`Binding`/`Trace` shapes, already defined Task 4), §6.3 (`error.kind = "tenant_boundary"`, never retried), §14.11 (tests 1, 2, 4 — the tenant-mismatch-across-streams, bundle-set-identity, and tampered-MAC negative tests this task implements directly; test 3 is hub-api install-time + stage-runtime `routes_to` enforcement, out of this crate; tests 5-7 are cross-service e2e, out of this crate).
+
+- [ ] **Step 1: Write `packages/rust-spine/src/binding.rs`:**
+
+```rust
+//! D30: workstream identity, end-to-end trace, and the tenant wall (spec
+//! Sec5.11). `BindingKeyring` holds the symmetric HMAC keys named by
+//! `kid` (spec Sec12.3 `security.envelopeBinding.keySecretRef`) --
+//! **never held by hub-api, a bundle, or the compiler**, only the four
+//! Rust stage services. `compute_binding_mac`/`verify_binding` are the
+//! mint/check pair every stage runs before any other processing of an
+//! entry (spec Sec5.11 "Verification at every hop").
+
+use std::collections::HashMap;
+use std::path::Path;
+
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
+use hmac::{Hmac, Mac};
+use serde::Deserialize;
+use sha2::Sha256;
+use subtle::ConstantTimeEq;
+
+use crate::client::Grant;
+use crate::dlq::{DlqError, DlqErrorKind};
+use crate::envelope::{trace_id_from_traceparent, Binding, StageEnvelope};
+use crate::scope::parse_scope_from_key;
+
+type HmacSha256 = Hmac<Sha256>;
+
+/// One HMAC key version. `retired_at: None` means this is the currently
+/// active signing key (spec Sec5.11's "current kid"); `Some(t)` means it
+/// was retired at `t` and is still *verification*-eligible until
+/// `t + rotation_overlap` (spec Sec12.3 `rotationOverlapSeconds`), never
+/// used to mint a new MAC.
+#[derive(Clone)]
+pub struct BindingKeyEntry {
+    /// Raw key bytes. Never logged -- see this type's `Debug` impl.
+    pub key: Vec<u8>,
+    /// `None` = active (signs new MACs); `Some(t)` = retired at `t`.
+    pub retired_at: Option<DateTime<Utc>>,
+}
+
+impl std::fmt::Debug for BindingKeyEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BindingKeyEntry")
+            .field("key", &"[REDACTED]")
+            .field("retired_at", &self.retired_at)
+            .finish()
+    }
+}
+
+/// The set of `kid`-named HMAC keys a stage replica holds (spec Sec5.11,
+/// Sec12.3). Loaded once at startup from `WADDLES_BINDING_KEY_FILE` and
+/// never mutated; a rotation is a new deploy with a new file.
+#[derive(Clone)]
+pub struct BindingKeyring {
+    active_kid: String,
+    keys: HashMap<String, BindingKeyEntry>,
+    rotation_overlap: ChronoDuration,
+}
+
+impl std::fmt::Debug for BindingKeyring {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BindingKeyring")
+            .field("active_kid", &self.active_kid)
+            .field("known_kids", &self.keys.keys().collect::<Vec<_>>())
+            .field("rotation_overlap", &self.rotation_overlap)
+            .finish()
+    }
+}
+
+/// A `WADDLES_BINDING_KEY_FILE` entry (spec Sec12.7): `key_hex` is the
+/// raw HMAC key, hex-encoded; `retired_at`, when present, is an RFC 3339
+/// timestamp.
+#[derive(Debug, Deserialize)]
+struct RawKeyEntry {
+    key_hex: String,
+    #[serde(default)]
+    retired_at: Option<String>,
+}
+
+impl BindingKeyring {
+    /// Builds a keyring directly from decoded entries -- the primitive
+    /// [`BindingKeyring::load`] is built on, and what tests use to avoid
+    /// touching the filesystem.
+    pub fn from_entries(
+        active_kid: impl Into<String>,
+        entries: HashMap<String, BindingKeyEntry>,
+        rotation_overlap: ChronoDuration,
+    ) -> Result<Self, BoundaryError> {
+        let active_kid = active_kid.into();
+        match entries.get(&active_kid) {
+            Some(e) if e.retired_at.is_none() => Ok(BindingKeyring { active_kid, keys: entries, rotation_overlap }),
+            Some(_) => Err(BoundaryError::UnknownOrExpiredKid { kid: active_kid }),
+            None => Err(BoundaryError::UnknownOrExpiredKid { kid: active_kid }),
+        }
+    }
+
+    /// Loads `WADDLES_BINDING_KEY_FILE` (spec Sec12.7): a JSON object
+    /// `{"<kid>": {"key_hex": "...", "retired_at": "<rfc3339>"|null}, ...}`.
+    /// Never logs the file's contents -- only [`BoundaryError`] values,
+    /// which never carry key material, escape this function.
+    pub fn load(
+        path: &Path,
+        active_kid: impl Into<String>,
+        rotation_overlap: ChronoDuration,
+    ) -> Result<Self, BoundaryError> {
+        let text = std::fs::read_to_string(path)
+            .map_err(|_| BoundaryError::UnknownOrExpiredKid { kid: "<unreadable key file>".to_string() })?;
+        let raw: HashMap<String, RawKeyEntry> = serde_json::from_str(&text)
+            .map_err(|_| BoundaryError::UnknownOrExpiredKid { kid: "<malformed key file>".to_string() })?;
+
+        let mut entries = HashMap::with_capacity(raw.len());
+        for (kid, r) in raw {
+            let key = hex::decode(&r.key_hex)
+                .map_err(|_| BoundaryError::UnknownOrExpiredKid { kid: kid.clone() })?;
+            let retired_at = match r.retired_at {
+                None => None,
+                Some(s) => Some(
+                    DateTime::parse_from_rfc3339(&s)
+                        .map_err(|_| BoundaryError::UnknownOrExpiredKid { kid: kid.clone() })?
+                        .with_timezone(&Utc),
+                ),
+            };
+            entries.insert(kid, BindingKeyEntry { key, retired_at });
+        }
+        Self::from_entries(active_kid, entries, rotation_overlap)
+    }
+
+    /// The `(kid, key)` pair every new `binding.mac` is minted under
+    /// (spec Sec5.11: "always mints new MACs under the current `kid`").
+    pub fn signing_kid_and_key(&self) -> (&str, &[u8]) {
+        let entry = self.keys.get(&self.active_kid).expect(
+            "invariant: from_entries/load never construct a keyring whose active_kid is absent or retired",
+        );
+        (&self.active_kid, &entry.key)
+    }
+
+    /// The verification key for `kid`, if it is either the active key or
+    /// a retired key still inside its rotation-overlap window as of `now`
+    /// (spec Sec5.11: "a verifier accepts a MAC produced under any `kid`
+    /// still inside the overlap window"). `None` for an unknown kid, or a
+    /// retired kid whose overlap window has elapsed.
+    pub fn verify_key_for(&self, kid: &str, now: DateTime<Utc>) -> Option<&[u8]> {
+        let entry = self.keys.get(kid)?;
+        match entry.retired_at {
+            None => Some(&entry.key),
+            Some(retired_at) if now <= retired_at + self.rotation_overlap => Some(&entry.key),
+            Some(_) => None,
+        }
+    }
+}
+
+/// The exact field tuple spec Sec5.11's `binding.mac` formula names:
+/// `HMAC-SHA256(k_binding[kid], tenant || community || workstream_id ||
+/// event_id || trace_id)`, concatenated with no separator, per the
+/// formula as the spec states it.
+pub struct BindingInput<'a> {
+    /// The envelope's tenant slug.
+    pub tenant: &'a str,
+    /// The envelope's community slug, or `None` for tenant-wide.
+    pub community: Option<&'a str>,
+    /// The envelope's `workstream_id`.
+    pub workstream_id: &'a str,
+    /// The envelope's `event_id`.
+    pub event_id: &'a str,
+    /// The 32-hex trace-id segment of `trace.traceparent`.
+    pub trace_id: &'a str,
+}
+
+impl BindingInput<'_> {
+    fn concat(&self) -> String {
+        let community = self.community.unwrap_or(crate::scope::TENANT_WIDE_SEGMENT);
+        format!(
+            "{}{}{}{}{}",
+            self.tenant, community, self.workstream_id, self.event_id, self.trace_id
+        )
+    }
+}
+
+fn hmac_hex(key: &[u8], input: &str) -> String {
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC accepts a key of any length");
+    mac.update(input.as_bytes());
+    hex::encode(mac.finalize().into_bytes())
+}
+
+/// Mints a fresh `binding.mac` under the keyring's currently active `kid`
+/// (spec Sec5.11). Ingest calls this once per inbound event; no other
+/// stage mints, only verifies.
+pub fn compute_binding_mac(keyring: &BindingKeyring, input: &BindingInput<'_>) -> Binding {
+    let (kid, key) = keyring.signing_kid_and_key();
+    let mac = hmac_hex(key, &input.concat());
+    Binding { kid: kid.to_string(), mac }
+}
+
+/// Errors from `verify_binding`/`ScopeCheck` (spec Sec5.11's tenant wall,
+/// D30). Every variant is `error.kind = "tenant_boundary"` (spec Sec6.3):
+/// **never retried** -- see [`crate::DlqErrorKind::never_retry`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum BoundaryError {
+    /// The recomputed MAC did not match `binding.mac`.
+    #[error("binding.mac does not verify")]
+    MacMismatch,
+    /// `binding.kid` is unknown, or was retired outside its rotation
+    /// overlap window.
+    #[error("binding.kid {kid:?} is unknown or its rotation-overlap window has elapsed")]
+    UnknownOrExpiredKid {
+        /// The offending kid.
+        kid: String,
+    },
+    /// The envelope's `tenant` disagrees with the stream key's `t:`
+    /// segment (or a [`Grant`]'s).
+    #[error("envelope tenant does not match the stream/grant it was read from")]
+    TenantMismatch,
+    /// The envelope's `community` disagrees with the stream key's `c:`
+    /// segment (or a [`Grant`]'s).
+    #[error("envelope community does not match the stream/grant it was read from")]
+    CommunityMismatch,
+    /// `binding.mac` cannot be verified because the envelope carries no
+    /// `trace` -- ingest always mints one (spec Sec5.11), so its absence
+    /// here means a forged or malformed envelope, not a legitimate gap.
+    #[error("envelope has no trace; binding.mac cannot be verified without a trace_id")]
+    MissingTrace,
+}
+
+impl BoundaryError {
+    /// The `reason` label on `waddles_tenant_boundary_violations_total`
+    /// (spec Sec5.11) and the DLQ record's `error.code` basis.
+    pub fn reason(&self) -> &'static str {
+        match self {
+            BoundaryError::MacMismatch => "mac_mismatch",
+            BoundaryError::UnknownOrExpiredKid { .. } => "unknown_kid",
+            BoundaryError::TenantMismatch => "tenant_mismatch",
+            BoundaryError::CommunityMismatch => "community_mismatch",
+            BoundaryError::MissingTrace => "missing_trace",
+        }
+    }
+
+    /// Builds the [`DlqError`] a stage hands to `SpineClient::dead_letter`
+    /// for this failure -- always `DlqErrorKind::TenantBoundary` (spec
+    /// Sec6.3), never retried.
+    pub fn to_dlq_error(&self, consumer_id: String, artifact_digest: Option<String>) -> DlqError {
+        DlqError {
+            kind: DlqErrorKind::TenantBoundary,
+            code: self.reason().to_uppercase(),
+            message: self.to_string(),
+            detail: None,
+            artifact_digest,
+            consumer_id,
+        }
+    }
+}
+
+/// Verifies `env.binding.mac` against a freshly recomputed value (spec
+/// Sec5.11, check 1 of 4). Constant-time compare on the decoded MAC
+/// bytes -- a hex-decode failure is treated as a mismatch, never a panic
+/// or an early return that could leak timing information about *where*
+/// the mismatch was.
+pub fn verify_binding(keyring: &BindingKeyring, env: &StageEnvelope) -> Result<(), BoundaryError> {
+    let trace = env.trace.as_ref().ok_or(BoundaryError::MissingTrace)?;
+    let trace_id = trace_id_from_traceparent(&trace.traceparent).ok_or(BoundaryError::MissingTrace)?;
+
+    let key = keyring
+        .verify_key_for(&env.binding.kid, Utc::now())
+        .ok_or_else(|| BoundaryError::UnknownOrExpiredKid { kid: env.binding.kid.clone() })?;
+
+    let input = BindingInput {
+        tenant: &env.tenant,
+        community: env.community.as_deref(),
+        workstream_id: &env.workstream_id,
+        event_id: &env.event_id,
+        trace_id,
+    };
+    let expected_hex = hmac_hex(key, &input.concat());
+
+    let expected_bytes = hex::decode(&expected_hex).unwrap_or_default();
+    let actual_bytes = hex::decode(&env.binding.mac).unwrap_or_default();
+    // A length mismatch alone (e.g. actual_bytes empty from a decode
+    // failure) must still resolve through the constant-time path rather
+    // than short-circuiting on `.len()` first.
+    let equal = expected_bytes.len() == actual_bytes.len()
+        && bool::from(expected_bytes.ct_eq(&actual_bytes));
+    if equal {
+        Ok(())
+    } else {
+        Err(BoundaryError::MacMismatch)
+    }
+}
+
+/// Verifies that an envelope's tenant/community agree with the Valkey key
+/// (or [`Grant`]) it was read from (spec Sec5.11, checks 2-3 of 4). This
+/// crate's half of the check; the remaining half (install approval scope)
+/// lives in the stage binary alongside its own approval cache, out of
+/// this crate's scope.
+pub struct ScopeCheck;
+
+impl ScopeCheck {
+    /// Check 2: `env.tenant`/`env.community` equal the `t:`/`c:` segments
+    /// of the stream key the entry was read from.
+    pub fn check_against_key(env: &StageEnvelope, key: &str) -> Result<(), BoundaryError> {
+        let (tenant, community) = parse_scope_from_key(key).ok_or(BoundaryError::TenantMismatch)?;
+        if env.tenant != tenant {
+            return Err(BoundaryError::TenantMismatch);
+        }
+        if env.community != community {
+            return Err(BoundaryError::CommunityMismatch);
+        }
+        Ok(())
+    }
+
+    /// Check 3: `env.tenant`/`env.community` equal the tenant/community
+    /// implied by the [`Grant`] (its stream's key) the bundle was
+    /// permitted to read.
+    pub fn check_against_grant(env: &StageEnvelope, grant: &Grant) -> Result<(), BoundaryError> {
+        Self::check_against_key(env, &grant.stream)
+    }
+}
+
+/// The envelope-identity fields a process bundle's `transform` output can
+/// never set (spec Sec5.11 "Bundles cannot move a workstream") -- the
+/// stage copies these from the *input* envelope onto the output
+/// unconditionally, never reading them from bundle output.
+pub const RESERVED_IDENTITY_FIELDS: [&str; 5] =
+    ["tenant_id", "community_id", "workstream_id", "event_id", "trace"];
+
+/// Removes the first [`RESERVED_IDENTITY_FIELDS`] key present in a
+/// process bundle's returned payload, if any, and returns its name so the
+/// caller can increment `waddles_tenant_boundary_violations_total{stage=
+/// "process",reason="bundle_set_identity"}` (spec Sec5.11). This is
+/// deliberately **not** a hard failure: the event is not dropped, only
+/// the offending field -- the stage's own copy of the input envelope's
+/// identity fields is authoritative regardless.
+pub fn strip_bundle_identity_fields(payload: &mut serde_json::Map<String, serde_json::Value>) -> Option<&'static str> {
+    for field in RESERVED_IDENTITY_FIELDS {
+        if payload.remove(field).is_some() {
+            return Some(field);
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+    use serde_json::json;
+
+    fn keyring_with(active_kid: &str, key: &[u8], retired: Vec<(&str, &[u8], DateTime<Utc>)>) -> BindingKeyring {
+        let mut entries = HashMap::new();
+        entries.insert(active_kid.to_string(), BindingKeyEntry { key: key.to_vec(), retired_at: None });
+        for (kid, k, retired_at) in retired {
+            entries.insert(kid.to_string(), BindingKeyEntry { key: k.to_vec(), retired_at: Some(retired_at) });
+        }
+        BindingKeyring::from_entries(active_kid, entries, ChronoDuration::seconds(86_400)).unwrap()
+    }
+
+    fn valid_envelope_json() -> serde_json::Value {
+        json!({
+            "schema_version": 2,
+            "tenant": "acme",
+            "community": "main",
+            "app_id": "waddles.bot.commands.default",
+            "stage": "process",
+            "event": {
+                "platform": "twitch", "event_type": "chat.message", "actor": "u",
+                "payload": {}, "occurred_at": "2026-09-14T12:00:00.000Z"
+            },
+            "ts": "2026-09-14T12:00:00.123Z",
+            "target_app_id": null,
+            "workstream_id": "8f14e45f-ceea-467e-adde-3fb5c9752730",
+            "event_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "session_id": null,
+            "trace": {"traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", "tracestate": null},
+            "binding": {"kid": "2026-09", "mac": "0".repeat(64)}
+        })
+    }
+
+    fn signed_envelope(keyring: &BindingKeyring, tenant: &str, community: Option<&str>) -> StageEnvelope {
+        let mut v = valid_envelope_json();
+        v["tenant"] = json!(tenant);
+        v["community"] = match community {
+            Some(c) => json!(c),
+            None => serde_json::Value::Null,
+        };
+        let input = BindingInput {
+            tenant,
+            community,
+            workstream_id: v["workstream_id"].as_str().unwrap(),
+            event_id: v["event_id"].as_str().unwrap(),
+            trace_id: "4bf92f3577b34da6a3ce929d0e0e4736",
+        };
+        let binding = compute_binding_mac(keyring, &input);
+        v["binding"] = json!({"kid": binding.kid, "mac": binding.mac});
+        serde_json::from_value(v).unwrap()
+    }
+
+    #[test]
+    fn compute_and_verify_round_trip_succeeds() {
+        let keyring = keyring_with("2026-09", &[1u8; 32], vec![]);
+        let env = signed_envelope(&keyring, "acme", Some("main"));
+        assert!(verify_binding(&keyring, &env).is_ok());
+    }
+
+    #[test]
+    fn tampered_mac_is_rejected() {
+        let keyring = keyring_with("2026-09", &[1u8; 32], vec![]);
+        let mut env = signed_envelope(&keyring, "acme", Some("main"));
+        let mut mac_bytes = hex::decode(&env.binding.mac).unwrap();
+        mac_bytes[0] ^= 0xFF; // flip one byte
+        env.binding.mac = hex::encode(mac_bytes);
+        assert_eq!(verify_binding(&keyring, &env), Err(BoundaryError::MacMismatch));
+    }
+
+    #[test]
+    fn unknown_kid_is_rejected() {
+        let keyring = keyring_with("2026-09", &[1u8; 32], vec![]);
+        let mut env = signed_envelope(&keyring, "acme", Some("main"));
+        env.binding.kid = "does-not-exist".to_string();
+        let err = verify_binding(&keyring, &env).unwrap_err();
+        assert_eq!(err, BoundaryError::UnknownOrExpiredKid { kid: "does-not-exist".to_string() });
+        assert_eq!(err.reason(), "unknown_kid");
+    }
+
+    #[test]
+    fn rotated_key_accepted_within_overlap_window_and_refused_after() {
+        let old_key = [2u8; 32];
+        let new_key = [3u8; 32];
+        // Retired 10 seconds ago, 1-hour overlap -- still inside the window.
+        let mut entries = HashMap::new();
+        entries.insert("2026-09".to_string(), BindingKeyEntry { key: new_key.to_vec(), retired_at: None });
+        entries.insert(
+            "2026-08".to_string(),
+            BindingKeyEntry { key: old_key.to_vec(), retired_at: Some(Utc::now() - ChronoDuration::seconds(10)) },
+        );
+        let keyring_within = BindingKeyring::from_entries("2026-09", entries.clone(), ChronoDuration::seconds(3600)).unwrap();
+
+        // An envelope signed under the *old* (retired) key/kid.
+        let input = BindingInput {
+            tenant: "acme", community: Some("main"),
+            workstream_id: "8f14e45f-ceea-467e-adde-3fb5c9752730",
+            event_id: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            trace_id: "4bf92f3577b34da6a3ce929d0e0e4736",
+        };
+        let mac = hmac_hex(&old_key, &input.concat());
+        let mut v = valid_envelope_json();
+        v["binding"] = json!({"kid": "2026-08", "mac": mac});
+        let env: StageEnvelope = serde_json::from_value(v).unwrap();
+
+        assert!(verify_binding(&keyring_within, &env).is_ok(), "must accept a retired kid within its overlap window");
+
+        // Same key file, but retired 2 hours ago against a 1-hour overlap
+        // -- outside the window now.
+        let mut expired_entries = entries;
+        expired_entries.insert(
+            "2026-08".to_string(),
+            BindingKeyEntry { key: old_key.to_vec(), retired_at: Some(Utc::now() - ChronoDuration::seconds(7_200)) },
+        );
+        let keyring_expired = BindingKeyring::from_entries("2026-09", expired_entries, ChronoDuration::seconds(3600)).unwrap();
+        let err = verify_binding(&keyring_expired, &env).unwrap_err();
+        assert_eq!(err, BoundaryError::UnknownOrExpiredKid { kid: "2026-08".to_string() });
+    }
+
+    #[test]
+    fn missing_trace_is_rejected() {
+        let keyring = keyring_with("2026-09", &[1u8; 32], vec![]);
+        let mut v = valid_envelope_json();
+        v["trace"] = serde_json::Value::Null;
+        v["binding"] = json!({"kid": "2026-09", "mac": "0".repeat(64)});
+        let env: StageEnvelope = serde_json::from_value(v).unwrap();
+        assert_eq!(verify_binding(&keyring, &env), Err(BoundaryError::MissingTrace));
+    }
+
+    #[test]
+    fn scope_check_against_key_matches_tenant_and_community() {
+        let keyring = keyring_with("2026-09", &[1u8; 32], vec![]);
+        let env = signed_envelope(&keyring, "acme", Some("main"));
+        assert!(ScopeCheck::check_against_key(&env, "waddles:t:acme:c:main:src:twitch:tw-a:events").is_ok());
+    }
+
+    #[test]
+    fn scope_check_against_key_rejects_a_different_tenant_stream() {
+        // spec Sec14.11 test 1: a valid MAC for the envelope's OWN tenant,
+        // read from a DIFFERENT tenant's stream key.
+        let keyring = keyring_with("2026-09", &[1u8; 32], vec![]);
+        let env = signed_envelope(&keyring, "acme", Some("main"));
+        assert!(verify_binding(&keyring, &env).is_ok(), "the MAC itself is valid for acme/main");
+        let err = ScopeCheck::check_against_key(&env, "waddles:t:other-tenant:c:main:src:twitch:tw-a:events")
+            .unwrap_err();
+        assert_eq!(err, BoundaryError::TenantMismatch);
+        assert_eq!(err.reason(), "tenant_mismatch");
+    }
+
+    #[test]
+    fn scope_check_against_key_rejects_a_different_community() {
+        let keyring = keyring_with("2026-09", &[1u8; 32], vec![]);
+        let env = signed_envelope(&keyring, "acme", Some("main"));
+        let err = ScopeCheck::check_against_key(&env, "waddles:t:acme:c:other:src:twitch:tw-a:events").unwrap_err();
+        assert_eq!(err, BoundaryError::CommunityMismatch);
+    }
+
+    #[test]
+    fn scope_check_against_grant_delegates_to_check_against_key() {
+        let keyring = keyring_with("2026-09", &[1u8; 32], vec![]);
+        let env = signed_envelope(&keyring, "acme", Some("main"));
+        let grant = Grant {
+            stream: "waddles:t:acme:c:main:src:twitch:tw-a:events".to_string(),
+            platform: "twitch".to_string(),
+            source_id: "tw-a".to_string(),
+        };
+        assert!(ScopeCheck::check_against_grant(&env, &grant).is_ok());
+
+        let mismatched_grant = Grant { stream: "waddles:t:other:c:main:src:twitch:tw-a:events".to_string(), ..grant };
+        assert_eq!(ScopeCheck::check_against_grant(&env, &mismatched_grant), Err(BoundaryError::TenantMismatch));
+    }
+
+    #[test]
+    fn strip_bundle_identity_fields_removes_and_reports_the_first_reserved_key() {
+        let mut payload = serde_json::Map::new();
+        payload.insert("text".to_string(), json!("hello"));
+        payload.insert("workstream_id".to_string(), json!("attacker-supplied"));
+        payload.insert("tenant_id".to_string(), json!("attacker-supplied"));
+
+        let removed = strip_bundle_identity_fields(&mut payload);
+        // RESERVED_IDENTITY_FIELDS order is fixed; tenant_id precedes
+        // workstream_id in that array, so it is found and removed first.
+        assert_eq!(removed, Some("tenant_id"));
+        assert!(!payload.contains_key("tenant_id"));
+        assert!(payload.contains_key("workstream_id"), "only the first match is removed per call");
+        assert!(payload.contains_key("text"));
+    }
+
+    #[test]
+    fn strip_bundle_identity_fields_is_none_when_nothing_reserved_is_present() {
+        let mut payload = serde_json::Map::new();
+        payload.insert("text".to_string(), json!("hello"));
+        assert_eq!(strip_bundle_identity_fields(&mut payload), None);
+    }
+
+    #[test]
+    fn boundary_error_to_dlq_error_is_always_tenant_boundary_and_never_retried() {
+        let err = BoundaryError::MacMismatch;
+        let dlq_err = err.to_dlq_error("svc-process-abc".to_string(), Some("sha256:aaaa".to_string()));
+        assert_eq!(dlq_err.kind, DlqErrorKind::TenantBoundary);
+        assert!(dlq_err.kind.never_retry());
+        assert_eq!(dlq_err.code, "MAC_MISMATCH");
+        assert_eq!(dlq_err.consumer_id, "svc-process-abc");
+    }
+
+    #[test]
+    fn binding_keyring_debug_never_prints_key_bytes() {
+        let keyring = keyring_with("2026-09", b"super-secret-key-material-32byte", vec![]);
+        let rendered = format!("{keyring:?}");
+        assert!(!rendered.contains("super-secret-key-material-32byte"));
+        assert!(rendered.contains("REDACTED"));
+    }
+
+    #[test]
+    fn from_entries_rejects_an_active_kid_that_is_itself_marked_retired() {
+        let mut entries = HashMap::new();
+        entries.insert(
+            "2026-09".to_string(),
+            BindingKeyEntry { key: vec![1; 32], retired_at: Some(Utc::now()) },
+        );
+        let err = BindingKeyring::from_entries("2026-09", entries, ChronoDuration::seconds(60)).unwrap_err();
+        assert_eq!(err, BoundaryError::UnknownOrExpiredKid { kid: "2026-09".to_string() });
+    }
+}
+```
+
+- [ ] **Step 2: Run and fix until green.**
+
+Run: `docker run --rm -v "$(pwd)/packages/rust-spine:/work" -w /work rust:1.97.1 cargo test --lib binding::`
+Expected: `test result: ok. 14 passed; 0 failed`
+
+- [ ] **Step 3: Activate the `lib.rs` export:**
+
+```rust
+mod binding;
+pub use binding::{
+    compute_binding_mac, strip_bundle_identity_fields, verify_binding, BindingInput,
+    BindingKeyEntry, BindingKeyring, BoundaryError, ScopeCheck, RESERVED_IDENTITY_FIELDS,
+};
+```
+
+(Add `mod binding;` alongside the other `mod` declarations near the top of `lib.rs`, and the `pub use` line alongside the others.)
+
+- [ ] **Step 4: Run the full suite and confirm green.**
+
+Run: `docker run --rm -v "$(pwd)/packages/rust-spine:/work" -w /work rust:1.97.1 cargo test`
+Expected: `test result: ok.` across every module, no failures.
+
+- [ ] **Step 5: Commit.**
+
+```bash
+git add packages/rust-spine/src/binding.rs packages/rust-spine/src/lib.rs
+git commit -m "$(cat <<'EOF'
+feat(spine): add the D30 binding module -- BindingKeyring, compute/
+verify_binding, ScopeCheck, BoundaryError
+
+Implements spec Sec5.11's tenant wall: BindingKeyring holds kid-named
+HMAC keys with a rotation-overlap acceptance window; compute_binding_
+mac/verify_binding mint and check binding.mac over exactly the fields
+the spec's formula names; ScopeCheck proves envelope tenant/community
+match the stream key or Grant an entry was read from; strip_bundle_
+identity_fields enforces "bundles cannot move a workstream" by
+dropping (never trusting) a bundle-supplied identity field. Every
+BoundaryError maps to DlqErrorKind::TenantBoundary (never retried).
+Negative tests: cross-tenant stream read, tampered MAC, unknown kid,
+and key-rotation overlap acceptance/expiry (spec Sec14.11 tests 1/2/4).
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
+EOF
+)"
+```
+
+---
+
+---
+
+### Task 20: `waddles:usage` — `UsageDelta`, `HostCallCounts`, `UsageBatcher`, `SpineClient::append_usage` (D31)
+
+**Files:**
+- Create: `packages/rust-spine/src/usage.rs`
+- Modify: `packages/rust-spine/src/client.rs`, `packages/rust-spine/src/lib.rs`, `packages/rust-spine/tests/integration_stream_tests.rs`
+
+**Interfaces:**
+- Consumes: `SpineClient`, `SpineError` (Task 13).
+- Produces: `USAGE_STREAM_KEY: &str = "waddles:usage"`, `HostCallCounts { http, kv, db, relay, flags, log }`, `HostCallKind` (6 variants), `UsageDelta { tenant_id, community_id, workstream_id, stage, app_id, events, invocations, host_calls, fuel_ms, actions_delivered, outbound_bytes, media_minutes }`, `UsageDelta::zero(...)`, `UsageBatcher { record, flush, is_empty }`, `SpineClient::append_usage(&self, delta: &UsageDelta) -> Result<String, SpineError>`. No later task in this plan consumes these — the stage binaries (M4/M5, out of this plan's scope) call `UsageBatcher::record` at every host-call/invocation/event point and flush on a `METERING_FLUSH_INTERVAL_S` timer.
+
+Spec: §5.12 (full normative text: what is recorded, per-stage-replica batching at `METERING_FLUSH_INTERVAL_S` default `10`, stages are write-only), §6.2 (`waddles:usage` key row: stream, `MAXLEN ~ SPINE_STREAM_MAXLEN`, written by every stage batched, read by hub-api's aggregator only), §11.10.2 (every stage user's grant is `+xadd`-only on this stream, implemented as an ACL selector in Task 12), §12.3/§12.7 (`metering.enabled`/`METERING_ENABLED` default `true`, `metering.flushIntervalSeconds`/`METERING_FLUSH_INTERVAL_S` default `10`), §13.1 ("usage is never an OTel metric label" — `workstream_id`/`app_id` are high-cardinality by design, this module's data never reaches `SpineMetrics`).
+
+- [ ] **Step 1: Write `packages/rust-spine/src/usage.rs`:**
+
+```rust
+//! D31: workstream usage metering (spec Sec5.12). Every stage batches
+//! deltas in-process via [`UsageBatcher`] and flushes them onto
+//! `waddles:usage` (spec Sec6.2) at most every `METERING_FLUSH_INTERVAL_S`
+//! -- never per event, so a chatty channel does not multiply the write
+//! rate. Stages are write-only on this stream (spec Sec11.10.2, enforced
+//! in Task 12's ACL matrix): this module never reads it back. `hub-api`'s
+//! usage aggregator (out of this crate's scope) owns the read side.
+
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+use serde::{Deserialize, Serialize};
+
+/// The single global stream every stage batches usage deltas onto (spec
+/// Sec6.2) -- unlike every other key this crate builds, this one is
+/// **not** tenant/community scoped: usage rows carry their own
+/// `tenant_id`/`community_id` fields instead, since one stream is what
+/// lets hub-api's aggregator drain a single source rather than fan out
+/// across every tenant's key space.
+pub const USAGE_STREAM_KEY: &str = "waddles:usage";
+
+/// Which host-call capability a delta's count belongs to (spec Sec5.12's
+/// "host calls by kind" — `context`/`clock` are not counted: `context` is
+/// built once per invocation rather than called, and `clock` is a local
+/// read with no host round-trip).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostCallKind {
+    /// The `http` host capability.
+    Http,
+    /// The `kv` host capability.
+    Kv,
+    /// The `db` host capability.
+    Db,
+    /// The `relay` host capability.
+    Relay,
+    /// The `flags` host capability.
+    Flags,
+    /// The `log` host capability.
+    Log,
+}
+
+/// Host-call counts broken out by capability kind (spec Sec5.12).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostCallCounts {
+    /// `http` host calls.
+    pub http: u64,
+    /// `kv` host calls.
+    pub kv: u64,
+    /// `db` host calls.
+    pub db: u64,
+    /// `relay` host calls.
+    pub relay: u64,
+    /// `flags` host calls.
+    pub flags: u64,
+    /// `log` host calls.
+    pub log: u64,
+}
+
+impl HostCallCounts {
+    /// +1 to the counter for `kind`.
+    pub fn increment(&mut self, kind: HostCallKind) {
+        match kind {
+            HostCallKind::Http => self.http += 1,
+            HostCallKind::Kv => self.kv += 1,
+            HostCallKind::Db => self.db += 1,
+            HostCallKind::Relay => self.relay += 1,
+            HostCallKind::Flags => self.flags += 1,
+            HostCallKind::Log => self.log += 1,
+        }
+    }
+
+    /// Adds `other`'s counts into `self`, field-wise.
+    pub fn add(&mut self, other: &HostCallCounts) {
+        self.http += other.http;
+        self.kv += other.kv;
+        self.db += other.db;
+        self.relay += other.relay;
+        self.flags += other.flags;
+        self.log += other.log;
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct UsageKey {
+    tenant_id: String,
+    community_id: Option<String>,
+    workstream_id: String,
+    stage: String,
+    app_id: Option<String>,
+}
+
+/// One usage row, keyed by `(tenant_id, community_id, workstream_id,
+/// stage, app_id)` (spec Sec5.12) -- the exact shape `XADD`ed onto
+/// [`USAGE_STREAM_KEY`] and, on the hub-api side (out of this crate's
+/// scope), aggregated hourly into `workstream_usage_hourly` (spec
+/// Sec6.12). Field order matches the natural read order of spec Sec5.12's
+/// own prose ("events, bundle invocations, ... host calls ..., actions
+/// delivered, outbound bytes, and ... stream-media minutes").
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UsageDelta {
+    /// The tenant this usage belongs to.
+    pub tenant_id: String,
+    /// The community, or `None` for a tenant-wide workstream.
+    pub community_id: Option<String>,
+    /// Which workstream (spec Sec5.11, Sec6.11) this usage belongs to.
+    pub workstream_id: String,
+    /// `"ingest"` \| `"process"` \| `"action"` \| `"streaming"`.
+    pub stage: String,
+    /// `None` for ingest-stage rows, which have no bundle (spec Sec6.12).
+    pub app_id: Option<String>,
+    /// Events ingested/processed in this window.
+    pub events: u64,
+    /// Bundle invocations in this window.
+    pub invocations: u64,
+    /// Host calls by kind (spec Sec7.2/Sec7.3's per-call accounting).
+    pub host_calls: HostCallCounts,
+    /// Bundle fuel/CPU-ms, from the executor's per-call accounting.
+    pub fuel_ms: u64,
+    /// Actions delivered to a platform in this window.
+    pub actions_delivered: u64,
+    /// Outbound bytes sent in this window.
+    pub outbound_bytes: u64,
+    /// svc-streaming-only: stream-media minutes. `None` for every other stage.
+    pub media_minutes: Option<f64>,
+}
+
+impl UsageDelta {
+    /// A zeroed delta for the given key -- the starting point
+    /// [`UsageBatcher`] accumulates into.
+    pub fn zero(
+        tenant_id: impl Into<String>,
+        community_id: Option<String>,
+        workstream_id: impl Into<String>,
+        stage: impl Into<String>,
+        app_id: Option<String>,
+    ) -> Self {
+        UsageDelta {
+            tenant_id: tenant_id.into(),
+            community_id,
+            workstream_id: workstream_id.into(),
+            stage: stage.into(),
+            app_id,
+            events: 0,
+            invocations: 0,
+            host_calls: HostCallCounts::default(),
+            fuel_ms: 0,
+            actions_delivered: 0,
+            outbound_bytes: 0,
+            media_minutes: None,
+        }
+    }
+
+    fn key(&self) -> UsageKey {
+        UsageKey {
+            tenant_id: self.tenant_id.clone(),
+            community_id: self.community_id.clone(),
+            workstream_id: self.workstream_id.clone(),
+            stage: self.stage.clone(),
+            app_id: self.app_id.clone(),
+        }
+    }
+
+    fn merge_from(&mut self, other: &UsageDelta) {
+        self.events += other.events;
+        self.invocations += other.invocations;
+        self.host_calls.add(&other.host_calls);
+        self.fuel_ms += other.fuel_ms;
+        self.actions_delivered += other.actions_delivered;
+        self.outbound_bytes += other.outbound_bytes;
+        self.media_minutes = match (self.media_minutes, other.media_minutes) {
+            (None, None) => None,
+            (a, b) => Some(a.unwrap_or(0.0) + b.unwrap_or(0.0)),
+        };
+    }
+}
+
+/// In-process accumulator every stage replica holds, keyed by `(tenant_id,
+/// community_id, workstream_id, stage, app_id)` (spec Sec5.12). `record`
+/// is cheap and non-blocking (a mutex-guarded `HashMap` insert); a
+/// background timer tick calls `flush` at most every
+/// `METERING_FLUSH_INTERVAL_S` and hands each drained delta to
+/// [`crate::SpineClient::append_usage`].
+#[derive(Default)]
+pub struct UsageBatcher {
+    deltas: Mutex<HashMap<UsageKey, UsageDelta>>,
+}
+
+impl UsageBatcher {
+    /// A fresh, empty batcher.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Accumulates `delta` into the in-memory batch. Multiple `record`
+    /// calls for the same key within one flush interval are summed into
+    /// one row -- this is what keeps a chatty channel from multiplying
+    /// the `XADD` rate (spec Sec5.12).
+    pub fn record(&self, delta: UsageDelta) {
+        let mut deltas = self.deltas.lock().expect("UsageBatcher mutex poisoned");
+        let key = delta.key();
+        deltas
+            .entry(key)
+            .or_insert_with(|| {
+                UsageDelta::zero(
+                    delta.tenant_id.clone(),
+                    delta.community_id.clone(),
+                    delta.workstream_id.clone(),
+                    delta.stage.clone(),
+                    delta.app_id.clone(),
+                )
+            })
+            .merge_from(&delta);
+    }
+
+    /// Drains every delta accumulated since the last flush. The caller
+    /// hands each to [`crate::SpineClient::append_usage`]; a delta is
+    /// gone from the batch the moment `flush` returns, regardless of
+    /// whether the subsequent `XADD` succeeds -- a caller wanting
+    /// at-least-once delivery on its own write failure should `record`
+    /// the delta again rather than relying on this method to retry.
+    pub fn flush(&self) -> Vec<UsageDelta> {
+        let mut deltas = self.deltas.lock().expect("UsageBatcher mutex poisoned");
+        deltas.drain().map(|(_, v)| v).collect()
+    }
+
+    /// `true` when nothing has been recorded since the last flush --
+    /// lets a caller skip an empty flush tick's `XADD` entirely.
+    pub fn is_empty(&self) -> bool {
+        self.deltas.lock().expect("UsageBatcher mutex poisoned").is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+
+    fn sample(events: u64, invocations: u64) -> UsageDelta {
+        let mut d = UsageDelta::zero("acme", Some("main".to_string()), "ws-1", "process", Some("waddles.bot.commands.default".to_string()));
+        d.events = events;
+        d.invocations = invocations;
+        d
+    }
+
+    #[test]
+    fn host_call_counts_increment_and_add() {
+        let mut counts = HostCallCounts::default();
+        counts.increment(HostCallKind::Http);
+        counts.increment(HostCallKind::Http);
+        counts.increment(HostCallKind::Db);
+        assert_eq!(counts, HostCallCounts { http: 2, db: 1, ..Default::default() });
+
+        let mut total = HostCallCounts::default();
+        total.add(&counts);
+        total.add(&counts);
+        assert_eq!(total, HostCallCounts { http: 4, db: 2, ..Default::default() });
+    }
+
+    #[test]
+    fn zero_delta_has_every_counter_at_zero() {
+        let d = UsageDelta::zero("acme", None, "ws-1", "ingest", None);
+        assert_eq!(d.events, 0);
+        assert_eq!(d.invocations, 0);
+        assert_eq!(d.host_calls, HostCallCounts::default());
+        assert_eq!(d.media_minutes, None);
+        assert_eq!(d.community_id, None);
+        assert_eq!(d.app_id, None);
+    }
+
+    #[test]
+    fn batcher_sums_records_sharing_the_same_key() {
+        let batcher = UsageBatcher::new();
+        batcher.record(sample(3, 1));
+        batcher.record(sample(2, 1));
+        let flushed = batcher.flush();
+        assert_eq!(flushed.len(), 1, "same key must merge into one row");
+        assert_eq!(flushed[0].events, 5);
+        assert_eq!(flushed[0].invocations, 2);
+    }
+
+    #[test]
+    fn batcher_keeps_different_keys_separate() {
+        let batcher = UsageBatcher::new();
+        batcher.record(sample(1, 0));
+        let mut other = sample(1, 0);
+        other.app_id = Some("waddles.bot.other.default".to_string());
+        batcher.record(other);
+        let flushed = batcher.flush();
+        assert_eq!(flushed.len(), 2, "different app_id must be a different row");
+    }
+
+    #[test]
+    fn flush_drains_and_clears_the_batch() {
+        let batcher = UsageBatcher::new();
+        batcher.record(sample(1, 1));
+        assert!(!batcher.is_empty());
+        let first_flush = batcher.flush();
+        assert_eq!(first_flush.len(), 1);
+        assert!(batcher.is_empty());
+        assert_eq!(batcher.flush().len(), 0, "a second flush with nothing recorded in between must be empty");
+    }
+
+    #[test]
+    fn media_minutes_merges_as_sum_and_stays_none_when_both_absent() {
+        let batcher = UsageBatcher::new();
+        let mut a = UsageDelta::zero("acme", None, "ws-1", "streaming", None);
+        a.media_minutes = Some(2.5);
+        let mut b = UsageDelta::zero("acme", None, "ws-1", "streaming", None);
+        b.media_minutes = Some(1.5);
+        batcher.record(a);
+        batcher.record(b);
+        let flushed = batcher.flush();
+        assert_eq!(flushed[0].media_minutes, Some(4.0));
+
+        let batcher2 = UsageBatcher::new();
+        batcher2.record(sample(1, 0)); // media_minutes: None by default
+        assert_eq!(batcher2.flush()[0].media_minutes, None);
+    }
+
+    #[test]
+    fn usage_delta_round_trips_through_json() {
+        let d = sample(5, 2);
+        let json = serde_json::to_string(&d).unwrap();
+        let back: UsageDelta = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, d);
+    }
+}
+```
+
+- [ ] **Step 2: Add `SpineClient::append_usage` to `packages/rust-spine/src/client.rs`** (append inside the existing `impl SpineClient` block, and add `use crate::usage::{UsageDelta, USAGE_STREAM_KEY};` to the file's imports):
+
+```rust
+    /// `XADD`s one usage delta onto [`crate::USAGE_STREAM_KEY`]
+    /// (`waddles:usage`, spec Sec5.12/Sec6.2, D31), `MAXLEN ~` bounded
+    /// exactly like every other stream this crate writes. Every stage is
+    /// **write-only** here (spec Sec11.10.2, Task 12's ACL selector) --
+    /// this method never reads the stream back; hub-api's aggregator
+    /// owns that side.
+    pub async fn append_usage(&self, delta: &UsageDelta) -> Result<String, SpineError> {
+        let json = serde_json::to_string(delta)?;
+        let mut conn = self.conn.clone();
+        let maxlen = StreamMaxlen::Approx(self.cfg.stream_maxlen as usize);
+        let id: Option<String> = conn
+            .xadd_maxlen(USAGE_STREAM_KEY, maxlen, "*", &[("env", json.as_str())])
+            .await?;
+        id.ok_or_else(|| SpineError::Config("XADD to waddles:usage returned no entry id".to_string()))
+    }
+```
+
+- [ ] **Step 3: Append an integration test to `packages/rust-spine/tests/integration_stream_tests.rs`:**
+
+```rust
+#[tokio::test]
+async fn append_usage_writes_a_usage_delta_and_returns_an_entry_id() {
+    use penguin_spine::{HostCallCounts, UsageDelta};
+    let client = test_client().await;
+    let mut delta = UsageDelta::zero(
+        "acme",
+        Some("main".to_string()),
+        uuid::Uuid::new_v4().to_string(),
+        "process",
+        Some("waddles.bot.commands.default".to_string()),
+    );
+    delta.events = 3;
+    delta.invocations = 3;
+    delta.host_calls = HostCallCounts { http: 1, kv: 2, ..Default::default() };
+
+    let id = client.append_usage(&delta).await.unwrap();
+    assert!(id.contains('-'), "a Valkey stream entry id looks like {{ms}}-{{seq}}, got {id:?}");
+}
+```
+
+- [ ] **Step 4: Run and fix until green.**
+
+Run: `docker run --rm -v "$(pwd)/packages/rust-spine:/work" -w /work rust:1.97.1 cargo test --lib usage::`
+Expected: `test result: ok. 7 passed; 0 failed`
+
+Run: `cd /home/penguin/code/penguin-libs/.worktrees/plan-penguin-spine && make test-integration-spine`
+Expected: `append_usage_writes_a_usage_delta_and_returns_an_entry_id ... ok` among the output.
+
+- [ ] **Step 5: Activate the `lib.rs` export:**
+
+```rust
+mod usage;
+pub use usage::{HostCallCounts, HostCallKind, UsageBatcher, UsageDelta, USAGE_STREAM_KEY};
+```
+
+(Add `mod usage;` alongside the other `mod` declarations, and the `pub use` line alongside the others.)
+
+- [ ] **Step 6: Run the full suite and confirm green.**
+
+Run: `docker run --rm -v "$(pwd)/packages/rust-spine:/work" -w /work rust:1.97.1 cargo test`
+Expected: `test result: ok.` across every module, no failures.
+
+- [ ] **Step 7: Commit.**
+
+```bash
+git add packages/rust-spine/src/usage.rs packages/rust-spine/src/client.rs packages/rust-spine/src/lib.rs packages/rust-spine/tests/integration_stream_tests.rs
+git commit -m "$(cat <<'EOF'
+feat(spine): add D31 workstream usage metering -- UsageDelta,
+UsageBatcher, SpineClient::append_usage
+
+UsageBatcher accumulates deltas per (tenant_id, community_id,
+workstream_id, stage, app_id) in-process and flushes at most every
+METERING_FLUSH_INTERVAL_S; append_usage XADDs one delta onto
+waddles:usage, MAXLEN ~ bounded like every other stream. Stages are
+write-only on this stream (Task 12's ACL selector) -- this crate never
+reads it back; hub-api's aggregator (workstream_usage_hourly, out of
+this plan's scope) owns that side.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
+EOF
+)"
+```
+
+---
+
+### Task 21: CI workflow, full README/CHANGELOG, final verification, self-review
 
 **Files:**
 - Create: `/home/penguin/code/penguin-libs/.github/workflows/rust-spine.yml`
@@ -5358,6 +7073,7 @@ Design source: `docs/superpowers/specs/2026-09-14-rust-data-plane-design.md`
 | Bundle config | `...:app:{app_id}:cfg` | string |
 | Bundle state | `...:app:{app_id}:state` | hash |
 | Dead letter | `waddles:dlq:{stage}` | stream, `MAXLEN ~` |
+| Usage metering (D31) | `waddles:usage` (not tenant/community scoped) | stream, `MAXLEN ~` |
 
 `{community}` is the literal `_tenant` segment for a tenant-wide activation
 — never omitted, so splitting a key on `:` always yields the same field
@@ -5392,6 +7108,36 @@ count. See [`Scope`] for the builders.
 | `SPINE_MAX_DELIVERIES` | `5` | |
 | `DRAIN_SOCKET_TIMEOUT_S` | `65` | |
 | `RELAY_BLOCK_TIMEOUT_S` | `30` | Validated here; consumed by the (out-of-crate) outbound relay. |
+| `WADDLES_BINDING_KEY_FILE` | `/etc/waddles/envelope-binding/keys.json` | `kid -> {key_hex, retired_at}` map for [`BindingKeyring::load`] (D30). |
+| `WADDLES_BINDING_KID` | *(required)* | The active `kid` this replica mints new `binding.mac` values under. |
+| `WADDLES_BINDING_ROTATION_OVERLAP_S` | `86400` | How long a retired `kid` still verifies. |
+| `METERING_ENABLED` | `true` | Whether callers should run [`UsageBatcher`] at all (D31). |
+| `METERING_FLUSH_INTERVAL_S` | `10` | Max interval between [`UsageBatcher::flush`] calls. |
+
+## Workstream identity & tenant wall (D30)
+
+Every `StageEnvelope` carries `workstream_id`/`event_id`/`session_id`/
+`trace`/`binding` (spec Sec5.11, Sec6.1.2). `binding.mac` is an
+`HMAC-SHA256` over `tenant || community || workstream_id || event_id ||
+trace_id`, minted by [`compute_binding_mac`] and checked by
+[`verify_binding`] against a [`BindingKeyring`] loaded from
+`WADDLES_BINDING_KEY_FILE` -- a key only the four Rust stage services
+hold, never hub-api, a bundle, or the compiler. [`ScopeCheck`] proves an
+envelope's tenant/community agree with the stream key or [`Grant`] it was
+read from. Any failure is `error.kind = "tenant_boundary"`
+(`DlqErrorKind::TenantBoundary`), **never retried**
+(`DlqErrorKind::never_retry`), and counted via
+`SpineMetrics::tenant_boundary_violation`.
+
+## Usage metering (D31)
+
+[`UsageBatcher`] accumulates `UsageDelta` rows per `(tenant_id,
+community_id, workstream_id, stage, app_id)` in-process; a caller flushes
+it at most every `METERING_FLUSH_INTERVAL_S` and hands each drained delta
+to [`SpineClient::append_usage`], which `XADD`s it onto `waddles:usage`.
+Every stage is write-only there (Task 12's ACL selector) -- this crate
+never reads it back; `hub-api`'s aggregator (`workstream_usage_hourly`,
+out of this crate's scope) owns that side.
 
 ## Usage
 
@@ -5475,7 +7221,7 @@ Initial release — Milestone M1a of the Waddles Rust data-plane design.
 
 - `Scope`/`Stage` key builders, byte-compatible with `flask_core.stream_pipeline`.
 - `PlatformEvent`/`StageEnvelope`/`EnvelopeError` with strict deserialization.
-- `DlqRecord`/`DlqErrorDetail`/`DlqError`/`DlqErrorKind` (spec Sec6.3, all nine kinds).
+- `DlqRecord`/`DlqErrorDetail`/`DlqError`/`DlqErrorKind` (spec Sec6.3, all ten kinds, D30 adds `tenant_boundary`).
 - `SpineMetrics` facade + `NoopMetrics`.
 - `SpineConfig`: env loading, TLS/auth startup refusal, block-timeout validation.
 - The Sec12.6 classified startup connectivity self-check (`probe_valkey`).
@@ -5485,9 +7231,19 @@ Initial release — Milestone M1a of the Waddles Rust data-plane design.
   enforcing both Sec5.7 client connection-separation rules.
 - The D28 least-privilege Valkey ACL matrix, its renderer, and a live
   `ACL LIST` conformance test plus five negative permission tests.
-- 22 valid + 32 invalid golden envelope fixtures, full DLQ/key fixture
+- 27 valid + 34 invalid golden envelope fixtures, full DLQ/key fixture
   coverage, shared with the (separate, not-yet-scheduled) `flask_core`
   alignment work.
+- **D30** workstream identity/trace/tenant-wall: `schema_version` bumped
+  to `2` (no dual-read), `workstream_id`/`event_id`/`session_id`/`trace`/
+  `binding` on `StageEnvelope`, the `binding` module (`BindingKeyring`,
+  `compute_binding_mac`/`verify_binding`, `ScopeCheck`, `BoundaryError`),
+  `DlqErrorKind::TenantBoundary` (never retried), `workstream_id`/`trace`
+  on `DlqRecord`, `SpineMetrics::tenant_boundary_violation`.
+- **D31** workstream usage metering: `UsageDelta`/`HostCallCounts`/
+  `UsageBatcher`, `SpineClient::append_usage` onto `waddles:usage`
+  (`+xadd`-only for every stage, read-only for hub-api — Valkey ACL
+  selector).
 ```
 
 - [ ] **Step 4: Run the complete gate locally, exactly as CI will.**
@@ -5503,7 +7259,7 @@ make bench-spine
 Expected: every command exits 0.
 
 - [ ] **Step 5: Self-review** (performed by you, the implementer finishing this plan — not a sub-task to delegate):
-  1. **Spec coverage.** Re-open the spec's §4.7, §5, §6.1-6.3, §11.6.1, §11.10, §12.6, §12.7, §13.1 (spine-owned metrics only), §14.1, §14.2 sections and confirm every bullet maps to a task above; list any gap you find and add a task for it before calling this plan done.
+  1. **Spec coverage.** Re-open the spec's §4.7, §5 (including §5.11/§5.12, D30/D31), §6.1-6.3, §6.11/§6.12, §11.6.1, §11.10 (including §11.10.2's `waddles:usage` selector row), §12.3/§12.7 (including the binding-key and metering env vars), §13.1 (spine-owned metrics only, plus `tenant_boundary_violation`), §14.1, §14.2, §14.11 (tests 1/2/4, this crate's share) sections and confirm every bullet maps to a task above; list any gap you find and add a task for it before calling this plan done.
   2. **Placeholder scan.** `grep -n "TODO\|TBD\|similar to Task\|add tests for the above" packages/rust-spine -r` (run from the executed crate, not this plan file) must return nothing except the deliberate `// TODO(task-N):` lib.rs markers this plan itself instructs later tasks to remove — confirm none remain once Task 17 is done.
   3. **Signature consistency.** Grep this plan document itself for every occurrence of `SpineClient::`, `GroupReader::`, `Scope::`, `Stage::` and confirm each call site matches the signature the defining task declared (parameter order, `Stage` argument present on `claim_stale`/`GroupReader::connect`/`dead_letter_unparseable` throughout).
   4. Fix anything Step 5.1-5.3 turn up, then proceed to Step 6.
@@ -5542,7 +7298,7 @@ EOF
 | `PlatformEvent`/`Source` strict types (Sec6.1.1) | 3 |
 | `StageEnvelope`/`PROCESS_TARGET_APP_ID_KEY` strict types (Sec6.1.2, Sec5.9) | 4 |
 | `SpineError` | 5 |
-| DLQ record shape, nine `error.kind` values (Sec6.3) | 5 |
+| DLQ record shape, ten `error.kind` values (Sec6.3, D30 adds `tenant_boundary`) | 5 |
 | `SpineMetrics` facade (Sec13.1 spine-owned subset, Sec4.9 no-penguin-logging-yet) | 6 |
 | Golden fixtures: envelopes valid/invalid, keys, entries, dlq (Sec14.1) | 7, 8 |
 | `fixtures_examined == fixtures_on_disk`, non-zero denominator, printed (Sec14.1, Verification Integrity) | 8 |
@@ -5557,21 +7313,32 @@ EOF
 | Fan-in, group isolation, claim concurrency, stream/DLQ bounding (Sec14.2) | 16 |
 | `GroupReader`, both client connection-separation rules, grant enforcement negative test, envelope_invalid DLQ path (Sec5.2, Sec5.7) | 17 |
 | Benchmark | 18 |
-| CI gate (fmt/clippy/deny/audit/test/llvm-cov ≥90%), README, CHANGELOG, v0.1.0 (Sec14.5) | 19 |
+| Workstream identity/trace/binding types on `StageEnvelope`, `schema_version` bump to 2 (Sec5.11, Sec6.1.2, D30) | 4 |
+| `DlqErrorKind::TenantBoundary`, `never_retry`, `DlqRecord.workstream_id`/`.trace` (Sec6.3, D30) | 5 |
+| `SpineMetrics::tenant_boundary_violation` (Sec13.1, D30) | 6 |
+| Golden fixtures extended for D30 fields, tenant_boundary DLQ kind (Sec14.1) | 7, 8 |
+| `waddles:usage` ACL selector (+xadd-only per stage, read-only for hub-api) (Sec11.10.2, D31) | 12 |
+| `BindingKeyring`, `compute_binding_mac`/`verify_binding`, `ScopeCheck`, `BoundaryError`, kid rotation-overlap acceptance (Sec5.11, D30) | 19 |
+| Negative tests: cross-tenant stream read, tampered MAC, unknown kid, rotation-overlap expiry (Sec14.11 tests 1/2/4, D30) | 19 |
+| `UsageDelta`/`HostCallCounts`/`UsageBatcher`, `SpineClient::append_usage` onto `waddles:usage` (Sec5.12, Sec6.2, D31) | 20 |
+| CI gate (fmt/clippy/deny/audit/test/llvm-cov ≥90%), README, CHANGELOG, v0.1.0 (Sec14.5) | 21 |
 
-No gap found. `penguin-bundle-host::wire`/`::manifest`, `penguin-logging`, `penguin-connectors`, and `penguin-licensing`'s CI/publish jobs are separate M1 deliverables (sibling plans already exist as worktrees `plan-penguin-bundle-host`, `plan-penguin-logging`, `plan-penguin-connectors`) — correctly out of scope for this `penguin-spine`-only plan.
+No gap found. `penguin-bundle-host::wire`/`::manifest`, `penguin-logging`, `penguin-connectors`, and `penguin-licensing`'s CI/publish jobs are separate M1 deliverables (sibling plans already exist as worktrees `plan-penguin-bundle-host`, `plan-penguin-logging`, `plan-penguin-connectors`) — correctly out of scope for this `penguin-spine`-only plan. D30's spec Sec14.11 tests 3/5/6/7 and the install-approval half of Sec5.11's check 3 are stage-binary/hub-api work (M4/M5, out of every M1 crate plan's scope) — this crate ships the verifiable primitives (`verify_binding`, `ScopeCheck`) those stages will call.
 
-**2. Placeholder scan.** Searched this document for `TBD`, `TODO` (outside the deliberate `// TODO(task-N):` lib.rs markers each task instructs a later task to remove), `similar to Task`, and "add tests for the above" — none found outside those markers.
+**2. Placeholder scan.** Re-searched this document, including the D30/D31 additions (Tasks 4-8, 12, 19, 20), for `TBD`, `TODO` (outside the deliberate `// TODO(task-N):` lib.rs markers each task instructs a later task to remove), `similar to Task`, and "add tests for the above" — none found outside those markers.
 
 **3. Signature/type consistency, checked across every task:**
-- `Scope::new(tenant, community: Option<String>)`, `.source_stream/.action_stream/.config_key/.state_key` — same signature Tasks 2, 8, 13, 17-19 all use.
+- `Scope::new(tenant, community: Option<String>)`, `.source_stream/.action_stream/.config_key/.state_key` — same signature Tasks 2, 8, 13, 17, 18, 21 all use.
 - `Stage::{Process, Action}`, `.as_str()`, `Stage::parse(&str)` — Task 2 defines; Tasks 5 (`error.rs` uses `crate::SpineError::Config` inside `Stage::parse`, later superseded intact by Task 5's real `SpineError`), 15, 17 all call it identically.
-- `SpineClient::connect(cfg: SpineConfig, metrics: Arc<dyn SpineMetrics>) -> Result<Self, SpineError>` — Task 13 defines by value; every later call site (15, 16, 17, 18, 19) passes an owned `SpineConfig` (cloning first where the same config is reused), matching.
+- `SpineClient::connect(cfg: SpineConfig, metrics: Arc<dyn SpineMetrics>) -> Result<Self, SpineError>` — Task 13 defines by value; every later call site (15, 16, 17, 18, 21) passes an owned `SpineConfig` (cloning first where the same config is reused), matching.
 - `SpineClient::claim_stale(&self, stream: &str, app_id: &str, stage: Stage)` — Task 15 defines with three params (the Global Constraints deviation 6 addition); Task 16's three call sites and Task 17 are consistent.
 - `GroupReader::connect(cfg: &SpineConfig, grants: Vec<Grant>, app_id: String, stage: Stage, dlq: SpineClient, metrics: Arc<dyn SpineMetrics>)` — Task 17 defines; its own tests and Task 18's bench call it identically, in the same argument order.
 - `Delivered { stream, entry_id, env, deliveries }` field names/order — Task 13 defines; Tasks 15, 16, 17 construct it identically every time.
-- `DlqError { kind, code, message, detail, artifact_digest, consumer_id }` — Task 5 defines; Task 15's `claim_stale` and Task 16's `dlq_stays_within_the_configured_maxlen` construct it with the same field set.
+- `DlqError { kind, code, message, detail, artifact_digest, consumer_id }` — Task 5 defines; Task 15's `claim_stale` and Task 16's `dlq_stays_within_the_configured_maxlen` construct it with the same field set; Task 19's `BoundaryError::to_dlq_error` builds the same six fields in the same order.
 - `dead_letter_raw`/`dead_letter_unparseable` visibility corrected to `pub(crate)` in Task 15 specifically so Task 17's `GroupReader` (a sibling module) can call them — flagged and fixed during authoring rather than left as a cross-module privacy error.
+- `StageEnvelope { schema_version, tenant, community, app_id, stage, event, ts, target_app_id, workstream_id, event_id, session_id, trace, binding }` (D30, Task 4) — field order matches the spec Sec6.1.2 JSON example exactly, which is what makes Task 8's byte-identical golden round-trips possible; Task 5's `dead_letter`/`dead_letter_unparseable`, Task 15's `DlqRecord` construction sites, and Task 19's test fixtures all read/construct the same field set.
+- `BindingKeyring::from_entries`/`load` both return `Result<Self, BoundaryError>` and reject an active `kid` that is itself marked retired — Task 19 defines and tests both constructors against the same invariant.
+- `UsageDelta::zero(tenant_id, community_id, workstream_id, stage, app_id)` — Task 20 defines; its own tests and the Task 20 integration test construct it with the same five positional arguments in the same order.
 
 No inconsistency found beyond the one caught and fixed above (`pub(crate)` visibility). Plan complete.
 
