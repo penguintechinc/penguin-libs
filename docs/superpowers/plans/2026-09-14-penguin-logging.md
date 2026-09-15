@@ -29,6 +29,7 @@
   Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
   ```
 - **Branch:** work happens on `docs/plan-penguin-logging`'s successor implementation branch (a fresh `feature/penguin-logging` branch off `main`, inside its own worktree per `using-git-worktrees`) — this plan document itself lives on `docs/plan-penguin-logging` and is not the implementation branch. Never push to `main`.
+- **Shared-file collision (pre-flight review, session_01N2rQgkHY872RubwXoBZxtE):** this plan appends to repo-root `Makefile`, `.github/workflows/ci.yml` and `.github/workflows/publish.yml` — the same three files `penguin-connectors` (M1d) also appends to, and `ci.yml`/`publish.yml` are additionally touched by `penguin-bundle-host` (M1c); `penguin-spine` (M1a) touches `Makefile` only (its own dedicated `rust-spine.yml` workflow, not `ci.yml`/`publish.yml`). Every plan adds a distinct, uniquely-named job/target block (this plan: `build-rust-logging`/`publish-rust-logging`), so a merge conflict here is textual, never semantic. Rebase onto the release branch immediately before opening the PR — do not assume this plan is the only one touching these files.
 - **Docs:** every new `pub` item gets a 2-3 line doc comment (godoc-style content, Rust `///` syntax) — required anyway by `#[deny(missing_docs)]`. No ASCII-art section dividers.
 
 ## File Structure
