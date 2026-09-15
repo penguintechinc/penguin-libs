@@ -131,6 +131,10 @@ serde_json = "=1.0.151"
 regex = "=1.13.1"
 thiserror = "=2.0.20"
 tokio = { version = "=1.53.1", features = ["sync", "rt", "macros", "time"] }
+# D30 (spec §5.11): validates workstream_id is a UUID before it is
+# recorded as a span/log field -- the last line of defense against PII
+# being smuggled into a field whose name implies a trusted identifier.
+uuid = "=1.26.1"
 
 [dev-dependencies]
 rstest = "=0.27.0"
@@ -2710,15 +2714,16 @@ EOF
 
 ---
 
-### Task 13: `trace_context.rs` — W3C `traceparent` propagation for `StageEnvelope.trace_context`
+### Task 13: `trace_context.rs` — W3C `traceparent` propagation for `StageEnvelope.trace` (D30)
 
 **Files:**
 - Create: `packages/rust-logging/src/trace_context.rs`
-- Modify: `packages/rust-logging/src/lib.rs`
+- Modify: `packages/rust-logging/src/lib.rs`, `packages/rust-logging/Cargo.toml` (add `uuid = "=1.26.1"`), `packages/rust-logging/Cargo.lock`
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks (pure functions over `opentelemetry::Context`).
-- Produces: `pub fn inject_trace_context(cx: &opentelemetry::Context) -> Option<String>`, `pub fn context_from_trace_context(traceparent: Option<&str>) -> opentelemetry::Context` — `penguin-spine`'s `StageEnvelope.trace_context: Option<String>` field (design spec §6.1.2, exact format `"00-<32 hex trace id>-<16 hex span id>-<2 hex flags>"`) is populated by `inject_trace_context(&Span::current().context())` when a stage enqueues an envelope, and consumed by `context_from_trace_context(envelope.trace_context.as_deref())` when the next stage starts its own root span as a child of that context.
+- Produces: `pub fn inject_trace_context(cx: &opentelemetry::Context) -> Option<String>`, `pub fn context_from_trace_context(traceparent: Option<&str>) -> opentelemetry::Context` — `penguin-spine`'s `StageEnvelope.trace: Option<Trace>` field (design spec §6.1.2, D30 -- supersedes the pre-D30 single-field `trace_context`; `Trace.traceparent` carries the exact format `"00-<32 hex trace id>-<16 hex span id>-<2 hex flags>"`) is populated by `inject_trace_context(&Span::current().context())` when a stage enqueues an envelope, and consumed by `context_from_trace_context(envelope.trace.as_ref().map(|t| t.traceparent.as_str()))` when the next stage starts its own root span as a child of that context.
+- **D30 (spec §5.11) also produces:** `TENANT_ID_FIELD`/`COMMUNITY_ID_FIELD`/`WORKSTREAM_ID_FIELD`/`APP_ID_FIELD` (the four standard span-attribute keys, spec §13.2), `WorkstreamIdNotUuid`, `record_workstream_span_fields(&tracing::Span, tenant_id: &str, community_id: Option<&str>, workstream_id: &str, app_id: &str) -> Result<(), WorkstreamIdNotUuid>`. `penguin-bundle-host` and every Rust stage service consume these instead of hand-writing the four field-name string literals per call site.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2765,6 +2770,62 @@ mod tests {
     // a future edit needs them; not directly asserted on above.
     #[allow(dead_code)]
     fn _unused(_: TraceState) {}
+
+    // -- D30 (spec §5.11, §13.2): span-attribute keys + UUID-only workstream_id --
+
+    #[test]
+    fn record_workstream_span_fields_accepts_a_valid_uuid() {
+        let span = tracing::info_span!(
+            "test.span",
+            waddles.tenant_id = tracing::field::Empty,
+            waddles.community_id = tracing::field::Empty,
+            waddles.workstream_id = tracing::field::Empty,
+            waddles.app_id = tracing::field::Empty,
+        );
+        let result = record_workstream_span_fields(
+            &span,
+            "acme",
+            Some("main"),
+            "8f14e45f-ceea-467e-adde-3fb5c9752730",
+            "waddles.bot.commands.default",
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn record_workstream_span_fields_rejects_a_non_uuid_workstream_id() {
+        let span = tracing::info_span!(
+            "test.span",
+            waddles.tenant_id = tracing::field::Empty,
+            waddles.community_id = tracing::field::Empty,
+            waddles.workstream_id = tracing::field::Empty,
+            waddles.app_id = tracing::field::Empty,
+        );
+        // A PII-shaped value (an email) must never reach a span field --
+        // this is exactly the case UUID-only validation exists to catch.
+        let err = record_workstream_span_fields(&span, "acme", None, "someone@example.com", "a").unwrap_err();
+        assert_eq!(err, WorkstreamIdNotUuid("someone@example.com".to_string()));
+    }
+
+    #[test]
+    fn record_workstream_span_fields_rejects_an_empty_workstream_id() {
+        let span = tracing::info_span!(
+            "test.span",
+            waddles.tenant_id = tracing::field::Empty,
+            waddles.community_id = tracing::field::Empty,
+            waddles.workstream_id = tracing::field::Empty,
+            waddles.app_id = tracing::field::Empty,
+        );
+        assert!(record_workstream_span_fields(&span, "acme", None, "", "a").is_err());
+    }
+
+    #[test]
+    fn span_attribute_field_constants_match_the_spec_names_exactly() {
+        assert_eq!(TENANT_ID_FIELD, "waddles.tenant_id");
+        assert_eq!(COMMUNITY_ID_FIELD, "waddles.community_id");
+        assert_eq!(WORKSTREAM_ID_FIELD, "waddles.workstream_id");
+        assert_eq!(APP_ID_FIELD, "waddles.app_id");
+    }
 }
 ```
 
@@ -2777,11 +2838,20 @@ Expected: FAIL — `cannot find function `inject_trace_context`` / `context_from
 
 ```rust
 //! W3C `traceparent` propagation for the design spec's `StageEnvelope.
-//! trace_context` field (§6.1.2): `"00-<32 hex trace id>-<16 hex span
-//! id>-<2 hex flags>"`, absent/null meaning no parent span. This module
-//! wraps `opentelemetry_sdk`'s `TraceContextPropagator` (the standard W3C
+//! trace.traceparent` field (§6.1.2; D30 supersedes the pre-D30
+//! single-field `trace_context` with `trace: {traceparent, tracestate}`,
+//! same string format): `"00-<32 hex trace id>-<16 hex span id>-<2 hex
+//! flags>"`, absent/null meaning no parent span. This module wraps
+//! `opentelemetry_sdk`'s `TraceContextPropagator` (the standard W3C
 //! implementation) behind a two-function API so callers never touch the
 //! `Injector`/`Extractor` carrier plumbing directly.
+//!
+//! Also home to the D30 (spec §5.11, §13.2) standard span-attribute
+//! keys: every span that touches a workstream invocation --
+//! `penguin-bundle-host`'s `bundle.invoke`/`host.call`, and every Rust
+//! stage service's own spans -- carries `waddles.tenant_id`/
+//! `.community_id`/`.workstream_id`/`.app_id`, ids only, never PII or
+//! message bodies.
 
 use opentelemetry::propagation::TextMapPropagator;
 use opentelemetry::trace::TraceContextExt;
@@ -2790,6 +2860,52 @@ use opentelemetry_sdk::propagation::TraceContextPropagator;
 use std::collections::HashMap;
 
 const TRACEPARENT_HEADER: &str = "traceparent";
+
+/// The four standard D30 span-attribute keys (spec §5.11, §13.2). Field
+/// names in `tracing`'s span macros must be written literally (dotted
+/// names are supported unquoted, but never as an interpolated constant),
+/// so these exist for two purposes: labelling `opentelemetry::KeyValue`
+/// metric dimensions, and as the argument to [`record_workstream_span_
+/// fields`]'s `Span::record` calls, which *does* accept a runtime `&str`
+/// field name as long as the span already declared it (via `tracing::
+/// field::Empty`) at creation time.
+pub const TENANT_ID_FIELD: &str = "waddles.tenant_id";
+/// See [`TENANT_ID_FIELD`].
+pub const COMMUNITY_ID_FIELD: &str = "waddles.community_id";
+/// See [`TENANT_ID_FIELD`].
+pub const WORKSTREAM_ID_FIELD: &str = "waddles.workstream_id";
+/// See [`TENANT_ID_FIELD`].
+pub const APP_ID_FIELD: &str = "waddles.app_id";
+
+/// `workstream_id` is not a valid UUID -- refused rather than recorded,
+/// since a span/log field named `workstream_id` is trusted by every
+/// downstream consumer to be an id, never free text (spec §5.11 D30).
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("workstream_id {0:?} is not a valid UUID")]
+pub struct WorkstreamIdNotUuid(pub String);
+
+/// Records the four D30 span-attribute fields onto `span`, which **must**
+/// already declare them via `tracing::field::Empty` in its own creation
+/// macro (`Span::record` looks a field up by name; it cannot add one that
+/// was never declared). Rejects and records nothing if `workstream_id`
+/// is not a valid UUID -- the one field here with a strict, checkable
+/// format, and therefore the last line of defense against a caller
+/// accidentally attaching PII (or any other free-text value) under a
+/// field name every consumer trusts to be an id.
+pub fn record_workstream_span_fields(
+    span: &tracing::Span,
+    tenant_id: &str,
+    community_id: Option<&str>,
+    workstream_id: &str,
+    app_id: &str,
+) -> Result<(), WorkstreamIdNotUuid> {
+    uuid::Uuid::parse_str(workstream_id).map_err(|_| WorkstreamIdNotUuid(workstream_id.to_string()))?;
+    span.record(TENANT_ID_FIELD, tenant_id);
+    span.record(COMMUNITY_ID_FIELD, community_id.unwrap_or("_tenant"));
+    span.record(WORKSTREAM_ID_FIELD, workstream_id);
+    span.record(APP_ID_FIELD, app_id);
+    Ok(())
+}
 
 /// Renders `cx`'s current span context as a W3C `traceparent` header
 /// value, for direct assignment to `StageEnvelope.trace_context`. Returns
@@ -2828,23 +2944,34 @@ pub fn context_from_trace_context(traceparent: Option<&str>) -> Context {
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `make test`
-Expected: PASS — all `trace_context::tests` green, including the round-trip test.
+Expected: PASS — all 8 `trace_context::tests` green (4 pre-existing + 4 D30), including the round-trip test and the UUID-only workstream_id rejection.
 
 - [ ] **Step 5: Wire into `lib.rs`**
 
 ```rust
 pub mod trace_context;
-pub use trace_context::{context_from_trace_context, inject_trace_context};
+pub use trace_context::{
+    context_from_trace_context, inject_trace_context, record_workstream_span_fields,
+    WorkstreamIdNotUuid, APP_ID_FIELD, COMMUNITY_ID_FIELD, TENANT_ID_FIELD, WORKSTREAM_ID_FIELD,
+};
 ```
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/rust-logging/src/trace_context.rs packages/rust-logging/src/lib.rs
+git add packages/rust-logging/src/trace_context.rs packages/rust-logging/src/lib.rs packages/rust-logging/Cargo.toml packages/rust-logging/Cargo.lock
 git commit -m "$(cat <<'EOF'
-feat(logging): add W3C traceparent inject/extract for StageEnvelope.trace_context
+feat(logging): add W3C traceparent inject/extract + D30 span-attribute keys
 
-Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+StageEnvelope.trace.traceparent (D30, supersedes the pre-D30 trace_context
+field) round-trips through inject_trace_context/context_from_trace_context
+unchanged. Adds the four standard span-attribute keys (waddles.tenant_id/
+.community_id/.workstream_id/.app_id, spec Sec5.11/Sec13.2) plus
+record_workstream_span_fields, which rejects a non-UUID workstream_id
+rather than recording it -- the last line of defense against PII
+reaching a field every downstream consumer trusts to be an id.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01N2rQgkHY872RubwXoBZxtE
 EOF
 )"
@@ -4192,6 +4319,7 @@ Performed against the spec (`docs/superpowers/specs/2026-09-14-rust-data-plane-d
 | §4.9 health/metrics surface | 14, 15 |
 | §4.9 `transport:` reporting | 14 (`HealthBody.transport`/`transport_detail`), 16 (`waddles_insecure_transport`) |
 | §6.1.2 `trace_context` W3C `traceparent`, optional, absent/null ⇒ no parent span | 13 |
+| §5.11/§13.2 D30 standard span-attribute keys (`waddles.tenant_id`/`.community_id`/`.workstream_id`/`.app_id`), UUID-only `workstream_id` validation | 13 |
 | §7.4 / WIT `log` interface: `fields-json` sanitized before emission | 3 (`sanitize_json_str`) |
 | §11.6.4 `/health` JSON shape, `transport` secure/insecure summary | 14 |
 | §11.6.4 fixed WARN banner text on `tls=false`/`auth=false`, `waddles_insecure_transport{component,aspect}` gauge, 0 for secure components | 16 |
@@ -4228,5 +4356,11 @@ Cross-checked every type and function name against its "Produces" declaration an
 - File structure map (top of document) updated to list both `tests/integration_exporter_failure.rs` and the added `tests/integration_no_otlp.rs`.
 
 No remaining signature mismatches found between any task's "Produces" and a later task's "Consumes"/call sites.
+
+### 4. D30 addendum (this amendment)
+
+- `StageEnvelope.trace_context: Option<String>` was renamed to `trace: Option<Trace>` (`{traceparent, tracestate}`) in `penguin-spine`'s M1a plan (D30). `trace_context.rs`'s doc comments and Interfaces block are updated accordingly; `inject_trace_context`/`context_from_trace_context`'s signatures are unaffected (they already operated on a bare `Option<&str>` traceparent, never the envelope type itself).
+- Added the four standard span-attribute key constants (`TENANT_ID_FIELD`/`COMMUNITY_ID_FIELD`/`WORKSTREAM_ID_FIELD`/`APP_ID_FIELD`) and `record_workstream_span_fields`, which rejects (and records nothing for) a non-UUID `workstream_id` — `WorkstreamIdNotUuid`, tested against both a valid UUID and a PII-shaped value (an email address).
+- **Not done in this amendment:** wiring `record_workstream_span_fields` into any of this crate's own spans (`penguin-logging` itself never handles a `StageEnvelope`) — it is a library function for `penguin-bundle-host` and the Rust stage services (M3/M4) to call. `penguin-bundle-host`'s own D30 amendment sets its span fields directly via `tracing::info_span!`'s dotted-field syntax rather than this helper, since a span macro's field *names* must be literal tokens (dotted names are supported unquoted by `tracing`, but never as an interpolated `&str` constant) — `record_workstream_span_fields` is for the complementary case where the four values are not all known at span-creation time and must be attached later via `Span::record`, which does accept a runtime field name matched against fields the span already declared as `tracing::field::Empty`.
 
 ---
