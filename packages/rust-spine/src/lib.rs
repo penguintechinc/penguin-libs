@@ -40,5 +40,5 @@ pub use envelope::{
 };
 pub use error::SpineError;
 pub use metrics::{NoopMetrics, SpineMetrics};
+pub use reader::GroupReader;
 pub use scope::{Scope, Stage, TENANT_WIDE_SEGMENT, parse_scope_from_key};
-// TODO(task-17): pub use reader::GroupReader;
