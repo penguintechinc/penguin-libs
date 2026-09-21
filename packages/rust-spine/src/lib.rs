@@ -28,14 +28,15 @@ mod metrics;
 mod reader;
 mod scope;
 
+pub use config::{SpineConfig, validate_block_timeout};
 pub use dlq::{DlqError, DlqErrorDetail, DlqErrorKind, DlqRecord};
 pub use envelope::{
     Binding, ENVELOPE_SCHEMA_VERSION, EnvelopeError, PROCESS_TARGET_APP_ID_KEY, PlatformEvent,
     Source, StageEnvelope, Trace, trace_id_from_traceparent,
 };
+// TODO(task-10): also export ProbeClass, ProbeResult
 pub use error::SpineError;
 pub use metrics::{NoopMetrics, SpineMetrics};
 pub use scope::{Scope, Stage, TENANT_WIDE_SEGMENT, parse_scope_from_key};
-// TODO(task-9): pub use config::{ProbeClass, ProbeResult, SpineConfig};
 // TODO(task-13): pub use client::{Delivered, Grant, GroupStats, SpineClient};
 // TODO(task-17): pub use reader::GroupReader;
