@@ -237,6 +237,265 @@ impl SpineConfig {
     }
 }
 
+/// One classified startup connectivity probe result (spec Sec12.6) —
+/// never a bare "connection failed".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProbeClass {
+    /// The hostname did not resolve.
+    Dns,
+    /// Resolved, but the connection was refused, timed out, or was blocked.
+    Tcp,
+    /// Connected, but the handshake or certificate verification failed.
+    Tls,
+    /// TLS succeeded, credentials were rejected.
+    Auth,
+    /// Reachable and authenticated.
+    Ok,
+}
+
+impl ProbeClass {
+    /// The lowercase wire form used in `waddles_dependency_check_total{class}`.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ProbeClass::Dns => "dns",
+            ProbeClass::Tcp => "tcp",
+            ProbeClass::Tls => "tls",
+            ProbeClass::Auth => "auth",
+            ProbeClass::Ok => "ok",
+        }
+    }
+}
+
+/// The outcome of one startup connectivity probe against one dependency
+/// (spec Sec12.6), always classified — never a bare failure.
+#[derive(Debug, Clone)]
+pub struct ProbeResult {
+    /// The dependency name (`"valkey"`, `"postgres"`, ...).
+    pub dependency: String,
+    /// The classification.
+    pub class: ProbeClass,
+    /// A human-readable message naming the endpoint and what went wrong.
+    pub message: String,
+}
+
+/// Classifies a `redis::RedisError` observed while connecting or
+/// authenticating into a Sec12.6 probe class. See this task's "known
+/// limitation" note for the TLS-vs-TCP heuristic (the `redis` crate has no
+/// dedicated TLS error kind, so this searches the error's `Display` text
+/// for TLS/certificate-shaped substrings — a best-effort heuristic, not a
+/// structural guarantee).
+pub fn classify_connect_error(err: &redis::RedisError) -> ProbeClass {
+    if err.kind() == redis::ErrorKind::AuthenticationFailed {
+        return ProbeClass::Auth;
+    }
+    if err.is_io_error() {
+        let text = err.to_string().to_ascii_lowercase();
+        let tls_markers = [
+            "certificate",
+            "tls",
+            "handshake",
+            "unknownissuer",
+            "invalid peer certificate",
+        ];
+        if tls_markers.iter().any(|m| text.contains(m)) {
+            return ProbeClass::Tls;
+        }
+        return ProbeClass::Tcp;
+    }
+    ProbeClass::Tcp
+}
+
+fn build_connection_info(cfg: &SpineConfig) -> Result<redis::ConnectionInfo, SpineError> {
+    let base: redis::ConnectionInfo =
+        redis::IntoConnectionInfo::into_connection_info(cfg.valkey_url.as_str()).map_err(|e| {
+            SpineError::Config(format!("invalid VALKEY_URL {:?}: {e}", cfg.valkey_url))
+        })?;
+    let mut redis_settings = base.redis_settings().clone();
+    if let Some(username) = &cfg.valkey_username {
+        redis_settings = redis_settings.set_username(username);
+    }
+    if let Some(password) = &cfg.valkey_password {
+        redis_settings = redis_settings.set_password(password);
+    }
+    Ok(base.set_redis_settings(redis_settings))
+}
+
+fn host_port_from_url(url: &str) -> Result<(String, u16), SpineError> {
+    let info: redis::ConnectionInfo = redis::IntoConnectionInfo::into_connection_info(url)
+        .map_err(|e| SpineError::Config(format!("invalid VALKEY_URL {url:?}: {e}")))?;
+    match info.addr() {
+        redis::ConnectionAddr::Tcp(host, port) => Ok((host.clone(), *port)),
+        redis::ConnectionAddr::TcpTls { host, port, .. } => Ok((host.clone(), *port)),
+        redis::ConnectionAddr::Unix(_) => Err(SpineError::Config(
+            "VALKEY_URL must be a TCP address, not a unix socket".to_string(),
+        )),
+        // `ConnectionAddr` is `#[non_exhaustive]` upstream; any future
+        // variant is refused the same way a unix socket is, rather than
+        // silently misparsed as a host:port pair.
+        _ => Err(SpineError::Config(
+            "VALKEY_URL resolved to an unsupported connection address type".to_string(),
+        )),
+    }
+}
+
+/// Resolves `host:port` via DNS only (spec Sec12.6's first probe layer).
+async fn resolve_host(host: &str, port: u16) -> Result<(), String> {
+    tokio::net::lookup_host((host, port))
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+static CRYPTO_PROVIDER_INIT: std::sync::Once = std::sync::Once::new();
+
+/// Installs the process-level rustls `CryptoProvider` (the `ring` backend)
+/// exactly once. `redis`'s `tls-rustls` feature enables `dep:rustls` but
+/// requests no provider itself, so the first TLS handshake anywhere in the
+/// process panics without this -- see the `rustls` dependency comment in
+/// `Cargo.toml`. Safe to call from every TLS-capable entry point
+/// (`probe_valkey`, `SpineClient::connect`): `Once` makes repeat calls a
+/// no-op, and a losing race against another caller installing the same
+/// provider is not an error either.
+fn ensure_crypto_provider_installed() {
+    CRYPTO_PROVIDER_INIT.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
+async fn single_valkey_probe_attempt(host: &str, port: u16, cfg: &SpineConfig) -> ProbeResult {
+    if cfg.security_transport_tls {
+        ensure_crypto_provider_installed();
+    }
+    let dependency = "valkey".to_string();
+    if let Err(e) = resolve_host(host, port).await {
+        return ProbeResult {
+            dependency,
+            class: ProbeClass::Dns,
+            message: format!("valkey: DNS resolution failed for {host:?}: {e}"),
+        };
+    }
+
+    let info = match build_connection_info(cfg) {
+        Ok(i) => i,
+        Err(e) => {
+            return ProbeResult {
+                dependency,
+                class: ProbeClass::Dns,
+                message: e.to_string(),
+            };
+        }
+    };
+
+    let client_result = if cfg.security_transport_tls {
+        let root_cert = std::fs::read(&cfg.valkey_ca_file).ok();
+        redis::Client::build_with_tls(
+            info,
+            redis::TlsCertificates {
+                client_tls: None,
+                root_cert,
+            },
+        )
+    } else {
+        redis::Client::open(info)
+    };
+
+    let client = match client_result {
+        Ok(c) => c,
+        Err(e) => {
+            return ProbeResult {
+                dependency,
+                class: classify_connect_error(&e),
+                message: format!("valkey: failed to build client: {e}"),
+            };
+        }
+    };
+
+    let async_cfg = redis::AsyncConnectionConfig::new().set_response_timeout(Some(
+        std::time::Duration::from_secs(cfg.drain_socket_timeout_s),
+    ));
+
+    let mut conn = match client
+        .get_multiplexed_async_connection_with_config(&async_cfg)
+        .await
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return ProbeResult {
+                dependency,
+                class: classify_connect_error(&e),
+                message: format!("valkey: connect failed: {e}"),
+            };
+        }
+    };
+
+    match redis::cmd("PING").query_async::<String>(&mut conn).await {
+        Ok(_) => ProbeResult {
+            dependency,
+            class: ProbeClass::Ok,
+            message: "ok".to_string(),
+        },
+        Err(e) => ProbeResult {
+            dependency,
+            class: classify_connect_error(&e),
+            message: format!("valkey: PING failed: {e}"),
+        },
+    }
+}
+
+/// Probes Valkey connectivity per spec Sec12.6: DNS resolution, then a
+/// connect + `AUTH` + `PING`, classified and retried up to `attempts`
+/// times at `retry_interval` apart, each attempt bounded by `timeout`.
+/// Never a silent retry loop — every attempt's classified result is meant
+/// to be logged by the caller (this crate only classifies; logging is the
+/// caller's job, see [`crate::SpineMetrics`]).
+pub async fn probe_valkey(
+    cfg: &SpineConfig,
+    timeout: std::time::Duration,
+    attempts: u32,
+    retry_interval: std::time::Duration,
+) -> ProbeResult {
+    let dependency = "valkey".to_string();
+    let (host, port) = match host_port_from_url(&cfg.valkey_url) {
+        Ok(hp) => hp,
+        Err(e) => {
+            return ProbeResult {
+                dependency,
+                class: ProbeClass::Dns,
+                message: e.to_string(),
+            };
+        }
+    };
+
+    let mut last = ProbeResult {
+        dependency: dependency.clone(),
+        class: ProbeClass::Tcp,
+        message: "probe never ran".to_string(),
+    };
+
+    for attempt in 0..attempts.max(1) {
+        if attempt > 0 {
+            tokio::time::sleep(retry_interval).await;
+        }
+        last = match tokio::time::timeout(timeout, single_valkey_probe_attempt(&host, port, cfg))
+            .await
+        {
+            Ok(result) => result,
+            Err(_) => ProbeResult {
+                dependency: dependency.clone(),
+                class: ProbeClass::Tcp,
+                message: format!(
+                    "valkey: TCP connect to {host}:{port} timed out after {}s",
+                    timeout.as_secs()
+                ),
+            },
+        };
+        if last.class == ProbeClass::Ok {
+            break;
+        }
+    }
+    last
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -377,5 +636,75 @@ mod tests {
         let env = base_env();
         let cfg = SpineConfig::from_lookup(&lookup_from(&env)).unwrap();
         assert!(cfg.consumer_id.starts_with("unknown-"));
+    }
+
+    fn synthetic_io_error(message: &str) -> redis::RedisError {
+        redis::RedisError::from(std::io::Error::other(message.to_string()))
+    }
+
+    #[test]
+    fn classify_connect_error_maps_authentication_failed_to_auth() {
+        let err = redis::RedisError::from((
+            redis::ErrorKind::AuthenticationFailed,
+            "authentication rejected",
+        ));
+        assert_eq!(classify_connect_error(&err), ProbeClass::Auth);
+    }
+
+    #[test]
+    fn classify_connect_error_maps_plain_io_error_to_tcp() {
+        let err = synthetic_io_error("connection refused (os error 111)");
+        assert_eq!(classify_connect_error(&err), ProbeClass::Tcp);
+    }
+
+    #[test]
+    fn classify_connect_error_maps_tls_shaped_io_error_to_tls() {
+        let err = synthetic_io_error("invalid peer certificate: UnknownIssuer");
+        assert_eq!(classify_connect_error(&err), ProbeClass::Tls);
+    }
+
+    #[tokio::test]
+    async fn resolve_host_fails_for_the_reserved_invalid_tld() {
+        // `.invalid` is IANA-reserved to never resolve (RFC 2606) -- a
+        // deterministic DNS failure with no external service dependency.
+        let result = resolve_host("this-host-does-not-exist.invalid", 6379).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn probe_valkey_classifies_dns_failure() {
+        let mut env = base_env();
+        env.insert(
+            "VALKEY_URL",
+            "rediss://this-host-does-not-exist.invalid:6379",
+        );
+        let cfg = SpineConfig::from_lookup(&lookup_from(&env)).unwrap();
+        let result = probe_valkey(
+            &cfg,
+            std::time::Duration::from_millis(500),
+            1,
+            std::time::Duration::from_millis(10),
+        )
+        .await;
+        assert_eq!(result.class, ProbeClass::Dns);
+        assert!(result.message.contains("this-host-does-not-exist.invalid"));
+    }
+
+    #[tokio::test]
+    async fn probe_valkey_classifies_connection_refused_as_tcp() {
+        // Port 1 on loopback is a reserved low port nothing listens on in
+        // a test container; the connection attempt fails immediately with
+        // "connection refused" rather than timing out.
+        let mut env = base_env();
+        env.insert("VALKEY_URL", "rediss://127.0.0.1:1");
+        let cfg = SpineConfig::from_lookup(&lookup_from(&env)).unwrap();
+        let result = probe_valkey(
+            &cfg,
+            std::time::Duration::from_millis(500),
+            1,
+            std::time::Duration::from_millis(10),
+        )
+        .await;
+        assert_eq!(result.class, ProbeClass::Tcp);
     }
 }

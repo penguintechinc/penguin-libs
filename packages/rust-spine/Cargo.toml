@@ -23,10 +23,16 @@ tokio = { version = "=1.53.1", features = ["rt", "time", "sync", "macros", "net"
 tracing = "=0.1.44"
 chrono = { version = "=0.4.45", features = ["serde"] }
 uuid = { version = "=1.26.1", features = ["v4"] }
-# PEM pre-validation of VALKEY_CA_FILE only (rustls::pki_types), never a TLS
-# handshake path -- redis's own `tls-rustls` feature owns that. No crypto
-# provider feature needed for pure PEM parsing.
-rustls = { version = "=0.23.45", default-features = false, features = ["std"] }
+# PEM pre-validation of VALKEY_CA_FILE (rustls::pki_types) plus the
+# process-level CryptoProvider every TLS handshake needs: redis's
+# `tls-rustls` feature enables `dep:rustls` but requests no provider
+# (confirmed against redis 1.7.0's own Cargo.toml), so without one enabled
+# here `SpineConfig`'s TLS path panics at first use with "Could not
+# automatically determine the process-level CryptoProvider" (rustls 0.23+
+# requires an explicit choice). `ring` is the traditional, widely-audited
+# choice; `probe_valkey`/`SpineClient::connect` install it once, guarded
+# by `std::sync::Once` (Sec12.6/Sec11.6.1's TLS paths, Task 10/13).
+rustls = { version = "=0.23.45", default-features = false, features = ["std", "ring"] }
 # D30 envelope binding MAC (spec Sec5.11): HMAC-SHA256 over the tenant/
 # community/workstream_id/event_id/trace_id tuple, constant-time verified.
 hmac = "=0.12.1"
