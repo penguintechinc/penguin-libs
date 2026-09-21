@@ -34,8 +34,8 @@ pub use envelope::{
     Source, StageEnvelope, Trace, trace_id_from_traceparent,
 };
 pub use error::SpineError;
+pub use metrics::{NoopMetrics, SpineMetrics};
 pub use scope::{Scope, Stage, TENANT_WIDE_SEGMENT, parse_scope_from_key};
-// TODO(task-6): pub use metrics::{NoopMetrics, SpineMetrics};
 // TODO(task-9): pub use config::{ProbeClass, ProbeResult, SpineConfig};
 // TODO(task-13): pub use client::{Delivered, Grant, GroupStats, SpineClient};
 // TODO(task-17): pub use reader::GroupReader;
