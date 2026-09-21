@@ -28,9 +28,11 @@ mod metrics;
 mod reader;
 mod scope;
 
-pub use scope::{parse_scope_from_key, Scope, Stage, TENANT_WIDE_SEGMENT};
-pub use envelope::{EnvelopeError, PlatformEvent, Source};
-// TODO(task-4): also export StageEnvelope, PROCESS_TARGET_APP_ID_KEY
+pub use envelope::{
+    Binding, ENVELOPE_SCHEMA_VERSION, EnvelopeError, PROCESS_TARGET_APP_ID_KEY, PlatformEvent,
+    Source, StageEnvelope, Trace, trace_id_from_traceparent,
+};
+pub use scope::{Scope, Stage, TENANT_WIDE_SEGMENT, parse_scope_from_key};
 // TODO(task-5): pub use dlq::{DlqError, DlqErrorDetail, DlqErrorKind, DlqRecord};
 pub use error::SpineError;
 // TODO(task-6): pub use metrics::{NoopMetrics, SpineMetrics};
