@@ -28,6 +28,7 @@ mod metrics;
 mod reader;
 mod scope;
 
+pub use client::{Delivered, Grant, GroupStats, SpineClient};
 pub use config::{
     ProbeClass, ProbeResult, SpineConfig, classify_connect_error, probe_valkey,
     validate_block_timeout,
@@ -40,5 +41,4 @@ pub use envelope::{
 pub use error::SpineError;
 pub use metrics::{NoopMetrics, SpineMetrics};
 pub use scope::{Scope, Stage, TENANT_WIDE_SEGMENT, parse_scope_from_key};
-// TODO(task-13): pub use client::{Delivered, Grant, GroupStats, SpineClient};
 // TODO(task-17): pub use reader::GroupReader;

@@ -103,8 +103,7 @@ impl std::fmt::Display for Stage {
 }
 
 /// The dead-letter stream key for one stage (spec §5.5): `waddles:dlq:{stage}`.
-/// Not yet called in-crate — wired up by `SpineClient::dead_letter` (Task 15).
-#[allow(dead_code)]
+/// Wired up by [`crate::SpineClient::dead_letter`]/`dead_letter_raw`.
 pub fn dlq_key(stage: Stage) -> String {
     format!("waddles:dlq:{}", stage.as_str())
 }

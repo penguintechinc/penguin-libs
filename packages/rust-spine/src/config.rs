@@ -353,10 +353,10 @@ static CRYPTO_PROVIDER_INIT: std::sync::Once = std::sync::Once::new();
 /// requests no provider itself, so the first TLS handshake anywhere in the
 /// process panics without this -- see the `rustls` dependency comment in
 /// `Cargo.toml`. Safe to call from every TLS-capable entry point
-/// (`probe_valkey`, `SpineClient::connect`): `Once` makes repeat calls a
-/// no-op, and a losing race against another caller installing the same
-/// provider is not an error either.
-fn ensure_crypto_provider_installed() {
+/// (`probe_valkey`, `SpineClient::connect`, `GroupReader::connect`):
+/// `Once` makes repeat calls a no-op, and a losing race against another
+/// caller installing the same provider is not an error either.
+pub(crate) fn ensure_crypto_provider_installed() {
     CRYPTO_PROVIDER_INIT.call_once(|| {
         let _ = rustls::crypto::ring::default_provider().install_default();
     });
