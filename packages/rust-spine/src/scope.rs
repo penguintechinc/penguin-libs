@@ -23,7 +23,10 @@ pub struct Scope {
 impl Scope {
     /// Builds a scope from a tenant slug and an optional community slug.
     pub fn new(tenant: impl Into<String>, community: Option<String>) -> Self {
-        Self { tenant: tenant.into(), community }
+        Self {
+            tenant: tenant.into(),
+            community,
+        }
     }
 
     fn community_segment(&self) -> &str {
@@ -100,6 +103,8 @@ impl std::fmt::Display for Stage {
 }
 
 /// The dead-letter stream key for one stage (spec §5.5): `waddles:dlq:{stage}`.
+/// Not yet called in-crate — wired up by `SpineClient::dead_letter` (Task 15).
+#[allow(dead_code)]
 pub fn dlq_key(stage: Stage) -> String {
     format!("waddles:dlq:{}", stage.as_str())
 }
@@ -134,8 +139,13 @@ mod tests {
     #[rstest]
     #[case("acme", Some("main".to_string()), "twitch", "tw-channelA",
         "waddles:t:acme:c:main:src:twitch:tw-channelA:events")]
-    #[case("acme", None, "twitch", "tw-channelA",
-        "waddles:t:acme:c:_tenant:src:twitch:tw-channelA:events")]
+    #[case(
+        "acme",
+        None,
+        "twitch",
+        "tw-channelA",
+        "waddles:t:acme:c:_tenant:src:twitch:tw-channelA:events"
+    )]
     #[case("global", Some("forums".to_string()), "discord", "dg-guildX",
         "waddles:t:global:c:forums:src:discord:dg-guildX:events")]
     fn source_stream_matches_spec_shape(
@@ -154,10 +164,14 @@ mod tests {
         "waddles:t:acme:c:main:app:waddles.bot.commands.default:action",
         "waddles:t:acme:c:main:app:waddles.bot.commands.default:cfg",
         "waddles:t:acme:c:main:app:waddles.bot.commands.default:state")]
-    #[case("global", None, "waddles.bot.commands.default",
+    #[case(
+        "global",
+        None,
+        "waddles.bot.commands.default",
         "waddles:t:global:c:_tenant:app:waddles.bot.commands.default:action",
         "waddles:t:global:c:_tenant:app:waddles.bot.commands.default:cfg",
-        "waddles:t:global:c:_tenant:app:waddles.bot.commands.default:state")]
+        "waddles:t:global:c:_tenant:app:waddles.bot.commands.default:state"
+    )]
     fn app_keys_match_spec_shape(
         #[case] tenant: &str,
         #[case] community: Option<String>,
