@@ -28,13 +28,13 @@ mod metrics;
 mod reader;
 mod scope;
 
+pub use dlq::{DlqError, DlqErrorDetail, DlqErrorKind, DlqRecord};
 pub use envelope::{
     Binding, ENVELOPE_SCHEMA_VERSION, EnvelopeError, PROCESS_TARGET_APP_ID_KEY, PlatformEvent,
     Source, StageEnvelope, Trace, trace_id_from_traceparent,
 };
-pub use scope::{Scope, Stage, TENANT_WIDE_SEGMENT, parse_scope_from_key};
-// TODO(task-5): pub use dlq::{DlqError, DlqErrorDetail, DlqErrorKind, DlqRecord};
 pub use error::SpineError;
+pub use scope::{Scope, Stage, TENANT_WIDE_SEGMENT, parse_scope_from_key};
 // TODO(task-6): pub use metrics::{NoopMetrics, SpineMetrics};
 // TODO(task-9): pub use config::{ProbeClass, ProbeResult, SpineConfig};
 // TODO(task-13): pub use client::{Delivered, Grant, GroupStats, SpineClient};

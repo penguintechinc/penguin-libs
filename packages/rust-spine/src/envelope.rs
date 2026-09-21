@@ -441,6 +441,12 @@ impl<'de> Deserialize<'de> for StageEnvelope {
     }
 }
 
+impl From<serde_json::Error> for EnvelopeError {
+    fn from(e: serde_json::Error) -> Self {
+        env_err(e.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
