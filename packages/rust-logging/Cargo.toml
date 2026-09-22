@@ -27,7 +27,6 @@ tracing-opentelemetry = "=0.33.0"
 opentelemetry = "=0.32.0"
 opentelemetry-otlp = { version = "=0.32.0", features = ["grpc-tonic"] }
 opentelemetry_sdk = { version = "=0.32.1", features = ["rt-tokio"] }
-opentelemetry-appender-tracing = "=0.32.0"
 opentelemetry-prometheus = "=0.32.0"
 prometheus = "=0.14.0"
 axum = "=0.8.9"
@@ -45,6 +44,13 @@ uuid = "=1.26.1"
 rstest = "=0.27.0"
 axum-test = "=21.1.0"
 tokio = { version = "=1.53.1", features = ["full", "test-util"] }
+# Edition 2021 uses resolver = "2", which unifies dev-dependency features
+# into test/bench builds only -- redeclaring opentelemetry_sdk here with
+# `testing` means plain `cargo test` gets the in-memory exporters without
+# `--all-features`. `make test`/`make coverage` already pass
+# `--all-features`, enabling the same thing via this crate's own `testing`
+# feature; both paths converge on the same underlying flag.
+opentelemetry_sdk = { version = "=0.32.1", features = ["testing"] }
 
 [lints.rust]
 unsafe_code = "deny"
