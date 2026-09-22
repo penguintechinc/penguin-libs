@@ -1,0 +1,22 @@
+[package]
+name = "penguin-connector-youtube"
+description = "YouTube connector: live-chat poll receive, liveChatMessages.insert send (scaffold — see crate docs)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords = ["youtube", "live-chat", "connector"]
+categories = ["network-programming", "asynchronous"]
+
+[dependencies]
+thiserror = "=2.0.18"
+
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

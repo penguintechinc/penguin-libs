@@ -1,0 +1,33 @@
+[package]
+name = "penguin-connector-discord"
+description = "Discord connector: Gateway client receive, REST message send"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords = ["discord", "gateway", "connector"]
+categories = ["network-programming", "asynchronous"]
+
+[dependencies]
+futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"] }
+reqwest = { version = "=0.13.4", default-features = false, features = ["rustls", "json"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"
+thiserror = "=2.0.18"
+tokio = { version = "=1.52.3", features = ["rt", "time", "macros", "sync"] }
+tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect", "handshake", "rustls-tls-webpki-roots"] }
+tracing = "=0.1.44"
+
+[dev-dependencies]
+tokio = { version = "=1.52.3", features = ["full"] }
+wiremock = "=0.6.5"
+
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

@@ -1,0 +1,32 @@
+[graph]
+all-features = true
+
+[advisories]
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "deny"
+ignore = []
+
+[licenses]
+# CDLA-Permissive-2.0: Mozilla's CA root bundle data (webpki-roots /
+# webpki-root-certs, pulled in via reqwest's rustls-platform-verifier and
+# tokio-tungstenite's rustls-tls-webpki-roots feature) — a permissive data
+# license, not copyleft; standard to allow alongside the code licenses below.
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
