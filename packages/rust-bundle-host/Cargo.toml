@@ -1,0 +1,48 @@
+[package]
+name = "penguin-bundle-host"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.97.1"
+license = "MIT"
+description = "Waddles WASM bundle sandbox: host-API wire frame codec and the bundle.yaml v2 manifest validator (31 rules)."
+repository = "https://github.com/penguintechinc/penguin-libs"
+authors = ["Penguin Tech Inc <support@penguintech.io>"]
+keywords = ["wasm", "wasi", "sandbox", "waddles"]
+categories = ["network-programming", "parser-implementations"]
+publish = false
+
+[lib]
+name = "penguin_bundle_host"
+path = "src/lib.rs"
+
+[dependencies]
+# `wire`: length-prefixed frame codec (u32 BE length + UTF-8 JSON) and the
+# correlation-id multiplexer over an async duplex stream (spec Sec6.6, A3).
+tokio = { version = "=1.53.1", features = ["rt", "macros", "io-util", "net", "sync", "time"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["preserve_order"] }
+thiserror = "=2.0.20"
+
+# `manifest`: bundle.yaml v2 is YAML on disk (spec Sec6.4); serde_yaml_ng is
+# the actively maintained fork of the archived dtolnay/serde-yaml (last
+# release 2024-03, no further security fixes) -- same serde-based
+# deserialization, no PRC/sanctioned-entity origin.
+serde_yaml_ng = "=0.10.0"
+regex = "=1.13.1"
+
+[dev-dependencies]
+tokio = { version = "=1.53.1", features = ["full", "test-util"] }
+rstest = "=0.27.0"
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

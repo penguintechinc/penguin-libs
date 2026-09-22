@@ -1,0 +1,10 @@
+schema_version: 2
+app_id: waddles.socials.music.default
+name: Music Station Song Request
+version: 3.0.0
+feature: waddles.socials.music
+module: socials
+provider: builtin
+language: python
+artifact: source
+stages: {}
