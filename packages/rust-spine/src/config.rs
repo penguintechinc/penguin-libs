@@ -104,7 +104,17 @@ pub fn validate_block_timeout(
 
 /// Environment-driven spine configuration (spec Sec12.7). Construct via
 /// [`SpineConfig::from_env`] at startup.
-#[derive(Debug, Clone)]
+///
+/// `Debug` is hand-written, not derived: `valkey_password` is a credential
+/// and must never appear verbatim in a `{:?}` log line (critical-rules.md
+/// Token & Secret Hygiene). Every other field has been audited and holds no
+/// secret value -- `valkey_username` is a non-secret identifier,
+/// `valkey_ca_file` is a filesystem path (not a key/cert value), and
+/// `valkey_url` never carries embedded credentials in this crate's usage
+/// (auth is always via the separate username/password fields, matching
+/// `SpineClient`'s existing manual `Debug` impl printing `valkey_url`
+/// unredacted).
+#[derive(Clone)]
 pub struct SpineConfig {
     /// `VALKEY_URL`, falling back to `REDIS_URL` for compatibility. Required.
     pub valkey_url: String,
@@ -143,6 +153,34 @@ pub struct SpineConfig {
     pub drain_socket_timeout_s: u64,
     /// `RELAY_BLOCK_TIMEOUT_S`, default `30` (spec Sec5.7/Sec5.8).
     pub relay_block_timeout_s: u64,
+}
+
+impl std::fmt::Debug for SpineConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SpineConfig")
+            .field("valkey_url", &self.valkey_url)
+            .field("valkey_username", &self.valkey_username)
+            .field(
+                "valkey_password",
+                &self.valkey_password.as_ref().map(|_| "<redacted>"),
+            )
+            .field("valkey_ca_file", &self.valkey_ca_file)
+            .field("security_transport_tls", &self.security_transport_tls)
+            .field("security_transport_auth", &self.security_transport_auth)
+            .field("consumer_id", &self.consumer_id)
+            .field("stream_maxlen", &self.stream_maxlen)
+            .field("read_count", &self.read_count)
+            .field("block_ms", &self.block_ms)
+            .field("claim_idle_ms", &self.claim_idle_ms)
+            .field("claim_interval_ms", &self.claim_interval_ms)
+            .field("stats_interval_ms", &self.stats_interval_ms)
+            .field("pel_alert", &self.pel_alert)
+            .field("dlq_maxlen", &self.dlq_maxlen)
+            .field("max_deliveries", &self.max_deliveries)
+            .field("drain_socket_timeout_s", &self.drain_socket_timeout_s)
+            .field("relay_block_timeout_s", &self.relay_block_timeout_s)
+            .finish()
+    }
 }
 
 impl SpineConfig {
@@ -636,6 +674,23 @@ mod tests {
         let env = base_env();
         let cfg = SpineConfig::from_lookup(&lookup_from(&env)).unwrap();
         assert!(cfg.consumer_id.starts_with("unknown-"));
+    }
+
+    /// Regression: `SpineConfig` used to `#[derive(Debug)]`, which prints
+    /// `valkey_password` verbatim -- a credential leak into any `{:?}` log
+    /// line. This must fail against the derive and pass only once the
+    /// hand-written `Debug` impl redacts the password (critical-rules.md
+    /// Token & Secret Hygiene: never print/log a full token value).
+    #[test]
+    fn debug_output_never_contains_the_raw_password() {
+        let mut env = base_env();
+        env.insert("VALKEY_PASSWORD", "sup3r-secret-do-not-leak-9f8e7d");
+        let cfg = SpineConfig::from_lookup(&lookup_from(&env)).unwrap();
+        let debug_output = format!("{cfg:?}");
+        assert!(
+            !debug_output.contains("sup3r-secret-do-not-leak-9f8e7d"),
+            "Debug output leaked the raw password: {debug_output}"
+        );
     }
 
     fn synthetic_io_error(message: &str) -> redis::RedisError {

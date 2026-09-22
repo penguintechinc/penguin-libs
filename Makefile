@@ -211,19 +211,21 @@ clean: ## Remove build artifacts and caches
 
 # === penguin-spine integration tests (pinned Valkey TLS container) ===
 
-.PHONY: test-integration-spine-up test-integration-spine-down test-integration-spine
+.PHONY: test-integration-spine-up test-integration-spine-down test-integration-spine coverage-spine
 
 SPINE_TLS_DIR := packages/rust-spine/tests/valkey/.tls
 SPINE_VALKEY_IMAGE := valkey/valkey:8.1.5@sha256:e51a82741b780e4bf315db10753edf07eea6496d405fa7df2a8677a18f5e7464
 SPINE_VALKEY_CONTAINER := penguin-spine-test-valkey
 SPINE_NETWORK := penguin-spine-test-net
 SPINE_RUST_IMAGE := rust:1.97.1@sha256:b1b3c9c0d921d7fa0a6d1f9ec7e4eab87f8c8ec97644c3d791450f131dec813f
+SPINE_COVERAGE_MIN_LINES := 90
 
 test-integration-spine-up: ## Start the pinned Valkey TLS container for penguin-spine integration tests
 	bash packages/rust-spine/tests/valkey/gen-test-tls.sh $(SPINE_TLS_DIR) $(SPINE_VALKEY_CONTAINER)
 	docker network create $(SPINE_NETWORK) >/dev/null 2>&1 || true
 	docker rm -f $(SPINE_VALKEY_CONTAINER) >/dev/null 2>&1 || true
 	docker run -d --name $(SPINE_VALKEY_CONTAINER) --network $(SPINE_NETWORK) \
+	  -p 6390:6390 \
 	  -v $(CURDIR)/$(SPINE_TLS_DIR):/tls:ro \
 	  -v $(CURDIR)/packages/rust-spine/tests/valkey/users.acl:/acl/users.acl:ro \
 	  -v $(CURDIR)/packages/rust-spine/tests/valkey/valkey.conf:/usr/local/etc/valkey/valkey.conf:ro \
@@ -252,3 +254,12 @@ test-integration-spine: test-integration-spine-up ## Run penguin-spine's integra
 	  $(SPINE_RUST_IMAGE) \
 	  cargo test --test integration_stream_tests --test client_rules_tests -- --test-threads=1
 	$(MAKE) test-integration-spine-down
+
+coverage-spine: test-integration-spine-up ## Enforce >=SPINE_COVERAGE_MIN_LINES% line coverage for penguin-spine (unit + integration) via cargo-llvm-cov on the host, against the container's host-mapped port (gen-test-tls.sh's SANs already cover DNS:localhost/IP:127.0.0.1). Always tears down (from $(CURDIR), unaffected by the subshell's cd), exit status is the coverage command's, never the teardown's.
+	@trap '$(MAKE) test-integration-spine-down' EXIT; \
+	( cd packages/rust-spine && \
+	  VALKEY_URL=rediss://127.0.0.1:6390 \
+	  VALKEY_USERNAME=waddles_admin \
+	  VALKEY_PASSWORD=test-admin-password \
+	  VALKEY_CA_FILE=$(CURDIR)/$(SPINE_TLS_DIR)/ca.crt \
+	  cargo llvm-cov --fail-under-lines $(SPINE_COVERAGE_MIN_LINES) -- --test-threads=1 )
