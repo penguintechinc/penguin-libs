@@ -301,6 +301,40 @@ jobs:
           cargo install cargo-deny --version 0.18.9 --locked
           cargo deny check
 
+  build-rust-spine:
+    name: Build & Test Rust Spine
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/rust-spine/') }}
+    defaults:
+      run:
+        working-directory: packages/rust-spine
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88 # master (2026-06-30)
+        with:
+          toolchain: 1.97.1
+          components: clippy,rustfmt
+      - name: Format check
+        run: cargo fmt --all --check
+      - name: Lint
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Test - unit
+        run: cargo test --lib
+      # The integration suite runs against a real, pinned Valkey over TLS with
+      # ACL auth -- never a mock. Its assertions depend on server state only
+      # Valkey produces (XINFO GROUPS PEL counts, concurrent XAUTOCLAIM splits,
+      # MAXLEN ~ trimming bounds), so a skipped container must fail the job
+      # rather than quietly pass.
+      - name: Test - integration (pinned Valkey TLS container)
+        working-directory: .
+        run: make test-integration-spine
+      - name: Security - cargo-deny
+        run: |
+          cargo install cargo-deny --version 0.18.9 --locked
+          cargo deny check
+
   build-react-form-builder:
     name: Build & Test React Form Builder
     runs-on: ubuntu-latest
