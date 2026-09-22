@@ -1,0 +1,41 @@
+schema_version: 2
+app_id: waddles.socials.music.default
+name: Music Station Song Request
+version: 3.0.0
+feature: waddles.socials.music
+module: socials
+provider: builtin
+language: python
+artifact: source
+execution_model: native
+is_default: true
+stages:
+  process:
+    entry: "bundles.social_music_process:transform"
+    consumes:
+      - platform: twitch
+        event_types: ["chat.message"]
+        filters:
+          command_prefix: ["!sr"]
+    produces: ["waddles.music.request"]
+  action:
+    entry: "bundles.social_music_action:send_request"
+egress:
+  - host: "api.spotify.com"
+    methods: ["GET", "POST"]
+  - host: "*.googleapis.com"
+data:
+  tables:
+    - music_queue
+limits:
+  timeout_ms: 2000
+  memory_mb: 64
+  egress_rps: 10
+permissions:
+  - "music:read"
+compatible_with: []
+incompatible_with: []
+platform_compatibility:
+  tested_with: "3.0.0"
+  min_version: "3.0.0"
+  max_version: "4.0.0"

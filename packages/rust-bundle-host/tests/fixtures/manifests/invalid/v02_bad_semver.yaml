@@ -1,0 +1,17 @@
+schema_version: 2
+app_id: waddles.socials.music.default
+name: Music Station Song Request
+version: "not-a-version"
+feature: waddles.socials.music
+module: socials
+provider: builtin
+language: python
+artifact: source
+stages:
+  process:
+    entry: "bundles.social_music_process:transform"
+    consumes:
+      - platform: twitch
+        event_types: ["chat.message"]
+  action:
+    entry: "bundles.social_music_action:send_request"
