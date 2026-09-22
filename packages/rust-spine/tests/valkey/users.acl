@@ -1,0 +1,2 @@
+user default off
+user waddles_admin on >test-admin-password ~* &* +@all

@@ -208,3 +208,47 @@ clean: ## Remove build artifacts and caches
 	@find . -type d -name __pycache__ -not -path "*/node_modules/*" -exec rm -rf {} + 2>/dev/null || true
 	@find . -type d -name "*.egg-info" -not -path "*/node_modules/*" -exec rm -rf {} + 2>/dev/null || true
 	@find . -name "*.pyc" -not -path "*/node_modules/*" -delete 2>/dev/null || true
+
+# === penguin-spine integration tests (pinned Valkey TLS container) ===
+
+.PHONY: test-integration-spine-up test-integration-spine-down test-integration-spine
+
+SPINE_TLS_DIR := packages/rust-spine/tests/valkey/.tls
+SPINE_VALKEY_IMAGE := valkey/valkey:8.1.5@sha256:e51a82741b780e4bf315db10753edf07eea6496d405fa7df2a8677a18f5e7464
+SPINE_VALKEY_CONTAINER := penguin-spine-test-valkey
+SPINE_NETWORK := penguin-spine-test-net
+SPINE_RUST_IMAGE := rust:1.97.1@sha256:b1b3c9c0d921d7fa0a6d1f9ec7e4eab87f8c8ec97644c3d791450f131dec813f
+
+test-integration-spine-up: ## Start the pinned Valkey TLS container for penguin-spine integration tests
+	bash packages/rust-spine/tests/valkey/gen-test-tls.sh $(SPINE_TLS_DIR) $(SPINE_VALKEY_CONTAINER)
+	docker network create $(SPINE_NETWORK) >/dev/null 2>&1 || true
+	docker rm -f $(SPINE_VALKEY_CONTAINER) >/dev/null 2>&1 || true
+	docker run -d --name $(SPINE_VALKEY_CONTAINER) --network $(SPINE_NETWORK) \
+	  -v $(CURDIR)/$(SPINE_TLS_DIR):/tls:ro \
+	  -v $(CURDIR)/packages/rust-spine/tests/valkey/users.acl:/acl/users.acl:ro \
+	  -v $(CURDIR)/packages/rust-spine/tests/valkey/valkey.conf:/usr/local/etc/valkey/valkey.conf:ro \
+	  $(SPINE_VALKEY_IMAGE) valkey-server /usr/local/etc/valkey/valkey.conf
+	@echo "waiting for valkey to become ready..."
+	@ready=0; \
+	for i in $$(seq 1 30); do \
+	  if docker exec $(SPINE_VALKEY_CONTAINER) valkey-cli --tls --cert /tls/server.crt --key /tls/server.key --cacert /tls/ca.crt -p 6390 --user waddles_admin --pass test-admin-password PING 2>/dev/null | grep -q PONG; then ready=1; break; fi; \
+	  sleep 1; \
+	done; \
+	if [ "$$ready" != "1" ]; then echo "valkey did not become ready in time"; exit 1; fi
+
+test-integration-spine-down: ## Tear down the pinned Valkey TLS container/network/certs
+	docker rm -f $(SPINE_VALKEY_CONTAINER) >/dev/null 2>&1 || true
+	docker network rm $(SPINE_NETWORK) >/dev/null 2>&1 || true
+	rm -rf $(SPINE_TLS_DIR)
+
+test-integration-spine: test-integration-spine-up ## Run penguin-spine's integration tests against the pinned Valkey container
+	docker run --rm --network $(SPINE_NETWORK) \
+	  -v $(CURDIR)/packages/rust-spine:/work \
+	  -w /work \
+	  -e VALKEY_URL=rediss://$(SPINE_VALKEY_CONTAINER):6390 \
+	  -e VALKEY_USERNAME=waddles_admin \
+	  -e VALKEY_PASSWORD=test-admin-password \
+	  -e VALKEY_CA_FILE=/work/tests/valkey/.tls/ca.crt \
+	  $(SPINE_RUST_IMAGE) \
+	  cargo test --test integration_stream_tests --test client_rules_tests -- --test-threads=1
+	$(MAKE) test-integration-spine-down
