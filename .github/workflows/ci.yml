@@ -326,6 +326,35 @@ jobs:
           cargo install cargo-deny --version 0.18.9 --locked
           cargo deny check
 
+  build-rust-licensing:
+    name: Build & Test Rust Licensing
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/rust-licensing/') }}
+    defaults:
+      run:
+        working-directory: packages/rust-licensing
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88 # master (2026-06-30)
+        with:
+          toolchain: 1.97.1
+          components: clippy,rustfmt
+      - name: Format check
+        run: cargo fmt --all --check
+      # --all-features: the `axum` gating-middleware feature has its own
+      # test file (tests/axum_tests.rs, `#![cfg(feature = "axum")]`) that a
+      # plain `cargo test`/`cargo clippy` silently skips entirely.
+      - name: Lint
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Test
+        run: cargo test --all-features
+      - name: Security - cargo-deny
+        run: |
+          cargo install cargo-deny --version 0.18.9 --locked
+          cargo deny check
+
   build-react-form-builder:
     name: Build & Test React Form Builder
     runs-on: ubuntu-latest
