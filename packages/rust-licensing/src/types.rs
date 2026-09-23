@@ -281,4 +281,48 @@ mod tests {
         info.valid = false;
         assert!(!info.feature_entitled("sso"));
     }
+
+    #[test]
+    fn feature_deserialize_without_units_uses_default() {
+        let json = r#"{"name":"sso","entitled":true}"#;
+        let feature: Feature = serde_json::from_str(json).expect("deserialize feature");
+        assert_eq!(feature.name, "sso");
+        assert!(feature.entitled);
+        assert_eq!(feature.units, -1); // default_units() returns -1
+    }
+
+    #[test]
+    fn license_info_deserialize_without_tier_uses_default() {
+        let json = r#"{
+            "valid":true,
+            "customer":"ACME",
+            "product":"test",
+            "expires_at":null,
+            "issued_at":null,
+            "features":[],
+            "limits":null,
+            "metadata":null,
+            "message":null
+        }"#;
+        let info: LicenseInfo = serde_json::from_str(json).expect("deserialize license info");
+        assert_eq!(info.tier, Tier::Free); // default_tier() returns Tier::Free
+        assert!(info.valid);
+    }
+
+    #[test]
+    fn absurd_grace_value_falls_back_to_strict_expiry() {
+        // chrono::Duration::from_std() fails for durations with too many seconds.
+        // Use a duration that exceeds chrono's limits to trigger the Err(_) path.
+        let absurd_grace = Duration::from_secs(u64::MAX / 2);
+        let grace_as_chrono = chrono::Duration::from_std(absurd_grace);
+        assert!(
+            grace_as_chrono.is_err(),
+            "Expected grace to exceed chrono limits"
+        );
+
+        let now = Utc::now();
+        let just_expired = licensed(Some(now - chrono::Duration::hours(1)));
+        // With absurd grace, is_live_at should fall back to strict expiry without grace
+        assert!(!just_expired.is_live_at(now, absurd_grace));
+    }
 }
