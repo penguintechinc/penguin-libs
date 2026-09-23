@@ -26,10 +26,32 @@ pub enum DiscordError {
     #[error("discord gateway payload decode error: {0}")]
     Decode(String),
 
-    /// The gateway asked for `RECONNECT` or declared the session invalid
-    /// (`INVALID_SESSION`) — the caller must reconnect. Retryable.
+    /// The gateway sent `RECONNECT` (opcode 7) — Discord is asking for a
+    /// fresh connection but the *session* is still resumable (a real
+    /// `RESUME` using the stored session id + last sequence number would
+    /// avoid re-`IDENTIFY`ing). Retryable.
+    ///
+    /// TODO: this crate does not yet capture the `session_id` from `READY`
+    /// or implement `OP_RESUME`, so today's caller can only reconnect via
+    /// a fresh handshake — same recovery as [`Self::SessionInvalidated`],
+    /// just distinguished here so a future resume implementation (and any
+    /// jittered reconnect backoff, which belongs in the caller's reconnect
+    /// loop — this crate has none) has a signal to key off of.
+    #[error("discord gateway asked for reconnect (resumable)")]
+    ResumeRequested,
+
+    /// The gateway declared the session invalid (`INVALID_SESSION`,
+    /// opcode 9) — no resume is possible, the caller must reconnect and
+    /// re-`IDENTIFY` from scratch. Retryable.
     #[error("discord gateway session invalidated, reconnect required")]
     SessionInvalidated,
+
+    /// No `HEARTBEAT_ACK` (opcode 11) arrived for the previous heartbeat
+    /// before the next one came due — a zombied connection (no RST/FIN)
+    /// that would otherwise heartbeat forever without ever reconnecting.
+    /// The caller must drop this session and reconnect. Retryable.
+    #[error("discord gateway heartbeat not acked before next heartbeat due")]
+    HeartbeatAckTimeout,
 
     /// The REST send request itself failed at the transport layer.
     /// Retryable.
@@ -70,10 +92,28 @@ impl DiscordError {
             self,
             DiscordError::Transport(_)
                 | DiscordError::ClosedDuringHandshake
+                | DiscordError::ResumeRequested
                 | DiscordError::SessionInvalidated
+                | DiscordError::HeartbeatAckTimeout
                 | DiscordError::Http(_)
                 | DiscordError::RateLimited { .. }
                 | DiscordError::ServerError(_)
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DiscordError;
+
+    #[test]
+    fn resume_requested_and_session_invalidated_are_retryable() {
+        assert!(DiscordError::ResumeRequested.is_retryable());
+        assert!(DiscordError::SessionInvalidated.is_retryable());
+    }
+
+    #[test]
+    fn heartbeat_ack_timeout_is_retryable() {
+        assert!(DiscordError::HeartbeatAckTimeout.is_retryable());
     }
 }

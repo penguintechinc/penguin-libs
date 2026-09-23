@@ -18,6 +18,7 @@ serde_json = "=1.0.150"
 sha2 = "=0.10.9"
 subtle = "=2.6.1"
 thiserror = "=2.0.18"
+time = { version = "=0.3.55", default-features = false, features = ["std", "parsing"] }
 tokio = { version = "=1.52.3", features = ["net", "rt", "io-util", "time", "macros", "sync"] }
 tokio-rustls = "=0.26.5"
 tracing = "=0.1.44"
