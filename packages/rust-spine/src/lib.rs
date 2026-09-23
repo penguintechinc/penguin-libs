@@ -19,6 +19,7 @@
 //! into a caller-supplied [`SpineMetrics`] implementation, since no Rust
 //! penguin-logging crate exists yet (`backend-rust.md`, known gap).
 
+mod binding;
 mod client;
 mod config;
 mod dlq;
@@ -28,6 +29,7 @@ mod metrics;
 mod reader;
 mod scope;
 
+pub use binding::{BindingError, KeyRing, compute_binding_mac, verify_binding};
 pub use client::{Delivered, Grant, GroupStats, SpineClient};
 pub use config::{
     ProbeClass, ProbeResult, SpineConfig, classify_connect_error, probe_valkey,
