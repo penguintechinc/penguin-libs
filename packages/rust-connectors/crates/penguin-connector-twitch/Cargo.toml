@@ -13,19 +13,19 @@ categories = ["network-programming", "asynchronous"]
 [dependencies]
 hex = "=0.4.3"
 hmac = "=0.12.1"
-serde = { version = "=1.0.228", features = ["derive"] }
-serde_json = "=1.0.150"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
 sha2 = "=0.10.9"
 subtle = "=2.6.1"
-thiserror = "=2.0.18"
+thiserror = "=2.0.20"
 time = { version = "=0.3.55", default-features = false, features = ["std", "parsing"] }
-tokio = { version = "=1.52.3", features = ["net", "rt", "io-util", "time", "macros", "sync"] }
+tokio = { version = "=1.53.1", features = ["net", "rt", "io-util", "time", "macros", "sync"] }
 tokio-rustls = "=0.26.5"
 tracing = "=0.1.44"
 webpki-roots = "=1.0.9"
 
 [dev-dependencies]
-tokio = { version = "=1.52.3", features = ["full"] }
+tokio = { version = "=1.53.1", features = ["full"] }
 
 [lints.rust]
 unsafe_code = "deny"

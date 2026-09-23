@@ -11,7 +11,7 @@ keywords = ["kick", "pusher", "webhook", "connector"]
 categories = ["network-programming", "asynchronous"]
 
 [dependencies]
-thiserror = "=2.0.18"
+thiserror = "=2.0.20"
 
 [lints.rust]
 unsafe_code = "deny"
