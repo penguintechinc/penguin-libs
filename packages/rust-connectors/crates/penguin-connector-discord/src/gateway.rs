@@ -209,6 +209,12 @@ pub struct GatewaySession<S> {
     heartbeat_interval: Duration,
     seq: Option<u64>,
     self_user_id: Option<String>,
+    /// `true` from the moment a heartbeat is sent until its `HEARTBEAT_ACK`
+    /// (opcode 11) is observed. If still `true` when the *next* heartbeat
+    /// comes due, the connection is zombied (no RST/FIN, just silence) and
+    /// [`GatewaySession::next_chat_message`] errors out to force a
+    /// reconnect rather than heartbeating forever.
+    awaiting_ack: bool,
 }
 
 impl<S> std::fmt::Debug for GatewaySession<S> {
@@ -220,6 +226,7 @@ impl<S> std::fmt::Debug for GatewaySession<S> {
             .field("heartbeat_interval", &self.heartbeat_interval)
             .field("seq", &self.seq)
             .field("self_user_id", &self.self_user_id)
+            .field("awaiting_ack", &self.awaiting_ack)
             .finish_non_exhaustive()
     }
 }
@@ -261,6 +268,7 @@ where
             heartbeat_interval,
             seq: None,
             self_user_id: None,
+            awaiting_ack: false,
         })
     }
 
@@ -277,6 +285,13 @@ where
                 Ok(Some(Err(e))) => return Err(DiscordError::Transport(e.to_string())),
                 Ok(None) => return Ok(None),
                 Err(_elapsed) => {
+                    // The interval elapsed with no ack for the heartbeat we
+                    // already sent — a zombied connection would otherwise
+                    // heartbeat forever without ever reconnecting (no
+                    // RST/FIN arrives to surface as a transport error).
+                    if self.awaiting_ack {
+                        return Err(DiscordError::HeartbeatAckTimeout);
+                    }
                     self.send_heartbeat().await?;
                     continue;
                 }
@@ -293,7 +308,9 @@ where
             }
             match payload.op {
                 OP_HEARTBEAT => self.send_heartbeat().await?,
-                OP_RECONNECT | OP_INVALID_SESSION => return Err(DiscordError::SessionInvalidated),
+                OP_HEARTBEAT_ACK => self.awaiting_ack = false,
+                OP_RECONNECT => return Err(DiscordError::ResumeRequested),
+                OP_INVALID_SESSION => return Err(DiscordError::SessionInvalidated),
                 OP_DISPATCH => match payload.t.as_deref() {
                     Some("READY") => self.self_user_id = extract_ready_self_id(&payload.d),
                     Some("MESSAGE_CREATE") => {
@@ -310,6 +327,9 @@ where
         }
     }
 
+    /// Send a `HEARTBEAT` frame and mark this session as awaiting its ack —
+    /// [`GatewaySession::next_chat_message`] forces a reconnect if the ack
+    /// never arrives before the next heartbeat comes due.
     async fn send_heartbeat(&mut self) -> Result<(), DiscordError> {
         let heartbeat = build_heartbeat(self.seq);
         let text =
@@ -317,7 +337,9 @@ where
         self.ws
             .send(Message::text(text))
             .await
-            .map_err(|e| DiscordError::Transport(e.to_string()))
+            .map_err(|e| DiscordError::Transport(e.to_string()))?;
+        self.awaiting_ack = true;
+        Ok(())
     }
 }
 
@@ -668,6 +690,100 @@ mod tests {
             .expect("should not error")
             .expect("message present");
         assert_eq!(msg.author_username, "dee");
+    }
+
+    #[tokio::test]
+    async fn next_chat_message_reconnects_when_heartbeat_ack_missing() {
+        let (mut session, mut server_ws) = handshake_over_duplex(30).await;
+
+        let recv_task = tokio::spawn(async move { session.next_chat_message().await });
+
+        // First heartbeat, sent because the interval elapsed with no frames
+        // from the server at all -- exactly the "zombied, no RST/FIN"
+        // shape this fix targets.
+        let first_heartbeat = server_ws
+            .next()
+            .await
+            .expect("heartbeat frame")
+            .expect("ok frame");
+        let heartbeat =
+            parse_payload(&first_heartbeat.into_text().expect("text frame")).expect("decode");
+        assert_eq!(heartbeat.op, OP_HEARTBEAT);
+
+        // Never ack it. The next heartbeat interval elapses with the prior
+        // heartbeat still unacked, so the session must error out to force
+        // a reconnect rather than heartbeat forever.
+        let err = recv_task
+            .await
+            .expect("task should not panic")
+            .expect_err("missing ack should force a reconnect");
+        assert!(matches!(err, DiscordError::HeartbeatAckTimeout));
+    }
+
+    #[tokio::test]
+    async fn next_chat_message_survives_when_heartbeat_ack_arrives_in_time() {
+        let (mut session, mut server_ws) = handshake_over_duplex(30).await;
+
+        let recv_task = tokio::spawn(async move { session.next_chat_message().await });
+
+        let first_heartbeat = server_ws
+            .next()
+            .await
+            .expect("heartbeat frame")
+            .expect("ok frame");
+        let heartbeat =
+            parse_payload(&first_heartbeat.into_text().expect("text frame")).expect("decode");
+        assert_eq!(heartbeat.op, OP_HEARTBEAT);
+
+        // Ack it before the next heartbeat interval elapses, then deliver a
+        // message -- the session must NOT treat this as a zombied
+        // connection.
+        server_ws
+            .send(Message::text(r#"{"op":11,"d":null}"#))
+            .await
+            .expect("send ack");
+        server_ws
+            .send(Message::text(
+                r#"{"op":0,"s":1,"t":"MESSAGE_CREATE","d":{"id":"1","channel_id":"2",
+                   "author":{"id":"3","username":"eve","bot":false},"content":"hey"}}"#,
+            ))
+            .await
+            .expect("send message_create");
+
+        let msg = recv_task
+            .await
+            .expect("task should not panic")
+            .expect("should not error")
+            .expect("message present");
+        assert_eq!(msg.author_username, "eve");
+    }
+
+    #[tokio::test]
+    async fn next_chat_message_reconnect_opcode_is_resumable() {
+        let (mut session, mut server_ws) = handshake_over_duplex(60_000).await;
+        server_ws
+            .send(Message::text(r#"{"op":7,"d":null}"#))
+            .await
+            .expect("send reconnect");
+        let err = session
+            .next_chat_message()
+            .await
+            .expect_err("reconnect opcode should error");
+        assert!(matches!(err, DiscordError::ResumeRequested));
+    }
+
+    #[tokio::test]
+    async fn next_chat_message_invalid_session_opcode_is_not_resumable() {
+        let (mut session, mut server_ws) = handshake_over_duplex(60_000).await;
+        server_ws
+            .send(Message::text(r#"{"op":9,"d":false}"#))
+            .await
+            .expect("send invalid session");
+        let err = session
+            .next_chat_message()
+            .await
+            .expect_err("invalid session opcode should error");
+        assert!(matches!(err, DiscordError::SessionInvalidated));
     }
 
     #[tokio::test]
