@@ -38,6 +38,18 @@ pub struct Delivered {
     pub env: StageEnvelope,
     /// The delivery count at read time (`1` for a first delivery).
     pub deliveries: u64,
+    /// The consumer group this entry was actually delivered under
+    /// (`XREADGROUP`/`XAUTOCLAIM`'s group argument — [`crate::GroupReader::read`]
+    /// and [`SpineClient::claim_stale`] are the only producers of a
+    /// `Delivered`, and both set this to the group they read with). May
+    /// differ from `env.app_id`: that field is per-message routing
+    /// metadata describing which bundle the envelope is destined for,
+    /// while this is the group that owns the entry's pending-entries-list
+    /// slot. They coincide for svc_action's per-bundle action streams but
+    /// not for svc_process's shared ingest-source streams — this struct
+    /// carries both so [`SpineClient::dead_letter`] can `XACK` under the
+    /// right one instead of guessing from `env.app_id`.
+    pub group: String,
 }
 
 /// Per-group stats from `XINFO GROUPS` (spec Sec5.6).
@@ -230,7 +242,14 @@ impl SpineClient {
     /// `XADD waddles:dlq:{stage} MAXLEN ~ {dlq_maxlen} * rec {json}`, then
     /// `XACK`s the source entry so it stops being redelivered. The DLQ
     /// stage segment comes from `d.env.stage` (already validated to
-    /// `process`/`action`), never from a caller-chosen `Stage`.
+    /// `process`/`action`), never from a caller-chosen `Stage`. The `XACK`
+    /// (and the record's `group` field) use `d.group` — the consumer
+    /// group [`crate::GroupReader::read`]/`claim_stale` actually delivered
+    /// this entry under — never `d.env.app_id`: those coincide for
+    /// svc_action's per-bundle action streams but not svc_process's
+    /// shared ingest-source streams, where acking under `env.app_id`
+    /// would target a group that never read the entry and leave it stuck
+    /// in the real group's PEL forever.
     pub async fn dead_letter(&self, d: &Delivered, err: &DlqError) -> Result<(), SpineError> {
         let stage = Stage::parse(&d.env.stage)?;
         let raw = serde_json::to_string(&d.env)?;
@@ -239,7 +258,7 @@ impl SpineClient {
             stage: stage.as_str().to_string(),
             key: d.stream.clone(),
             entry_id: d.entry_id.clone(),
-            group: d.env.app_id.clone(),
+            group: d.group.clone(),
             tenant: d.env.tenant.clone(),
             community: d.env.community.clone(),
             app_id: d.env.app_id.clone(),
@@ -257,7 +276,7 @@ impl SpineClient {
             trace: d.env.trace.clone(),
             raw,
         };
-        self.dead_letter_raw(stage, &record, &d.stream, &d.env.app_id, &d.entry_id)
+        self.dead_letter_raw(stage, &record, &d.stream, &d.group, &d.entry_id)
             .await
     }
 
@@ -395,6 +414,7 @@ impl SpineClient {
                         entry_id: entry.id,
                         env,
                         deliveries,
+                        group: app_id.to_string(),
                     });
                 }
                 Some(env) => {
@@ -413,6 +433,7 @@ impl SpineClient {
                         entry_id: entry.id,
                         env,
                         deliveries,
+                        group: app_id.to_string(),
                     };
                     self.dead_letter(&d, &err).await?;
                 }

@@ -190,6 +190,7 @@ async fn ack_removes_an_entry_from_the_pending_entries_list() {
         entry_id: entry_id.clone(),
         env,
         deliveries: 1,
+        group: app_id.to_string(),
     };
     client.ack(&d, app_id).await.unwrap();
 
@@ -263,6 +264,7 @@ async fn fan_in_one_write_is_observed_by_every_group_exactly_once() {
                 entry_id: id_a,
                 env: env_a,
                 deliveries: 1,
+                group: "app-a".to_string(),
             },
             "app-a",
         )
@@ -275,6 +277,7 @@ async fn fan_in_one_write_is_observed_by_every_group_exactly_once() {
                 entry_id: id_b,
                 env: env_b,
                 deliveries: 1,
+                group: "app-b".to_string(),
             },
             "app-b",
         )
@@ -308,6 +311,7 @@ async fn group_isolation_a_stuck_group_does_not_affect_a_healthy_group() {
                 entry_id,
                 env,
                 deliveries: 1,
+                group: "healthy-app".to_string(),
             },
             "healthy-app",
         )
@@ -478,6 +482,7 @@ async fn dlq_stays_within_the_configured_maxlen() {
             entry_id,
             env,
             deliveries: 1,
+            group: "app-dlq-cap".to_string(),
         };
         let err = DlqError {
             kind: DlqErrorKind::BundleError,
@@ -499,5 +504,57 @@ async fn dlq_stays_within_the_configured_maxlen() {
     assert!(
         len < 20,
         "expected the DLQ to be trimmed toward its MAXLEN, got length {len}"
+    );
+}
+
+#[tokio::test]
+async fn dead_letter_acks_under_the_readers_group_not_the_envelope_app_id() {
+    // Regression: SpineClient::dead_letter used to XACK (and stamp the DLQ
+    // record's `group` field) using `d.env.app_id` -- the envelope's
+    // per-message bundle id -- instead of the consumer group the entry was
+    // actually delivered under. That's coincidentally correct for
+    // svc_action's per-bundle action streams (group == env.app_id there),
+    // but wrong for svc_process's shared ingest-source streams, where the
+    // group is shared across bundles and differs from any one envelope's
+    // app_id -- dead-lettered entries never got acked and stayed stuck in
+    // the real group's PEL forever. This reproduces the svc_process shape
+    // (group != env.app_id) and asserts the PEL, not just DLQ maxlen.
+    let client = test_client().await;
+    let stream = unique_stream("dead-letter-group-mismatch");
+    let group = "svc-process-shared-ingest-group";
+    // sample_envelope() always carries app_id
+    // "waddles.bot.commands.default" -- deliberately different from
+    // `group` above.
+    client.ensure_group(&stream, group).await.unwrap();
+    client.append(&stream, &sample_envelope()).await.unwrap();
+    let (entry_id, env) = read_one_via_xreadgroup(&stream, group, "consumer-1").await;
+    assert_ne!(
+        env.app_id, group,
+        "test setup must reproduce group != env.app_id (the svc_process shape)"
+    );
+
+    let d = Delivered {
+        stream: stream.clone(),
+        entry_id: entry_id.clone(),
+        env,
+        deliveries: 1,
+        group: group.to_string(),
+    };
+    let err = DlqError {
+        kind: DlqErrorKind::BundleError,
+        code: "TEST_FORCED".to_string(),
+        message: "forced for the group-mismatch regression test".to_string(),
+        detail: None,
+        artifact_digest: None,
+        consumer_id: "test-consumer".to_string(),
+    };
+    client.dead_letter(&d, &err).await.unwrap();
+
+    let stats = client.group_stats(&stream).await.unwrap();
+    let g = stats.iter().find(|g| g.app_id == group).unwrap();
+    assert_eq!(
+        g.pending, 0,
+        "dead_letter must XACK under the reader's actual consumer group (d.group), \
+         never env.app_id -- otherwise the entry stays stuck in the real group's PEL"
     );
 }
