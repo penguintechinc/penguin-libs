@@ -93,7 +93,10 @@ pub struct DlqRecord {
     /// The stream entry id the record came from — the stable
     /// de-duplication key, also handed to a bundle as `message-id`.
     pub entry_id: String,
-    /// The consumer group (`app_id`) that was processing the entry.
+    /// The consumer group that was processing the entry (`XREADGROUP`'s
+    /// group argument) — not necessarily the same as `app_id` below: they
+    /// coincide for a per-bundle action stream but not for a shared
+    /// ingest-source stream, where the group is shared across bundles.
     pub group: String,
     /// The tenant slug, sourced from the key, never the payload.
     pub tenant: String,

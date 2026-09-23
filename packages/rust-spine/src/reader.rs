@@ -134,6 +134,7 @@ impl GroupReader {
                             entry_id: entry.id,
                             env,
                             deliveries: 1,
+                            group: self.app_id.clone(),
                         });
                     }
                     None => {
