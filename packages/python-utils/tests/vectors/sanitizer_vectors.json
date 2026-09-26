@@ -1,0 +1,8 @@
+[
+  {"name": "password_key", "input": {"password": "hunter2"}, "expected": {"password": "[REDACTED]"}},
+  {"name": "token_key", "input": {"api_key": "sk-abc"}, "expected": {"api_key": "[REDACTED]"}},
+  {"name": "non_sensitive_substring", "input": {"footprint": "boot"}, "expected": {"footprint": "boot"}},
+  {"name": "email_in_message", "input": {"event": "login for carol@ex.com"}, "expected": {"event": "login for [email]"}},
+  {"name": "nested_dict", "input": {"outer": {"secret": "s"}}, "expected": {"outer": {"secret": "[REDACTED]"}}},
+  {"name": "list_of_strings", "input": {"xs": ["dan@ex.com", "ok"]}, "expected": {"xs": ["[email]", "ok"]}}
+]

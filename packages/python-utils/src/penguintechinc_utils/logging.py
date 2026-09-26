@@ -17,6 +17,10 @@ from structlog.types import EventDict, Processor
 if TYPE_CHECKING:
     from .sinks import Sink
 
+# Redaction placeholders
+SENSITIVE_PLACEHOLDER = "[REDACTED]"
+SANITIZE_ERROR_PLACEHOLDER = "[REDACTED:sanitize-error]"
+
 # Keys that should never be logged
 SENSITIVE_KEYS = frozenset(
     {
@@ -46,12 +50,76 @@ SENSITIVE_KEYS = frozenset(
 # Regex for email detection
 EMAIL_REGEX = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
 
+# Word-boundary splitter for key matching
+_KEY_SPLIT = re.compile(r"[^a-z0-9]+")
+
+
+def is_sensitive_key(key: str) -> bool:
+    """
+    Check if a key names a secret (word-boundary match, not substring).
+
+    Args:
+        key: Key name to check
+
+    Returns:
+        True if key contains a sensitive segment
+    """
+    key_lower = key.lower()
+    # Check exact match first
+    if key_lower in SENSITIVE_KEYS:
+        return True
+    # Then check word segments (e.g., "api_key" -> ["api", "key"])
+    segments = set(_KEY_SPLIT.split(key_lower))
+    segments.discard("")  # Remove empty strings from split
+    return bool(segments & SENSITIVE_KEYS)
+
+
+def redact_text(value: str) -> str:
+    """
+    Redact emails (and tokens) anywhere within a string.
+
+    Args:
+        value: String to redact
+
+    Returns:
+        String with emails replaced by [email]
+    """
+    # Redact emails anywhere in the string
+    # TODO: Add token patterns here (e.g., sk-*, tok_*, etc.)
+    return EMAIL_REGEX.sub("[email]", value)
+
+
+def _sanitize_value(value: Any) -> Any:
+    """
+    Recursively sanitize a value: dicts, lists, strings, or convert others to strings.
+
+    Args:
+        value: Value to sanitize
+
+    Returns:
+        Sanitized value
+
+    Raises:
+        Any exception from converting non-standard types to strings (e.g., broken __repr__).
+    """
+    if isinstance(value, dict):
+        return sanitize_log_data(value)
+    if isinstance(value, list):
+        return [_sanitize_value(v) for v in value]
+    if isinstance(value, str):
+        return redact_text(value)
+    # For non-standard types, try to convert to string (may raise if __repr__/__str__ broken)
+    # This allows fail-closed behavior to catch the exception
+    _ = str(value)
+    return value
+
 
 def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
     """
     Sanitize a dictionary for safe logging.
 
     Removes or redacts sensitive values like passwords, tokens, and emails.
+    Fails closed: if sanitizing a value raises, returns SANITIZE_ERROR_PLACEHOLDER.
 
     Args:
         data: Dictionary to sanitize
@@ -64,29 +132,16 @@ def sanitize_log_data(data: dict[str, Any]) -> dict[str, Any]:
 
     sanitized: dict[str, Any] = {}
     for key, value in data.items():
-        key_lower = key.lower()
-
-        # Check if key is sensitive
-        if key_lower in SENSITIVE_KEYS or any(s in key_lower for s in SENSITIVE_KEYS):
-            sanitized[key] = "[REDACTED]"
-        elif isinstance(value, str):
-            # Check for email addresses — only log domain
-            if "@" in value and EMAIL_REGEX.match(value):
-                parts = value.split("@")
-                if len(parts) == 2:
-                    sanitized[key] = f"[email]@{parts[1]}"
-                else:
-                    sanitized[key] = "[REDACTED_EMAIL]"
+        try:
+            # If key is sensitive, redact entirely
+            if is_sensitive_key(key):
+                sanitized[key] = SENSITIVE_PLACEHOLDER
             else:
-                sanitized[key] = value
-        elif isinstance(value, dict):
-            sanitized[key] = cast(Any, sanitize_log_data(value))
-        elif isinstance(value, list):
-            sanitized[key] = cast(
-                Any, [sanitize_log_data(item) if isinstance(item, dict) else item for item in value]
-            )
-        else:
-            sanitized[key] = value
+                # Otherwise, scan the value for emails/tokens and recurse
+                sanitized[key] = _sanitize_value(value)
+        except Exception:
+            # Fail closed: if anything raises during sanitization, use error placeholder
+            sanitized[key] = SANITIZE_ERROR_PLACEHOLDER
 
     return sanitized
 
