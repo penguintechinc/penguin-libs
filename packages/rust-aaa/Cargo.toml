@@ -1,0 +1,28 @@
+[package]
+name = "penguin-aaa"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+description = "PenguinTech ES256 JWT sign/verify primitives shared across Rust services (node-agent, testserver-rs, hub-router-rs)"
+license = "MIT"
+repository = "https://github.com/penguintechinc/penguin-libs"
+authors = ["Penguin Tech Inc <support@penguintech.io>"]
+keywords = ["jwt", "es256", "auth", "jsonwebtoken"]
+categories = ["authentication", "cryptography"]
+
+[dependencies]
+jsonwebtoken = { version = "=11.0.0", default-features = true, features = ["rust_crypto"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+thiserror = "=2.0.20"
+
+[dev-dependencies]
+p256 = "=0.13.2"
+rand_core = { version = "=0.6.4", features = ["getrandom"] }
+serde_json = "=1.0.151"
+
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"

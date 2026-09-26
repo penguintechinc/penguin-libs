@@ -1,0 +1,67 @@
+# cargo-deny configuration for penguin-aaa.
+#
+# Run locally with: cargo deny check
+# CI wiring lives outside this crate.
+
+[graph]
+all-features = true
+
+[advisories]
+# Fail on any known vulnerability or unmaintained dependency.
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "deny"
+ignore = [
+    # RUSTSEC-2023-0071 (Marvin Attack, RSA timing sidechannel): pulled in
+    # transitively by jsonwebtoken's `rust_crypto` feature, which bundles
+    # RSA support unconditionally alongside the ES256/ES384 (p256/p384)
+    # support this crate actually uses — jsonwebtoken has no feature that
+    # gets ES256 without also getting `rsa`. This crate's public API
+    # (`Es256Signer`/`Es256Verifier`) never constructs an RSA key or
+    # exercises an RSA code path, so the timing side-channel is unreachable
+    # here. No patched `rsa` release exists upstream (tracked at
+    # RustCrypto/RSA#626/#680/#702, still open as of this writing).
+    # Same pinned jsonwebtoken + `rust_crypto` combination already ships
+    # unmodified in `tobogganing`'s `engines/testserver-rs` and
+    # `agents/node-agent` — this is a pre-existing, org-wide accepted risk
+    # for this dependency choice, not one newly introduced here.
+    "RUSTSEC-2023-0071",
+]
+
+[licenses]
+# The crate itself is MIT-licensed. Dependencies must be permissive
+# enough to be linked into an MIT work; copyleft-with-linking-exception
+# and permissive licenses only. Anything else needs an explicit exception.
+#
+# No `OpenSSL`/`ring` entry: jsonwebtoken's `rust_crypto` feature selects
+# the pure-Rust RustCrypto backend (p256/p384/rsa/ed25519-dalek), not ring.
+confidence-threshold = 0.9
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+]
+exceptions = []
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Dependencies are pinned to exact versions in Cargo.toml per house policy.
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
