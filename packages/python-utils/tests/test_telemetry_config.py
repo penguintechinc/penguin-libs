@@ -1,5 +1,7 @@
 import logging
+
 import pytest
+
 from penguintechinc_utils.telemetry.config import TelemetryConfig
 
 
@@ -32,3 +34,16 @@ def test_missing_service_name_warns_and_falls_back(monkeypatch, caplog):
     with caplog.at_level(logging.WARNING):
         cfg = TelemetryConfig.resolve()
     assert cfg.service_name.startswith("unknown_service")
+
+
+def test_bad_arg_log_format_raises():
+    with pytest.raises((ValueError, TypeError)):
+        TelemetryConfig.resolve(service_name="s", log_format="invalid")
+
+
+def test_bad_env_log_format_warns_and_defaults(monkeypatch, caplog):
+    monkeypatch.setenv("LOG_FORMAT", "invalid")
+    with caplog.at_level(logging.WARNING):
+        cfg = TelemetryConfig.resolve(service_name="s")
+    assert cfg.log_format == "json"
+    assert any("LOG_FORMAT" in r.message for r in caplog.records)

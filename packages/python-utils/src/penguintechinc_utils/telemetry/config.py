@@ -42,7 +42,7 @@ class TelemetryConfig:
         service_version=None,
         level=None,
         log_format=None,
-    ) -> "TelemetryConfig":
+    ) -> TelemetryConfig:
         name = service_name or os.getenv("OTEL_SERVICE_NAME")
         if not name:
             name = f"unknown_service:{os.path.basename(sys.argv[0]) or 'python'}"
