@@ -1,81 +1,130 @@
-//! ES256 JWT verification.
+//! ES256 JWT verification — hand-rolled JWS framing, see the crate root
+//! doc for why this doesn't go through a bundled multi-algorithm JWT
+//! crate.
 
-use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
+use p256::ecdsa::signature::Verifier as _;
+use p256::ecdsa::{Signature, VerifyingKey};
+use p256::pkcs8::DecodePublicKey;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::{claims::Claims, error::AaaError};
+use crate::claims::Claims;
+use crate::error::AaaError;
+use crate::token::{Header, b64url_decode};
 
-/// Verifies ES256 (ECDSA P-256) JWTs and returns the decoded [`Claims`].
+/// Verifies ES256 (ECDSA P-256, SHA-256) JWTs and returns the decoded
+/// [`Claims`].
 ///
 /// Ported from `engines/testserver-rs/crates/core/src/auth.rs`'s
-/// `JwtVerifier`.
-///
-/// `algorithms` is pinned to `[ES256]` only, so a token signed HS256 —
-/// including the classic alg-confusion attack that reuses this verifier's
-/// public key as an HMAC secret, since a public key is not secret — or one
-/// declaring `alg: none` is rejected before signature verification ever
-/// runs; `jsonwebtoken::Algorithm` has no `none` variant at all, so an
-/// `alg: none` header fails to even parse.
-#[derive(Clone)]
+/// `JwtVerifier`. There is exactly one verification code path — parse the
+/// header, require `alg == "ES256"`, then ECDSA-verify the signature
+/// segment against the configured P-256 public key — so there is no `alg`
+/// dispatch to confuse: an HS256- or `alg: none`-labeled token is rejected
+/// by the explicit `alg` check before its signature segment is ever
+/// interpreted, and even without that check a genuine HMAC tag or an empty
+/// signature cannot parse as the fixed 64-byte ECDSA R‖S value this
+/// verifier expects.
+#[derive(Debug, Clone)]
 pub struct Es256Verifier {
-    decoding_key: DecodingKey,
-    validation: Validation,
-}
-
-// See `Es256Signer`'s `Debug` impl rationale — `DecodingKey`/`Validation`
-// don't derive `Debug` either, and this key is a *public* key, so there is
-// nothing worth hiding.
-impl std::fmt::Debug for Es256Verifier {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Es256Verifier").finish_non_exhaustive()
-    }
+    verifying_key: VerifyingKey,
+    expected_audience: Option<String>,
+    expected_issuer: Option<String>,
 }
 
 impl Es256Verifier {
-    /// Builds a verifier from an EC P-256 public key in PEM
-    /// (`-----BEGIN PUBLIC KEY-----`, SPKI/DER) format. Expiration is
-    /// always validated; `sub` and `exp` are required spec claims — a
-    /// token missing either is rejected even before the rest of [`Claims`]
-    /// is deserialized. No audience/issuer is pinned by default — since
-    /// [`Claims::aud`] is always present, `jsonwebtoken`'s
-    /// `validate_aud` (which defaults to `true` and errors on *any*
-    /// present-but-unpinned `aud`) is explicitly disabled here; chain
-    /// [`Es256Verifier::with_audience`] / [`Es256Verifier::with_issuer`] to
-    /// require a specific one.
+    /// Builds a verifier from an EC P-256 public key in SPKI PEM
+    /// (`-----BEGIN PUBLIC KEY-----`) format. No audience/issuer is pinned
+    /// by default; chain [`Es256Verifier::with_audience`] /
+    /// [`Es256Verifier::with_issuer`] to require a specific one.
     pub fn from_ec_pem(public_key_pem: &[u8]) -> Result<Self, AaaError> {
-        let decoding_key =
-            DecodingKey::from_ec_pem(public_key_pem).map_err(AaaError::InvalidKey)?;
-        let mut validation = Validation::new(Algorithm::ES256);
-        validation.validate_exp = true;
-        validation.validate_aud = false;
-        validation.algorithms = vec![Algorithm::ES256];
-        validation.required_spec_claims = ["exp", "sub"].into_iter().map(String::from).collect();
+        let pem =
+            std::str::from_utf8(public_key_pem).map_err(|e| AaaError::InvalidKey(e.to_string()))?;
+        let verifying_key = VerifyingKey::from_public_key_pem(pem)
+            .map_err(|e| AaaError::InvalidKey(e.to_string()))?;
         Ok(Self {
-            decoding_key,
-            validation,
+            verifying_key,
+            expected_audience: None,
+            expected_issuer: None,
         })
     }
 
     /// Additionally requires the token's `aud` claim to equal `audience`.
     #[must_use]
     pub fn with_audience(mut self, audience: &str) -> Self {
-        self.validation.validate_aud = true;
-        self.validation.set_audience(&[audience]);
+        self.expected_audience = Some(audience.to_string());
         self
     }
 
     /// Additionally requires the token's `iss` claim to equal `issuer`.
     #[must_use]
     pub fn with_issuer(mut self, issuer: &str) -> Self {
-        self.validation.set_issuer(&[issuer]);
+        self.expected_issuer = Some(issuer.to_string());
         self
     }
 
-    /// Verifies signature, algorithm, expiration, and required claims,
-    /// returning the decoded [`Claims`] on success. Every failure mode
-    /// collapses to [`AaaError::Verification`] — see that variant's docs.
+    /// Verifies structure, `alg`, signature, expiration, and (if
+    /// configured) audience/issuer, returning the decoded [`Claims`] on
+    /// success. Every failure mode collapses to [`AaaError::Verification`]
+    /// — see that variant's docs.
     pub fn verify(&self, token: &str) -> Result<Claims, AaaError> {
-        decode::<Claims>(token, &self.decoding_key, &self.validation)
-            .map(|data| data.claims)
-            .map_err(AaaError::Verification)
+        let mut segments = token.split('.');
+        let (Some(header_b64), Some(payload_b64), Some(sig_b64), None) = (
+            segments.next(),
+            segments.next(),
+            segments.next(),
+            segments.next(),
+        ) else {
+            return Err(AaaError::Verification(
+                "malformed token: expected exactly 3 '.'-separated segments".to_string(),
+            ));
+        };
+
+        let header_bytes =
+            b64url_decode(header_b64).map_err(|e| AaaError::Verification(e.to_string()))?;
+        let header: Header = serde_json::from_slice(&header_bytes)
+            .map_err(|e| AaaError::Verification(e.to_string()))?;
+        if header.alg != "ES256" {
+            return Err(AaaError::Verification(format!(
+                "unsupported alg {:?}: only ES256 is accepted",
+                header.alg
+            )));
+        }
+
+        let sig_bytes =
+            b64url_decode(sig_b64).map_err(|e| AaaError::Verification(e.to_string()))?;
+        let signature =
+            Signature::from_slice(&sig_bytes).map_err(|e| AaaError::Verification(e.to_string()))?;
+        let signing_input = format!("{header_b64}.{payload_b64}");
+        self.verifying_key
+            .verify(signing_input.as_bytes(), &signature)
+            .map_err(|e| AaaError::Verification(e.to_string()))?;
+
+        let payload_bytes =
+            b64url_decode(payload_b64).map_err(|e| AaaError::Verification(e.to_string()))?;
+        let claims: Claims = serde_json::from_slice(&payload_bytes)
+            .map_err(|e| AaaError::Verification(e.to_string()))?;
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| AaaError::Verification(e.to_string()))?
+            .as_secs() as i64;
+        if claims.exp < now {
+            return Err(AaaError::Verification("token expired".to_string()));
+        }
+        if let Some(expected) = &self.expected_audience
+            && &claims.aud != expected
+        {
+            return Err(AaaError::Verification(format!(
+                "audience mismatch: expected {expected:?}"
+            )));
+        }
+        if let Some(expected) = &self.expected_issuer
+            && &claims.iss != expected
+        {
+            return Err(AaaError::Verification(format!(
+                "issuer mismatch: expected {expected:?}"
+            )));
+        }
+
+        Ok(claims)
     }
 }

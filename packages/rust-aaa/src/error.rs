@@ -2,28 +2,26 @@
 
 /// Errors from ES256 key loading, signing, or verification.
 ///
-/// Verification failures deliberately collapse every underlying
-/// `jsonwebtoken` failure mode (bad signature, disallowed algorithm,
-/// expired, malformed, missing required claim) into one
-/// [`AaaError::Verification`] variant carrying the original error —
+/// Verification failures deliberately collapse every underlying failure
+/// mode (malformed token structure, bad base64, disallowed `alg`, bad
+/// signature, expired, missing required claim, audience/issuer mismatch)
+/// into one [`AaaError::Verification`] variant carrying a description —
 /// callers must never branch behavior on *why* a token failed to verify,
 /// only on the fact that it did (see security.md: a credential failure
-/// must never leak which check failed to the caller). The original error
-/// is retained for the caller's own sanitized debug-level logging, mirrored
-/// from `testserver-rs`'s `JwtVerifier::verify`.
+/// must never leak which check failed to the caller).
 #[derive(Debug, thiserror::Error)]
 pub enum AaaError {
     /// The supplied PEM was not valid EC (P-256) key material.
     #[error("invalid ES256 key material: {0}")]
-    InvalidKey(jsonwebtoken::errors::Error),
+    InvalidKey(String),
 
     /// Signing a claim set failed (only reachable with a malformed key
-    /// that slipped past construction).
+    /// that slipped past construction, or an unserializable claim set).
     #[error("token signing failed: {0}")]
-    Signing(jsonwebtoken::errors::Error),
+    Signing(String),
 
-    /// Signature, algorithm, expiration, or required-claim verification
-    /// failed.
+    /// Token structure, signature, expiration, or required-claim
+    /// verification failed.
     #[error("token verification failed: {0}")]
-    Verification(jsonwebtoken::errors::Error),
+    Verification(String),
 }

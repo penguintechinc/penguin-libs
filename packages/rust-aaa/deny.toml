@@ -7,33 +7,23 @@
 all-features = true
 
 [advisories]
-# Fail on any known vulnerability or unmaintained dependency.
+# Fail on any known vulnerability or unmaintained dependency. No ignores:
+# this crate deliberately has no `jsonwebtoken`/`jwt-simple`-style bundled
+# multi-algorithm JWT dependency (both pull in `rsa`, RUSTSEC-2023-0071,
+# unconditionally alongside ES256 support) — see the crate root doc for
+# why. `cargo tree` has zero `rsa` entries; keep it that way.
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "deny"
-ignore = [
-    # RUSTSEC-2023-0071 (Marvin Attack, RSA timing sidechannel): pulled in
-    # transitively by jsonwebtoken's `rust_crypto` feature, which bundles
-    # RSA support unconditionally alongside the ES256/ES384 (p256/p384)
-    # support this crate actually uses — jsonwebtoken has no feature that
-    # gets ES256 without also getting `rsa`. This crate's public API
-    # (`Es256Signer`/`Es256Verifier`) never constructs an RSA key or
-    # exercises an RSA code path, so the timing side-channel is unreachable
-    # here. No patched `rsa` release exists upstream (tracked at
-    # RustCrypto/RSA#626/#680/#702, still open as of this writing).
-    # Same pinned jsonwebtoken + `rust_crypto` combination already ships
-    # unmodified in `tobogganing`'s `engines/testserver-rs` and
-    # `agents/node-agent` — this is a pre-existing, org-wide accepted risk
-    # for this dependency choice, not one newly introduced here.
-    "RUSTSEC-2023-0071",
-]
+ignore = []
 
 [licenses]
 # The crate itself is MIT-licensed. Dependencies must be permissive
 # enough to be linked into an MIT work; copyleft-with-linking-exception
 # and permissive licenses only. Anything else needs an explicit exception.
 #
-# No `OpenSSL`/`ring` entry: jsonwebtoken's `rust_crypto` feature selects
-# the pure-Rust RustCrypto backend (p256/p384/rsa/ed25519-dalek), not ring.
+# No `OpenSSL`/`ring`/`rsa` entry: this crate hand-rolls its ES256-only JWS
+# framing directly over `p256`/`ecdsa` (pure Rust) instead of depending on
+# a bundled multi-algorithm JWT crate — see the crate root doc.
 confidence-threshold = 0.9
 allow = [
     "Apache-2.0",

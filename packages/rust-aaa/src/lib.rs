@@ -16,6 +16,18 @@
 //! (`JwtVerifier`) and `agents/node-agent/crates/core/src/jwt.rs`
 //! (`MachineJwtSigner`) in the `tobogganing` repository.
 //!
+//! **No bundled multi-algorithm JWT crate**: every general-purpose Rust
+//! JWT library evaluated (`jsonwebtoken`'s `rust_crypto` feature,
+//! `jwt-simple`'s `pure-rust` feature) unconditionally pulls in the `rsa`
+//! crate (RSA/RS256/PS256 support) alongside ES256 — one Cargo feature
+//! covers the whole algorithm bundle, with no way to get P-256 without
+//! also getting RSA. `rsa` carries RUSTSEC-2023-0071 (Marvin Attack RSA
+//! timing sidechannel) with no patched release available upstream. This
+//! crate never needs RSA, so it implements the ES256-only JWS subset
+//! (`src/token.rs`, `src/signer.rs`, `src/verifier.rs`) directly over
+//! `p256`/`ecdsa` instead of accepting that dependency — `cargo tree` has
+//! zero `rsa` entries and `cargo deny check` carries no advisory ignores.
+//!
 //! ```
 //! use penguin_aaa::{Claims, Es256Signer, Es256Verifier};
 //!
@@ -41,6 +53,7 @@
 mod claims;
 mod error;
 mod signer;
+mod token;
 mod verifier;
 
 pub use claims::Claims;

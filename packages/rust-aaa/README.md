@@ -23,6 +23,34 @@ reimplementations in the `tobogganing` repository:
   absent/empty for machine-to-machine tokens that don't carry them.
   Mirrors the platform's mandatory claim set (security.md JWT Claims).
 
+## Crypto backend: hand-rolled ES256 JWS, no bundled JWT crate
+
+This crate does **not** depend on `jsonwebtoken`, `jwt-simple`, or any other
+general-purpose multi-algorithm JWT library. Every one evaluated bundles
+RSA support (`RS256`/`PS256`) unconditionally alongside ES256 — one Cargo
+feature covers the whole algorithm set, with no way to opt into P-256 only:
+
+- `jsonwebtoken`'s `rust_crypto` feature: `["dep:ed25519-dalek", "dep:hmac",
+  "dep:p256", "dep:p384", "dep:rand", "dep:rsa", "dep:sha2"]`.
+- `jwt-simple`'s `pure-rust` feature: same shape, also pulls `rsa`.
+
+The `rsa` crate carries **RUSTSEC-2023-0071** (Marvin Attack, RSA timing
+sidechannel) with no patched release available upstream (still open,
+tracked at RustCrypto/RSA#626/#680/#702). Depending on either library would
+mean either accepting that advisory into `cargo deny check` via a
+documented ignore, or is not viable since org policy treats RUSTSEC
+advisories as a hard no-go regardless of whether the vulnerable code path
+is reachable.
+
+Since this crate only ever needs ES256, it implements the JWS compact
+serialization directly over `p256`/`ecdsa` (pure Rust, RFC6979 deterministic
+signing, SHA-256 prehash) in `src/token.rs` + `src/signer.rs` +
+`src/verifier.rs` — roughly 150 lines total. `cargo tree` has zero `rsa`
+entries and `cargo deny check` carries no advisory ignores. `node-agent`
+and `testserver-rs` currently carry this same `jsonwebtoken`/`rsa`/
+RUSTSEC-2023-0071 combination unmodified; migrating them onto this crate
+(a follow-on, not part of this v0.1 scaffold) removes it from them too.
+
 ## Usage
 
 ```rust
