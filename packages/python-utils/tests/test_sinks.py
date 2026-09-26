@@ -41,7 +41,7 @@ class TestSanitizeLogData:
         result = sanitize_log_data(data)
         assert result["user_password_hash"] == "[REDACTED]"
 
-    def test_redacts_email_to_domain(self) -> None:
+    def test_redacts_email_fully(self) -> None:
         data = {"contact": "alice@example.com"}
         result = sanitize_log_data(data)
         assert result["contact"] == "[email]"

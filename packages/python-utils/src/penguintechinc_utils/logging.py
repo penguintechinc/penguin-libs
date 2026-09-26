@@ -58,20 +58,27 @@ def is_sensitive_key(key: str) -> bool:
     """
     Check if a key names a secret (word-boundary match, not substring).
 
+    Matches on contiguous segment subsequence: "stripe_api_key" contains ["api", "key"].
+
     Args:
         key: Key name to check
 
     Returns:
-        True if key contains a sensitive segment
+        True if key contains a sensitive segment sequence
     """
     key_lower = key.lower()
-    # Check exact match first
-    if key_lower in SENSITIVE_KEYS:
-        return True
-    # Then check word segments (e.g., "api_key" -> ["api", "key"])
-    segments = set(_KEY_SPLIT.split(key_lower))
-    segments.discard("")  # Remove empty strings from split
-    return bool(segments & SENSITIVE_KEYS)
+    key_segments = [s for s in _KEY_SPLIT.split(key_lower) if s]
+
+    # For each sensitive key, check if its segments appear as contiguous subsequence
+    for sensitive in SENSITIVE_KEYS:
+        sensitive_segments = [s for s in _KEY_SPLIT.split(sensitive) if s]
+
+        # Check if sensitive_segments appears as contiguous run in key_segments
+        for i in range(len(key_segments) - len(sensitive_segments) + 1):
+            if key_segments[i : i + len(sensitive_segments)] == sensitive_segments:
+                return True
+
+    return False
 
 
 def redact_text(value: str) -> str:

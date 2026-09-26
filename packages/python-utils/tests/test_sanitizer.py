@@ -52,3 +52,16 @@ def test_fail_closed_on_hostile_repr() -> None:
 
     out = sanitize_log_data({"x": Boom()})
     assert out["x"] == SANITIZE_ERROR_PLACEHOLDER
+
+
+def test_prefixed_suffixed_compound_keys() -> None:
+    """Compound keys with prefixes/suffixes must match as contiguous segments."""
+    # Prefixed compound keys: vendor_api_key should match api_key
+    assert is_sensitive_key("stripe_api_key") is True
+    assert is_sensitive_key("aws_api_key") is True
+    assert is_sensitive_key("user_session_id") is True
+    assert is_sensitive_key("access_token_expiry") is True
+
+    # Single-segment variations must NOT match
+    assert is_sensitive_key("footprint") is False  # contains "otp" but single segment
+    assert is_sensitive_key("tokenizer") is False  # contains "token" but single segment
