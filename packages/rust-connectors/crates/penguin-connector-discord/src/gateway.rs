@@ -136,12 +136,31 @@ pub struct ChatMessage {
 
 /// Normalize a `MESSAGE_CREATE` dispatch's `d` into a [`ChatMessage`].
 ///
-/// Returns `None` when the message was authored by this bot's own identity
-/// (`self_user_id`, by id — never by `author.bot`, so other bots' messages
-/// still come through) or when a required field is missing/mistyped.
-/// `self_user_id: None` (before `READY` has been seen) never filters,
-/// matching `DiscordGatewayReceiver._is_self`'s own "unknown identity errs
-/// toward NOT dropping" rule.
+/// Returns `None` only when the message was authored by this bot's own
+/// identity (`self_user_id`, by id — never by `author.bot`, so other bots'
+/// messages still come through) or when `author`/`author.id`/`channel_id`
+/// -- the fields this crate cannot function without (self-filtering and
+/// reply routing) -- are missing/mistyped. `self_user_id: None` (before
+/// `READY` has been seen) never filters, matching
+/// `DiscordGatewayReceiver._is_self`'s own "unknown identity errs toward
+/// NOT dropping" rule.
+///
+/// `author.username`/the message's own `id`/`content` are read leniently
+/// (empty-string default, never a drop) to match
+/// `discord_gateway.py::_build_raw_event`'s behavior, the Python
+/// implementation this crate ports: py-cord's `discord.Message` object
+/// always exposes `.content`/`.author.name`/`.id` as populated attributes
+/// (defaulting internally, never raising) regardless of whether Discord's
+/// raw payload happened to omit/null one of them for a given dispatch --
+/// e.g. `content` legitimately arrives empty for messages sent in the
+/// instant before Discord's per-connection Message Content Intent grant is
+/// fully in effect. Silently discarding the *entire* message over a gap in
+/// optional display/threading metadata was a regression introduced by this
+/// port using `?` on every field indiscriminately: a real, non-self
+/// `!ping` was dropped end to end (never reaching `svc-process`) whenever
+/// any one of these three incidental fields didn't parse, even though
+/// `author.id` and `channel_id` -- everything actually needed to identify
+/// the sender and route a reply -- were present and correct.
 #[must_use]
 pub fn normalize_message_create(
     d: &serde_json::Value,
@@ -154,10 +173,22 @@ pub fn normalize_message_create(
             return None;
         }
     }
-    let author_username = author.get("username")?.as_str()?.to_string();
+    let author_username = author
+        .get("username")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
     let channel_id = d.get("channel_id")?.as_str()?.to_string();
-    let message_id = d.get("id")?.as_str()?.to_string();
-    let content = d.get("content")?.as_str()?.to_string();
+    let message_id = d
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let content = d
+        .get("content")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
     let guild_id = d
         .get("guild_id")
         .and_then(serde_json::Value::as_str)
@@ -257,6 +288,18 @@ where
         let heartbeat_interval = parse_hello(&hello)?;
 
         let identify = build_identify(&cfg.token, cfg.intents);
+        // Permanent DEBUG-level observability (critical-rules.md
+        // Observability: log generously at DEBUG) -- the exact intents
+        // value actually sent on the wire, read straight back out of the
+        // payload we're about to serialize -- never the token.
+        tracing::debug!(
+            intents = identify
+                .d
+                .get("intents")
+                .and_then(serde_json::Value::as_u64),
+            heartbeat_interval_ms = heartbeat_interval.as_millis() as u64,
+            "sending IDENTIFY"
+        );
         let identify_text =
             serde_json::to_string(&identify).map_err(|e| DiscordError::Decode(e.to_string()))?;
         ws.send(Message::text(identify_text))
@@ -306,19 +349,98 @@ where
             if let Some(seq) = payload.s {
                 self.seq = Some(seq);
             }
+            // Permanent DEBUG-level observability -- every opcode/dispatch
+            // received at the raw socket level, before any filtering, so
+            // "did it arrive at all" vs. "was it dropped downstream" is
+            // always distinguishable from the logs alone.
+            tracing::debug!(
+                op = payload.op,
+                t = payload.t.as_deref(),
+                seq = payload.s,
+                "gateway frame received"
+            );
             match payload.op {
                 OP_HEARTBEAT => self.send_heartbeat().await?,
                 OP_HEARTBEAT_ACK => self.awaiting_ack = false,
                 OP_RECONNECT => return Err(DiscordError::ResumeRequested),
                 OP_INVALID_SESSION => return Err(DiscordError::SessionInvalidated),
                 OP_DISPATCH => match payload.t.as_deref() {
-                    Some("READY") => self.self_user_id = extract_ready_self_id(&payload.d),
+                    Some("READY") => {
+                        self.self_user_id = extract_ready_self_id(&payload.d);
+                        let guilds = payload.d.get("guilds").and_then(|g| g.as_array());
+                        let guild_count = guilds.map(Vec::len);
+                        let unavailable_count = guilds.map(|a| {
+                            a.iter()
+                                .filter(|g| {
+                                    g.get("unavailable").and_then(serde_json::Value::as_bool)
+                                        == Some(true)
+                                })
+                                .count()
+                        });
+                        tracing::debug!(
+                            self_user_id = self.self_user_id.as_deref(),
+                            guild_count,
+                            unavailable_count,
+                            guild_ids = ?guilds.map(|a| a.iter().filter_map(|g| g.get("id").and_then(serde_json::Value::as_str)).collect::<Vec<_>>()),
+                            "READY received"
+                        );
+                    }
+                    Some("GUILD_CREATE") => {
+                        tracing::debug!(
+                            guild_id = payload.d.get("id").and_then(serde_json::Value::as_str),
+                            unavailable = payload
+                                .d
+                                .get("unavailable")
+                                .and_then(serde_json::Value::as_bool),
+                            "GUILD_CREATE received"
+                        );
+                    }
                     Some("MESSAGE_CREATE") => {
+                        tracing::debug!(
+                            guild_id = payload
+                                .d
+                                .get("guild_id")
+                                .and_then(serde_json::Value::as_str),
+                            channel_id = payload
+                                .d
+                                .get("channel_id")
+                                .and_then(serde_json::Value::as_str),
+                            author_id = payload
+                                .d
+                                .get("author")
+                                .and_then(|a| a.get("id"))
+                                .and_then(serde_json::Value::as_str),
+                            self_user_id = self.self_user_id.as_deref(),
+                            "MESSAGE_CREATE dispatch received (pre-filter)"
+                        );
                         if let Some(chat) =
                             normalize_message_create(&payload.d, self.self_user_id.as_deref())
                         {
+                            tracing::debug!(
+                                author_id = %chat.author_id,
+                                content_len = chat.content.len(),
+                                "MESSAGE_CREATE normalize decision: pass"
+                            );
                             return Ok(Some(chat));
                         }
+                        // `normalize_message_create` only ever returns `None` for one of
+                        // two reasons -- distinguish them here rather than leaving the
+                        // drop unexplained (see that function's own doc comment for why
+                        // every other field is read leniently and can never cause this).
+                        let author_id = payload
+                            .d
+                            .get("author")
+                            .and_then(|a| a.get("id"))
+                            .and_then(serde_json::Value::as_str);
+                        let reason = match (author_id, self.self_user_id.as_deref()) {
+                            (Some(id), Some(self_id)) if id == self_id => "self-authored",
+                            _ => "missing author/author.id/channel_id",
+                        };
+                        tracing::debug!(
+                            author_id,
+                            reason,
+                            "MESSAGE_CREATE normalize decision: drop"
+                        );
                     }
                     _ => {}
                 },
@@ -478,10 +600,78 @@ mod tests {
     }
 
     #[test]
-    fn normalize_message_create_missing_field_returns_none() {
+    fn normalize_message_create_missing_required_field_returns_none() {
+        // `channel_id` is one of the two fields this crate cannot function
+        // without (reply routing) -- still a hard drop.
         let mut d = message_create_fixture("42");
-        d.as_object_mut().expect("object").remove("content");
+        d.as_object_mut().expect("object").remove("channel_id");
         assert_eq!(normalize_message_create(&d, None), None);
+    }
+
+    /// Regression: the live incident (a real, non-self `!ping` never
+    /// reaching `svc-process`) was `normalize_message_create` treating
+    /// `content` as hard-required via `?`, exactly like `author.id`/
+    /// `channel_id` -- when Discord's payload for that specific dispatch
+    /// didn't carry it as a parseable string, the *entire* message was
+    /// silently dropped instead of forwarding with the metadata it did
+    /// have (matching `discord_gateway.py::_build_raw_event`'s lenient
+    /// behavior, see this function's own doc comment). A real human
+    /// author (`!= self_user_id`) must never be dropped over a missing
+    /// `content`/`username`/message `id` -- only self-authorship, or the
+    /// absence of `author`/`author.id`/`channel_id`, may drop it.
+    #[test]
+    fn normalize_message_create_missing_content_still_forwards_non_self_message() {
+        let mut d = message_create_fixture("328950127786065921");
+        d.as_object_mut().expect("object").remove("content");
+        let msg = normalize_message_create(&d, Some("587491432940699653"))
+            .expect("a non-self message must forward even with no content");
+        assert_eq!(msg.author_id, "328950127786065921");
+        assert_eq!(msg.content, "");
+    }
+
+    #[test]
+    fn normalize_message_create_null_content_still_forwards_non_self_message() {
+        let mut d = message_create_fixture("328950127786065921");
+        d["content"] = serde_json::Value::Null;
+        let msg = normalize_message_create(&d, Some("587491432940699653"))
+            .expect("a non-self message must forward even with null content");
+        assert_eq!(msg.content, "");
+    }
+
+    #[test]
+    fn normalize_message_create_missing_username_still_forwards_non_self_message() {
+        let mut d = message_create_fixture("328950127786065921");
+        d["author"]
+            .as_object_mut()
+            .expect("object")
+            .remove("username");
+        let msg = normalize_message_create(&d, Some("587491432940699653"))
+            .expect("a non-self message must forward even with no username");
+        assert_eq!(msg.author_username, "");
+    }
+
+    #[test]
+    fn normalize_message_create_missing_message_id_still_forwards_non_self_message() {
+        let mut d = message_create_fixture("328950127786065921");
+        d.as_object_mut().expect("object").remove("id");
+        let msg = normalize_message_create(&d, Some("587491432940699653"))
+            .expect("a non-self message must forward even with no message id");
+        assert_eq!(msg.message_id, "");
+    }
+
+    /// The bot's own message must still be filtered even though
+    /// `content`/`username`/message `id` are now read leniently -- the
+    /// self-filter runs on `author_id` before any of those fields are
+    /// touched, so lenient-metadata parsing can never resurrect a
+    /// self-authored message.
+    #[test]
+    fn normalize_message_create_self_authored_still_filtered_with_lenient_metadata() {
+        let mut d = message_create_fixture("587491432940699653");
+        d.as_object_mut().expect("object").remove("content");
+        assert_eq!(
+            normalize_message_create(&d, Some("587491432940699653")),
+            None
+        );
     }
 
     #[test]
