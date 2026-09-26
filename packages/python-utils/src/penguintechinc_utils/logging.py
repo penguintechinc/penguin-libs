@@ -53,12 +53,27 @@ EMAIL_REGEX = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
 # Word-boundary splitter for key matching
 _KEY_SPLIT = re.compile(r"[^a-z0-9]+")
 
-# Sensitive query-parameter names (derived from the same intent as SENSITIVE_KEYS).
-_SENSITIVE_QS = re.compile(
-    r"(?i)([?&#]|^)([^=&#\s]*(?:token|api[_-]?key|secret|passw(?:ord|d)?|"
-    r"auth(?:orization)?|access[_-]?token|refresh[_-]?token|session|"
-    r"sig|signature|credential)[^=&#\s]*)=([^&#\s]+)"
+# key=value / key: value scanner (query string, header, or inline free text).
+# Sensitivity is decided by is_sensitive_key -- the SAME function the structured
+# dict-field path uses -- so there is exactly one source of truth for what counts
+# as sensitive, never a second word list.
+#
+# The value's second alternative is guarded by a negative lookahead that refuses to
+# start consuming where the upcoming text itself looks like a new key=/key: pair.
+# Without that guard, a non-sensitive outer key (e.g. "note:") greedily swallows an
+# inner sensitive one (e.g. "password=hunter2") whole as its own opaque value, and
+# the inner pair never gets a chance to be scanned on its own.
+_KV = re.compile(
+    r"([A-Za-z0-9_.\-]+)(\s*[:=]\s*)"
+    r"((?:Bearer|Basic|Digest|Token)\s+[^\s&#,;?/]+"
+    r"|(?:(?![A-Za-z0-9_.\-]+\s*[:=])[^\s&#,;?/])+)",
+    re.IGNORECASE,
 )
+
+
+def _redact_kv(m: "re.Match[str]") -> str:
+    """Redact a _KV match's value when its key is sensitive; otherwise pass through."""
+    return f"{m.group(1)}{m.group(2)}[REDACTED]" if is_sensitive_key(m.group(1)) else m.group(0)
 
 
 def is_sensitive_key(key: str) -> bool:
@@ -90,18 +105,22 @@ def is_sensitive_key(key: str) -> bool:
 
 def redact_text(value: str) -> str:
     """
-    Redact emails and sensitive query-parameter values anywhere within a string.
+    Redact emails, and the value of any sensitive key=value / key: value pair.
+
+    Scans query strings, headers, and inline free text alike -- anywhere in the
+    string, not just query strings. Sensitivity is judged by is_sensitive_key, the
+    same function used for structured dict fields, so there is one source of truth
+    for what counts as sensitive rather than a second word list.
 
     Args:
         value: String to redact
 
     Returns:
-        String with emails replaced by [email] and sensitive query-parameter
-        values (token, api_key, secret, password, auth, session, sig,
-        credential, etc.) replaced by [REDACTED], key and separators kept.
+        String with emails replaced by [email] and sensitive key/value pairs'
+        values replaced by [REDACTED] (key and separator preserved).
     """
     value = EMAIL_REGEX.sub("[email]", value)
-    value = _SENSITIVE_QS.sub(lambda m: f"{m.group(1)}{m.group(2)}=[REDACTED]", value)
+    value = _KV.sub(_redact_kv, value)
     return value
 
 
