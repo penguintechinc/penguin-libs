@@ -7,7 +7,6 @@ import pytest
 
 from penguintechinc_utils.logging import (
     SANITIZE_ERROR_PLACEHOLDER,
-    SENSITIVE_PLACEHOLDER,
     is_sensitive_key,
     redact_text,
     sanitize_log_data,
@@ -65,3 +64,23 @@ def test_prefixed_suffixed_compound_keys() -> None:
     # Single-segment variations must NOT match
     assert is_sensitive_key("footprint") is False  # contains "otp" but single segment
     assert is_sensitive_key("tokenizer") is False  # contains "token" but single segment
+
+
+def test_redacts_sensitive_query_param_value() -> None:
+    """Sensitive query-parameter values (e.g. token=) are redacted; emails still redacted."""
+    out = redact_text("GET https://api.example.com/v1/x?token=sk-live-abc123&user=eve@example.com")
+    assert "sk-live-abc123" not in out  # token value redacted
+    assert "eve@example.com" not in out  # email still redacted
+    assert "token=[REDACTED]" in out  # replaced, not dropped
+
+
+def test_non_sensitive_query_param_survives() -> None:
+    """Benign query params (page, sort) must survive untouched."""
+    out = redact_text("https://x/y?page=2&sort=name")
+    assert out == "https://x/y?page=2&sort=name"  # benign params untouched
+
+
+def test_sanitize_recurses_into_tuple_and_set() -> None:
+    """tuple and set values are recursed into (as list) just like list."""
+    out = sanitize_log_data({"t": ("ok", "eve@example.com")})
+    assert "eve@example.com" not in json.dumps(out)

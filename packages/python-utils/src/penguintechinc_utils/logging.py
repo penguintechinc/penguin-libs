@@ -53,6 +53,13 @@ EMAIL_REGEX = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
 # Word-boundary splitter for key matching
 _KEY_SPLIT = re.compile(r"[^a-z0-9]+")
 
+# Sensitive query-parameter names (derived from the same intent as SENSITIVE_KEYS).
+_SENSITIVE_QS = re.compile(
+    r"(?i)([?&#]|^)([^=&#\s]*(?:token|api[_-]?key|secret|passw(?:ord|d)?|"
+    r"auth(?:orization)?|access[_-]?token|refresh[_-]?token|session|"
+    r"sig|signature|credential)[^=&#\s]*)=([^&#\s]+)"
+)
+
 
 def is_sensitive_key(key: str) -> bool:
     """
@@ -83,35 +90,37 @@ def is_sensitive_key(key: str) -> bool:
 
 def redact_text(value: str) -> str:
     """
-    Redact emails (and tokens) anywhere within a string.
+    Redact emails and sensitive query-parameter values anywhere within a string.
 
     Args:
         value: String to redact
 
     Returns:
-        String with emails replaced by [email]
+        String with emails replaced by [email] and sensitive query-parameter
+        values (token, api_key, secret, password, auth, session, sig,
+        credential, etc.) replaced by [REDACTED], key and separators kept.
     """
-    # Redact emails anywhere in the string
-    # TODO: Add token patterns here (e.g., sk-*, tok_*, etc.)
-    return EMAIL_REGEX.sub("[email]", value)
+    value = EMAIL_REGEX.sub("[email]", value)
+    value = _SENSITIVE_QS.sub(lambda m: f"{m.group(1)}{m.group(2)}=[REDACTED]", value)
+    return value
 
 
 def _sanitize_value(value: Any) -> Any:
     """
-    Recursively sanitize a value: dicts, lists, strings, or convert others to strings.
+    Recursively sanitize a value: dicts, lists/tuples/sets, strings, or convert others to strings.
 
     Args:
         value: Value to sanitize
 
     Returns:
-        Sanitized value
+        Sanitized value (list/tuple/set input is always returned as a list)
 
     Raises:
         Any exception from converting non-standard types to strings (e.g., broken __repr__).
     """
     if isinstance(value, dict):
         return sanitize_log_data(value)
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple, set)):
         return [_sanitize_value(v) for v in value]
     if isinstance(value, str):
         return redact_text(value)

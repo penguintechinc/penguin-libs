@@ -5,5 +5,7 @@
   {"name": "email_in_message", "input": {"event": "login for carol@ex.com"}, "expected": {"event": "login for [email]"}},
   {"name": "nested_dict", "input": {"outer": {"secret": "s"}}, "expected": {"outer": {"secret": "[REDACTED]"}}},
   {"name": "list_of_strings", "input": {"xs": ["dan@ex.com", "ok"]}, "expected": {"xs": ["[email]", "ok"]}},
-  {"name": "prefixed_compound_key", "input": {"stripe_api_key": "sk_live_x"}, "expected": {"stripe_api_key": "[REDACTED]"}}
+  {"name": "prefixed_compound_key", "input": {"stripe_api_key": "sk_live_x"}, "expected": {"stripe_api_key": "[REDACTED]"}},
+  {"name": "sensitive_query_param", "input": {"event": "call ?api_key=sk-LIVE-1 done"}, "expected": {"event": "call ?api_key=[REDACTED] done"}},
+  {"name": "tuple_value_email", "input": {"t": ["ok", "eve@example.com"]}, "expected": {"t": ["ok", "[email]"]}}
 ]
