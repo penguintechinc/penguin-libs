@@ -4,7 +4,12 @@ Penguin Tech Python Utilities
 Shared utilities for Penguin Tech Python applications.
 """
 
-__version__ = "0.3.0"
+from importlib import metadata as _metadata
+
+try:
+    __version__ = _metadata.version("penguin-utils")
+except _metadata.PackageNotFoundError:  # running from source tree without install
+    __version__ = "0.4.0"
 
 from .decorators import (
     DecoratorContext,

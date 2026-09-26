@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "penguin-utils"
-version = "0.3.0"
+version = "0.4.0"
 description = "Shared Python utilities for Penguin Tech applications"
 readme = "README.md"
 license = {text = "MIT"}
@@ -29,6 +29,15 @@ dependencies = [
     "pydal>=20230521.1",
     "structlog>=23.0",
     "httpx>=0.27",
+    "opentelemetry-api>=1.44.0,<2",
+    "opentelemetry-sdk>=1.44.0,<2",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.44.0,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.44.0,<2",
+    "opentelemetry-instrumentation-logging>=0.65b0,<1",
+    "opentelemetry-instrumentation-asgi>=0.65b0,<1",
+    "opentelemetry-instrumentation-httpx>=0.65b0,<1",
+    "opentelemetry-instrumentation-sqlalchemy>=0.65b0,<1",
+    "opentelemetry-instrumentation-redis>=0.65b0,<1",
 ]
 
 [project.optional-dependencies]
@@ -83,3 +92,8 @@ python_files = ["test_*.py"]
 # Without this (and the pytest-asyncio dev dependency) pytest reports
 # "Unknown pytest.mark.asyncio" and the async test fails rather than running.
 asyncio_mode = "auto"
+addopts = "--cov=penguintechinc_utils --cov-report=term-missing --cov-fail-under=90"
+
+[tool.coverage.run]
+branch = true
+source = ["penguintechinc_utils"]
