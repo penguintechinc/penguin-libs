@@ -1,47 +1,67 @@
 import logging
+
 from penguintechinc_utils.telemetry.config import TelemetryConfig
 from penguintechinc_utils.telemetry.providers import build_providers
 
 
-def _cfg(**kw):
-    base = dict(service_name="svc", service_version=None, level=logging.INFO,
-                log_format="json", otlp_endpoint=None, sdk_disabled=False)
-    base.update(kw); return TelemetryConfig(**base)
-
-
-def test_no_endpoint_builds_inprocess_no_export(caplog):
+def test_no_endpoint_builds_inprocess_no_export(monkeypatch, caplog):
+    """No endpoint → in-process, exporting=False, WARN logged."""
+    monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
     with caplog.at_level(logging.WARNING):
-        p = build_providers(_cfg(otlp_endpoint=None))
+        cfg = TelemetryConfig.resolve(service_name="svc")
+        p = build_providers(cfg)
     assert p.exporting is False
-    assert p.tracer_provider is not None and p.meter_provider is not None and p.logger_provider is not None
+    assert (
+        p.tracer_provider is not None
+        and p.meter_provider is not None
+        and p.logger_provider is not None
+    )
 
 
-def test_endpoint_enables_export():
-    p = build_providers(_cfg(otlp_endpoint="http://localhost:4317"))
+def test_endpoint_enables_export(monkeypatch):
+    """Endpoint set via env → exporting=True."""
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.example:4317")
+    cfg = TelemetryConfig.resolve(service_name="svc")
+    p = build_providers(cfg)
     assert p.exporting is True
 
 
 def test_resource_has_service_name():
-    p = build_providers(_cfg(service_name="svc"))
+    """Resource includes service.name from config."""
+    cfg = TelemetryConfig.resolve(service_name="svc")
+    p = build_providers(cfg)
     attrs = p.tracer_provider.resource.attributes
     assert attrs["service.name"] == "svc"
 
 
-def test_sdk_disabled_no_export(caplog):
+def test_sdk_disabled_no_export(monkeypatch, caplog):
+    """SDK disabled flag forces exporting=False even with endpoint."""
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+    monkeypatch.setenv("OTEL_SDK_DISABLED", "true")
     with caplog.at_level(logging.WARNING):
-        p = build_providers(_cfg(sdk_disabled=True, otlp_endpoint="http://localhost:4317"))
+        cfg = TelemetryConfig.resolve(service_name="svc")
+        p = build_providers(cfg)
     assert p.exporting is False
-    assert p.tracer_provider is not None and p.meter_provider is not None and p.logger_provider is not None
+    assert (
+        p.tracer_provider is not None
+        and p.meter_provider is not None
+        and p.logger_provider is not None
+    )
 
 
 def test_resource_has_service_version():
-    p = build_providers(_cfg(service_name="svc", service_version="1.2.3"))
+    """Resource includes service.version when set."""
+    cfg = TelemetryConfig.resolve(service_name="svc", service_version="1.2.3")
+    p = build_providers(cfg)
     attrs = p.tracer_provider.resource.attributes
     assert attrs["service.name"] == "svc"
     assert attrs["service.version"] == "1.2.3"
 
 
 def test_http_protocol(monkeypatch):
+    """HTTP protocol variant selected via env var."""
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.example:4318")
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
-    p = build_providers(_cfg(otlp_endpoint="http://localhost:4318"))
+    cfg = TelemetryConfig.resolve(service_name="svc")
+    p = build_providers(cfg)
     assert p.exporting is True
