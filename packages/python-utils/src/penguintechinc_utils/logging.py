@@ -322,60 +322,100 @@ class _SinkProcessor:
         return event_dict
 
 
+def _shared_processors() -> list[Processor]:
+    """
+    Build the processor chain applied to structlog events AND foreign stdlib records.
+
+    Imported lazily rather than at module scope because `telemetry` imports back
+    into this module; deferring to call time breaks the cycle. The same list is
+    reused as ProcessorFormatter's `foreign_pre_chain`, which is the only thing
+    that sanitizes records from third-party libraries -- they never pass through
+    structlog's own chain.
+    """
+    from .telemetry.context import add_trace_context
+
+    return [
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        add_trace_context,
+        _sanitize_processor,
+    ]
+
+
 def configure_logging(
     level: int = logging.INFO,
     json_output: bool = False,
     sinks: Sequence["Sink"] | None = None,
 ) -> None:
     """
-    Configure structlog for the application.
+    Configure structlog to render through stdlib logging. Logs only; call init() for OTel.
 
-    Sets up a processor chain that adds log level, ISO timestamps, sanitizes
-    sensitive fields, and renders output as JSON or a human-readable console
-    format. Optionally forwards events to additional sinks.
+    structlog events are routed to the stdlib root logger via ProcessorFormatter,
+    so one handler set (console, the 0.3.x sinks, and -- once init() runs -- the
+    OTel bridge) serves both our own events and any third-party library's. `level`
+    is applied to the root logger, so unlike 0.3.x it actually filters.
+
+    Replaces any handlers already on the root logger, rather than adding to them:
+    this owns the root handler set, so a caller that installed its own handler
+    beforehand loses it. Calling this repeatedly is therefore safe and never
+    doubles output.
 
     Args:
-        level: Minimum logging level (default: INFO).
+        level: Minimum logging level (default: INFO). Now enforced.
         json_output: Render as JSON lines when True, console format when False.
         sinks: Optional sequence of Sink instances to receive every event.
     """
-    processors: list[Processor] = [
-        structlog.stdlib.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso"),
-        _sanitize_processor,
-    ]
+    shared = _shared_processors()
+    renderer: Processor = (
+        structlog.processors.JSONRenderer()
+        if json_output
+        else structlog.dev.ConsoleRenderer(colors=False)
+    )
+    formatter = structlog.stdlib.ProcessorFormatter(
+        processor=renderer,
+        foreign_pre_chain=shared,
+    )
 
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        root.removeHandler(handler)
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    root.addHandler(console)
+    root.setLevel(level)
+
+    processors: list[Processor] = list(shared)
     if sinks:
         processors.append(_SinkProcessor(sinks))
-
-    if json_output:
-        processors.append(structlog.processors.JSONRenderer())
-    else:
-        processors.append(structlog.dev.ConsoleRenderer())
+    processors.append(structlog.stdlib.ProcessorFormatter.wrap_for_formatter)
 
     structlog.configure(
         processors=processors,
         wrapper_class=structlog.stdlib.BoundLogger,
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
+        logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
 
-    logging.basicConfig(level=level)
 
-
-def get_logger(name: str, level: int = logging.INFO) -> structlog.stdlib.BoundLogger:
+def get_logger(name: str | None = None, level: int | None = None) -> structlog.stdlib.BoundLogger:
     """
-    Get a structlog BoundLogger with Penguin Tech standard configuration.
+    Get a structlog BoundLogger routed through stdlib logging.
+
+    `level` defaults to None rather than INFO: forcing a per-logger level here is
+    what made 0.3.x print DEBUG regardless of configuration, and it would override
+    the root level set by configure_logging.
 
     Args:
         name: Logger name (usually __name__ or component name).
-        level: Logging level (default: INFO).
+        level: Optional per-logger level override; left untouched when None.
 
     Returns:
         Configured structlog BoundLogger instance.
     """
-    logging.getLogger(name).setLevel(level)
+    if level is not None:
+        logging.getLogger(name).setLevel(level)
     return cast(structlog.stdlib.BoundLogger, structlog.get_logger(name))
 
 
