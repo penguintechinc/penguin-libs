@@ -8,5 +8,6 @@
   {"name": "prefixed_compound_key", "input": {"stripe_api_key": "sk_live_x"}, "expected": {"stripe_api_key": "[REDACTED]"}},
   {"name": "sensitive_query_param", "input": {"event": "call ?api_key=sk-LIVE-1 done"}, "expected": {"event": "call ?api_key=[REDACTED] done"}},
   {"name": "tuple_value_email", "input": {"t": ["ok", "eve@example.com"]}, "expected": {"t": ["ok", "[email]"]}},
-  {"name": "base64_secret_value", "input": {"event": "call ?api_key=c2VjcmV0== ok"}, "expected": {"event": "call ?api_key=[REDACTED] ok"}}
+  {"name": "base64_secret_value", "input": {"event": "call ?api_key=c2VjcmV0== ok"}, "expected": {"event": "call ?api_key=[REDACTED] ok"}},
+  {"name": "colon_space_base64_secret", "input": {"event": "sent token: YWJjMTIz== ok"}, "expected": {"event": "sent token: [REDACTED] ok"}}
 ]

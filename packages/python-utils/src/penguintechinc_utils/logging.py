@@ -6,6 +6,7 @@ to prevent accidental exposure of passwords, tokens, emails, etc.
 Built on structlog for structured, production-ready logging.
 """
 
+import functools
 import logging
 import re
 from collections.abc import Sequence
@@ -47,8 +48,20 @@ SENSITIVE_KEYS = frozenset(
     }
 )
 
-# Regex for email detection
-EMAIL_REGEX = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+# Regex for email detection.
+#
+# The {1,64} / {1,255} bounds are the RFC 5321 4.5.3.1 limits on a local part and
+# a domain, so nothing that is actually an address stops matching. They exist for
+# cost, not validation: an unbounded greedy local part is retried at every offset
+# of a long run of local-part-legal characters, which is quadratic -- a 40KB
+# alphanumeric message (a base64 blob, a JWT, a stack trace) cost ~2.2s per
+# redact_text call. Bounding the run makes each retry O(64) instead of O(n).
+#
+# A negative lookbehind looks like the cheaper fix and is NOT safe here: it tests
+# the raw string, not "was this character already consumed", so when one address's
+# domain runs straight into the next address's local part the second match is
+# refused and the address leaks (`a@b.coma.b@x.co` kept `a.b@x.co` in full).
+EMAIL_REGEX = re.compile(r"[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9.-]{1,255}\.[a-zA-Z]{2,}")
 
 # Word-boundary splitter for key matching
 _KEY_SPLIT = re.compile(r"[^a-z0-9]+")
@@ -58,40 +71,105 @@ _KEY_SPLIT = re.compile(r"[^a-z0-9]+")
 # dict-field path uses -- so there is exactly one source of truth for what counts
 # as sensitive, never a second word list.
 #
-# The value class deliberately allows =, /, + so a base64-encoded secret (incl.
-# "==" padding) redacts in full: "token=YWJjMTIz==" -> "token=[REDACTED]", not a
-# truncated "token=[REDACTED]Iz==" leaving part of the secret exposed.
-#
-# Two alternatives, split on whether the separator is immediately followed by the
-# value (no gap) or by whitespace before it (a gap):
-#   - No gap ("token=YWJjMTIz==", "api_key=sk-LIVE-1"): value starts consuming
-#     immediately, no guard. This is the only shape a token/query-param value ever
-#     takes, so base64 payloads containing their own "=" are never mistaken for a
-#     second key=value pair -- there is no whitespace inside them to raise the
-#     question in the first place.
-#   - Gap ("note: password=hunter2", "Authorization: Bearer x"): value is guarded
-#     by a single, one-time (not per-character) negative lookahead refusing to
-#     start where the text immediately looks like a fresh key=/key: pair. Without
-#     it, a non-sensitive label like "note:" would greedily swallow the following
-#     "password=hunter2" whole as its own opaque, never-rescanned value -- the
-#     inner sensitive pair would never get an independent chance to match. Because
-#     this guard only ever applies in the whitespace-gap branch, and a value never
-#     has a naturally occurring whitespace gap after its own separator, it cannot
-#     reproduce the earlier regression where a single per-character guard blocked
-#     matching a token's OWN internal "=" (e.g. base64 padding) from position 0.
-_KV = re.compile(
-    r"([A-Za-z0-9_.\-]+)(\s*[:=])((?:Bearer|Basic|Digest|Token)\s+[^\s&#,;]+|[^\s&#,;?]+)"
-    r"|([A-Za-z0-9_.\-]+)(\s*[:=]\s+)(?![A-Za-z0-9_.\-]+\s*[:=])"
-    r"((?:Bearer|Basic|Digest|Token)\s+[^\s&#,;]+|[^\s&#,;?]+)",
+# The scan is driven from SEPARATORS, not from keys, and that choice is what keeps
+# the cost down. A key/value pair always contains a ":" or "=", and a bare
+# character-class search for one cannot backtrack, so a message with no separator
+# at all -- a stack trace, a base64 blob, ordinary prose -- costs one linear pass
+# and nothing more. Searching for the key instead means retrying a greedy
+# character class at every offset: with that shape an 80KB message cost ~1s, and
+# before the value was also split out of it, ~7.8s.
+_SEP_FIND = re.compile(r"[:=]")
+
+# The key, anchored to the END of the short window immediately before a separator.
+# Optional surrounding quotes, so a JSON/repr key ('"token":') is seen too;
+# is_sensitive_key splits on non-alphanumerics, so the quotes fall out of the
+# judgement for free -- no second word list, no stripping. Trailing \s* allows
+# "token = x". {1,128} bounds the window work; real keys are far shorter.
+_KEY_END = re.compile(r"(['\"]?[A-Za-z0-9_.\-]{1,128}['\"]?)\s*\Z")
+
+# How far back from a separator a key is looked for. Longer than any real key, so
+# the only thing the bound costs is that an absurdly long key gets judged on its
+# last 160 characters -- which is the end that carries the sensitive word
+# ("stripe_api_key"), so the judgement is unaffected in practice.
+_MAX_KEY_SPAN = 160
+
+# Characters the separator run may absorb after the ":"/"=" itself: whitespace
+# (newlines included, so a value on the next line is still reached) and then any
+# run of opening quotes, so replacing the value leaves the quoting intact and
+# 'token=""x""' cannot hide x behind the quotes.
+_SEP_CHARS = ":="
+_QUOTE_CHARS = "'\""
+
+# The value of a SENSITIVE key only. Deliberately permissive -- it stops just at
+# whitespace and the , ; & # separators that end a field -- because for a key we
+# already judged sensitive, over-redaction is the safe direction and a narrow
+# class is how secrets escape: excluding quotes and brackets let
+# 'token=""secret""' and an escaped '{"token": "\"secret\""}' slip through whole.
+# Allowing =, /, + also means a base64 secret (incl. "==" padding) redacts in full
+# rather than as a truncated "token=[REDACTED]Iz==" still exposing part of it.
+# A benign key's value is never matched with this at all.
+_VALUE = re.compile(
+    r"(?:Bearer|Basic|Digest|Token)\s+[^\s&#,;]+|[^\s&#,;]+",
     re.IGNORECASE,
 )
 
+# Structural characters trimmed back off the end of a redacted value and re-emitted
+# after the placeholder, so redacting inside JSON leaves the JSON parseable.
+_VALUE_TRAILING = "'\"})]"
 
-def _redact_kv(m: "re.Match[str]") -> str:
-    """Redact a _KV match's value when its key is sensitive; otherwise pass through."""
-    key = m.group(1) if m.group(1) is not None else m.group(4)
-    sep = m.group(2) if m.group(2) is not None else m.group(5)
-    return f"{key}{sep}[REDACTED]" if is_sensitive_key(key) else m.group(0)
+
+def _end_of_separator(value: str, start: int) -> int:
+    """
+    Return the index just past the separator run beginning at `start`.
+
+    Scanned by hand rather than with a regex so the caller never has to handle an
+    impossible no-match case: `start` always points at a ":" or "=", so the result
+    is always greater than `start` and redact_text's scan always advances.
+    """
+    end = start
+    length = len(value)
+    while end < length and value[end] in _SEP_CHARS:
+        end += 1
+    while end < length and value[end].isspace():
+        end += 1
+    while end < length and value[end] in _QUOTE_CHARS:
+        end += 1
+    return end
+
+
+@functools.lru_cache(maxsize=8)
+def _sensitive_segments(keys: frozenset[str]) -> tuple[tuple[str, ...], ...]:
+    """
+    Split each sensitive key into its word segments, once per distinct key set.
+
+    Cached because is_sensitive_key is called for every key in every log event and
+    for every key/value pair inside every message: re-splitting the whole word list
+    per call dominated redaction cost (~550ms for an 80KB message of "k=" pairs).
+    Keyed on the frozenset itself, so replacing SENSITIVE_KEYS is still picked up.
+    """
+    return tuple(tuple(s for s in _KEY_SPLIT.split(key) if s) for key in keys)
+
+
+@functools.lru_cache(maxsize=4096)
+def _is_sensitive_key(key: str, keys: frozenset[str]) -> bool:
+    """
+    Decide whether `key` names a secret, memoised per (key, sensitive-key-set).
+
+    The result is a pure function of its inputs and the same handful of field and
+    query-parameter names recur constantly, so memoising turns the hot path of both
+    the dict and the free-text scanners into a dict lookup. `keys` is part of the
+    cache key, so replacing SENSITIVE_KEYS never serves a stale answer.
+    """
+    key_segments = [s for s in _KEY_SPLIT.split(key.lower()) if s]
+
+    # For each sensitive key, check if its segments appear as a contiguous run
+    for sensitive_segments in _sensitive_segments(keys):
+        width = len(sensitive_segments)
+        for i in range(len(key_segments) - width + 1):
+            if tuple(key_segments[i : i + width]) == sensitive_segments:
+                return True
+
+    return False
 
 
 def is_sensitive_key(key: str) -> bool:
@@ -106,19 +184,7 @@ def is_sensitive_key(key: str) -> bool:
     Returns:
         True if key contains a sensitive segment sequence
     """
-    key_lower = key.lower()
-    key_segments = [s for s in _KEY_SPLIT.split(key_lower) if s]
-
-    # For each sensitive key, check if its segments appear as contiguous subsequence
-    for sensitive in SENSITIVE_KEYS:
-        sensitive_segments = [s for s in _KEY_SPLIT.split(sensitive) if s]
-
-        # Check if sensitive_segments appears as contiguous run in key_segments
-        for i in range(len(key_segments) - len(sensitive_segments) + 1):
-            if key_segments[i : i + len(sensitive_segments)] == sensitive_segments:
-                return True
-
-    return False
+    return _is_sensitive_key(key, SENSITIVE_KEYS)
 
 
 def redact_text(value: str) -> str:
@@ -138,8 +204,48 @@ def redact_text(value: str) -> str:
         values replaced by [REDACTED] (key and separator preserved).
     """
     value = EMAIL_REGEX.sub("[email]", value)
-    value = _KV.sub(_redact_kv, value)
-    return value
+
+    # Scanned with an explicit cursor rather than re.sub for two reasons. A benign
+    # key must not consume what follows it ("note: password=hunter2" -- the inner
+    # pair needs its own chance to match), and the value is only worth matching
+    # once the key is known to be sensitive. Resuming just past the separator on a
+    # benign key gives both. Recursing instead, as an earlier revision did, blew
+    # CPython's C stack on a long "k=k=...=token=secret" chain. The cursor strictly
+    # increases every iteration -- key and separator are both non-empty -- so the
+    # loop always terminates.
+    parts: list[str] = []
+    pos = 0
+    while (hit := _SEP_FIND.search(value, pos)) is not None:
+        sep_start = hit.start()
+        window_start = max(pos, sep_start - _MAX_KEY_SPAN)
+        key_match = _KEY_END.search(value[window_start:sep_start])
+        if key_match is None:
+            # A separator with no key in front of it ("://", "::", a bare ":").
+            parts.append(value[pos : sep_start + 1])
+            pos = sep_start + 1
+            continue
+        key = key_match.group(1)
+        key_start = window_start + key_match.start(1)
+        parts.append(value[pos:key_start])
+        pos = _end_of_separator(value, sep_start)
+        parts.append(value[key_start:pos])
+        if not is_sensitive_key(key):
+            continue
+        found = _VALUE.match(value, pos)
+        if found is None:
+            continue
+        raw = found.group(0)
+        pos = found.end()
+        if raw.startswith((SENSITIVE_PLACEHOLDER, SANITIZE_ERROR_PLACEHOLDER)):
+            # Already redacted: re-redacting would chip the placeholder's own
+            # closing bracket off and append another, so redact_text stays
+            # idempotent only by leaving it alone.
+            parts.append(raw)
+            continue
+        kept = raw.rstrip(_VALUE_TRAILING)
+        parts.append(SENSITIVE_PLACEHOLDER + raw[len(kept) :])
+    parts.append(value[pos:])
+    return "".join(parts)
 
 
 def _sanitize_value(value: Any) -> Any:
