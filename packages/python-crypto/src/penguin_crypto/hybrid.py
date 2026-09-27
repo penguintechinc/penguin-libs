@@ -1,10 +1,10 @@
 """Hybrid encryption (X25519 + AES-256-GCM)."""
 
-from cryptography.hazmat.primitives.asymmetric.x25519 import (  # type: ignore[import-untyped]
+from cryptography.hazmat.primitives.asymmetric.x25519 import (
     X25519PrivateKey,
     X25519PublicKey,
 )
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # type: ignore[import-untyped]
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from .ecc import generate_x25519_keypair, x25519_exchange
 from .kdf import derive_key_hkdf

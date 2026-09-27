@@ -3,10 +3,10 @@
 import pytest
 
 from penguin_crypto.kdf import (
-    generate_salt,
+    derive_key,
     derive_key_argon2id,
     derive_key_hkdf,
-    derive_key,
+    generate_salt,
 )
 
 

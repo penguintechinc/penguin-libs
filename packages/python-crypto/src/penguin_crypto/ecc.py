@@ -1,11 +1,11 @@
 """Elliptic curve cryptography (X25519, Ed25519)."""
 
-from cryptography.exceptions import InvalidSignature  # type: ignore[import-untyped]
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (  # type: ignore[import-untyped]
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
     Ed25519PublicKey,
 )
-from cryptography.hazmat.primitives.asymmetric.x25519 import (  # type: ignore[import-untyped]
+from cryptography.hazmat.primitives.asymmetric.x25519 import (
     X25519PrivateKey,
     X25519PublicKey,
 )

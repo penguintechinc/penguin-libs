@@ -2,7 +2,7 @@
 
 import os
 
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # type: ignore[import-untyped]
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
 def generate_key(length: int = 32) -> bytes:
