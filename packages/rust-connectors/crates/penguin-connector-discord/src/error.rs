@@ -1,5 +1,7 @@
 //! Error type for the Discord connector (Gateway client + REST sender).
 
+use crate::gateway::CloseCodeClass;
+
 /// Errors surfaced by the Gateway client and the REST message sender.
 #[derive(Debug, thiserror::Error)]
 pub enum DiscordError {
@@ -53,6 +55,22 @@ pub enum DiscordError {
     #[error("discord gateway heartbeat not acked before next heartbeat due")]
     HeartbeatAckTimeout,
 
+    /// The gateway WebSocket closed with an explicit close code, classified
+    /// per Discord's documented "Gateway Close Event Codes" table (see
+    /// [`crate::gateway::classify_close_code`]). Retryable except when
+    /// `class` is [`CloseCodeClass::Fatal`] — see
+    /// [`DiscordError::is_retryable`].
+    #[error("discord gateway closed: code={code:?} class={class:?} reason={reason}")]
+    GatewayClosed {
+        /// The WebSocket/Discord close code, when the peer sent one.
+        code: Option<u16>,
+        /// The close reason string the peer sent (never a token — this is
+        /// server-supplied text, not caller-provided secrets).
+        reason: String,
+        /// Resumable / needs-fresh-identify / fatal classification.
+        class: CloseCodeClass,
+    },
+
     /// The REST send request itself failed at the transport layer.
     /// Retryable.
     #[error("discord REST request failed: {0}")]
@@ -88,17 +106,18 @@ impl DiscordError {
     /// True when the caller should retry with backoff rather than give up.
     #[must_use]
     pub fn is_retryable(&self) -> bool {
-        matches!(
-            self,
+        match self {
             DiscordError::Transport(_)
-                | DiscordError::ClosedDuringHandshake
-                | DiscordError::ResumeRequested
-                | DiscordError::SessionInvalidated
-                | DiscordError::HeartbeatAckTimeout
-                | DiscordError::Http(_)
-                | DiscordError::RateLimited { .. }
-                | DiscordError::ServerError(_)
-        )
+            | DiscordError::ClosedDuringHandshake
+            | DiscordError::ResumeRequested
+            | DiscordError::SessionInvalidated
+            | DiscordError::HeartbeatAckTimeout
+            | DiscordError::Http(_)
+            | DiscordError::RateLimited { .. }
+            | DiscordError::ServerError(_) => true,
+            DiscordError::GatewayClosed { class, .. } => class.is_retryable(),
+            _ => false,
+        }
     }
 }
 

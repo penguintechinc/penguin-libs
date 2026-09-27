@@ -20,6 +20,7 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
@@ -41,6 +42,64 @@ pub const OP_INVALID_SESSION: u8 = 9;
 pub const OP_HELLO: u8 = 10;
 /// Heartbeat ACK — the gateway acknowledged our last heartbeat.
 pub const OP_HEARTBEAT_ACK: u8 = 11;
+
+/// How a Discord Gateway WebSocket close code should be handled, per
+/// Discord's documented "Gateway Close Event Codes" table
+/// (<https://discord.com/developers/docs/topics/opcodes-and-status-codes#gateway-close-event-codes>).
+///
+/// Collapsing every close to a single "connection ended" signal risks two
+/// failure modes: reconnecting forever against a fatal close (e.g. a
+/// revoked token, `4004`) causes a reconnect storm, and treating any close
+/// as fully resumable when Discord says otherwise (`4007`/`4009`) causes a
+/// `RESUME` attempt that will itself fail. This crate does not implement
+/// `RESUME` yet (see [`DiscordError::ResumeRequested`]), so today
+/// `Resumable` and `ReconnectFresh` both mean "reconnect via a fresh
+/// handshake" to the caller — the distinction is preserved for when
+/// `RESUME` lands, and so callers can log/alert differently on the two.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloseCodeClass {
+    /// The session could be resumed with `RESUME` (once implemented) using
+    /// the stored session id + last sequence number. Codes: `4000`-`4003`,
+    /// `4005`, `4008`.
+    Resumable,
+    /// Reconnect is possible, but Discord has said the session itself
+    /// cannot be resumed — a fresh `IDENTIFY` is required. Codes: `4007`
+    /// (invalid seq), `4009` (session timed out), and any
+    /// undocumented/standard WebSocket code (the safe default: attempting
+    /// `RESUME` on a code Discord hasn't documented as resumable risks a
+    /// second failed round trip before falling back to a fresh identify
+    /// anyway).
+    ReconnectFresh,
+    /// Do not reconnect — the caller must stop retrying. Codes: `4004`
+    /// (authentication failed), `4010` (invalid shard), `4011` (sharding
+    /// required), `4012` (invalid API version), `4013` (invalid
+    /// intent(s)), `4014` (disallowed intent(s)).
+    Fatal,
+}
+
+impl CloseCodeClass {
+    /// `true` for [`Self::Resumable`] and [`Self::ReconnectFresh`] —
+    /// `false` only for [`Self::Fatal`], which must stop the caller's
+    /// retry loop entirely.
+    #[must_use]
+    pub fn is_retryable(self) -> bool {
+        !matches!(self, Self::Fatal)
+    }
+}
+
+/// Classify a Discord Gateway WebSocket close code per Discord's
+/// documented "Gateway Close Event Codes" table. Any code Discord hasn't
+/// documented (including standard WebSocket codes like `1000`/`1001`)
+/// classifies as [`CloseCodeClass::ReconnectFresh`], the safe default when
+/// this crate has no specific resumability guidance for it.
+#[must_use]
+pub fn classify_close_code(code: u16) -> CloseCodeClass {
+    match code {
+        4004 | 4010 | 4011 | 4012 | 4013 | 4014 => CloseCodeClass::Fatal,
+        4000..=4003 | 4005 | 4008 => CloseCodeClass::Resumable,
+        _ => CloseCodeClass::ReconnectFresh,
+    }
+}
 
 /// Default Discord gateway URL (API v10, JSON encoding).
 pub const DEFAULT_GATEWAY_URL: &str = "wss://gateway.discord.gg/?v=10&encoding=json";
@@ -342,7 +401,12 @@ where
 
             let text = match frame {
                 Message::Text(text) => text.to_string(),
-                Message::Close(_) => return Ok(None),
+                // A close frame with no payload carries no code/reason to
+                // classify (e.g. the peer never sent one) — preserve the
+                // prior "clean end of stream" behavior rather than
+                // fabricating a code.
+                Message::Close(None) => return Ok(None),
+                Message::Close(Some(frame)) => return Err(Self::close_frame_error(&frame)),
                 _ => continue,
             };
             let payload = parse_payload(&text)?;
@@ -446,6 +510,32 @@ where
                 },
                 _ => {}
             }
+        }
+    }
+
+    /// Turn a server-sent WebSocket close frame into a classified
+    /// [`DiscordError::GatewayClosed`], logging at the severity the
+    /// classification warrants. Fatal codes (bad token, invalid/disallowed
+    /// intents, sharding misconfiguration) log at ERROR — the caller must
+    /// stop retrying, so this is the last chance to surface the code
+    /// somewhere actionable. Never logs the token; the close reason is
+    /// server-supplied text, not caller-provided secrets.
+    fn close_frame_error(frame: &CloseFrame) -> DiscordError {
+        let code = u16::from(frame.code);
+        let reason = frame.reason.to_string();
+        let class = classify_close_code(code);
+        match class {
+            CloseCodeClass::Fatal => {
+                tracing::error!(code, reason = %reason, ?class, "discord gateway closed fatally");
+            }
+            CloseCodeClass::Resumable | CloseCodeClass::ReconnectFresh => {
+                tracing::warn!(code, reason = %reason, ?class, "discord gateway closed");
+            }
+        }
+        DiscordError::GatewayClosed {
+            code: Some(code),
+            reason,
+            class,
         }
     }
 
@@ -985,6 +1075,131 @@ mod tests {
             .await
             .expect("close should not error");
         assert!(result.is_none());
+    }
+
+    /// Send a close frame carrying `code` and assert `next_chat_message`
+    /// surfaces a [`DiscordError::GatewayClosed`] with the expected
+    /// classification and code — shared by the close-code-class tests.
+    async fn assert_close_code_classifies(code: u16, expected: CloseCodeClass) {
+        let (mut session, mut server_ws) = handshake_over_duplex(60_000).await;
+        server_ws
+            .close(Some(CloseFrame {
+                code: code.into(),
+                reason: "test close".into(),
+            }))
+            .await
+            .expect("send close frame");
+        let err = session
+            .next_chat_message()
+            .await
+            .expect_err("coded close should error");
+        match err {
+            DiscordError::GatewayClosed {
+                code: got_code,
+                class,
+                ..
+            } => {
+                assert_eq!(got_code, Some(code));
+                assert_eq!(class, expected);
+                assert_eq!(class.is_retryable(), expected.is_retryable());
+            }
+            other => panic!("expected GatewayClosed, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn close_code_4000_unknown_error_is_resumable() {
+        assert_close_code_classifies(4000, CloseCodeClass::Resumable).await;
+    }
+
+    #[tokio::test]
+    async fn close_code_4008_rate_limited_is_resumable() {
+        assert_close_code_classifies(4008, CloseCodeClass::Resumable).await;
+    }
+
+    #[tokio::test]
+    async fn close_code_4007_invalid_seq_is_reconnect_fresh() {
+        assert_close_code_classifies(4007, CloseCodeClass::ReconnectFresh).await;
+    }
+
+    #[tokio::test]
+    async fn close_code_4009_session_timed_out_is_reconnect_fresh() {
+        assert_close_code_classifies(4009, CloseCodeClass::ReconnectFresh).await;
+    }
+
+    #[tokio::test]
+    async fn close_code_4004_auth_failed_is_fatal() {
+        assert_close_code_classifies(4004, CloseCodeClass::Fatal).await;
+    }
+
+    #[tokio::test]
+    async fn close_code_4010_invalid_shard_is_fatal() {
+        assert_close_code_classifies(4010, CloseCodeClass::Fatal).await;
+    }
+
+    #[tokio::test]
+    async fn close_code_4011_sharding_required_is_fatal() {
+        assert_close_code_classifies(4011, CloseCodeClass::Fatal).await;
+    }
+
+    #[tokio::test]
+    async fn close_code_4013_invalid_intents_is_fatal() {
+        assert_close_code_classifies(4013, CloseCodeClass::Fatal).await;
+    }
+
+    #[tokio::test]
+    async fn close_code_4014_disallowed_intents_is_fatal() {
+        assert_close_code_classifies(4014, CloseCodeClass::Fatal).await;
+    }
+
+    #[tokio::test]
+    async fn close_code_undocumented_defaults_to_reconnect_fresh() {
+        assert_close_code_classifies(1000, CloseCodeClass::ReconnectFresh).await;
+    }
+
+    #[test]
+    fn classify_close_code_covers_every_documented_code() {
+        let cases = [
+            (4000, CloseCodeClass::Resumable),
+            (4001, CloseCodeClass::Resumable),
+            (4002, CloseCodeClass::Resumable),
+            (4003, CloseCodeClass::Resumable),
+            (4004, CloseCodeClass::Fatal),
+            (4005, CloseCodeClass::Resumable),
+            (4007, CloseCodeClass::ReconnectFresh),
+            (4008, CloseCodeClass::Resumable),
+            (4009, CloseCodeClass::ReconnectFresh),
+            (4010, CloseCodeClass::Fatal),
+            (4011, CloseCodeClass::Fatal),
+            (4012, CloseCodeClass::Fatal),
+            (4013, CloseCodeClass::Fatal),
+            (4014, CloseCodeClass::Fatal),
+        ];
+        for (code, expected) in cases {
+            assert_eq!(classify_close_code(code), expected, "code {code}");
+        }
+    }
+
+    #[test]
+    fn discord_error_gateway_closed_is_retryable_matches_class() {
+        let resumable = DiscordError::GatewayClosed {
+            code: Some(4000),
+            reason: String::new(),
+            class: CloseCodeClass::Resumable,
+        };
+        let reconnect_fresh = DiscordError::GatewayClosed {
+            code: Some(4009),
+            reason: String::new(),
+            class: CloseCodeClass::ReconnectFresh,
+        };
+        let fatal = DiscordError::GatewayClosed {
+            code: Some(4004),
+            reason: String::new(),
+            class: CloseCodeClass::Fatal,
+        };
+        assert!(resumable.is_retryable());
+        assert!(reconnect_fresh.is_retryable());
+        assert!(!fatal.is_retryable());
     }
 
     #[tokio::test]
