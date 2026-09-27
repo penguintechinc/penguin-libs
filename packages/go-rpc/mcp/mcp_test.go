@@ -37,7 +37,7 @@ func TestMount_Path(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/not-mcp", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/not-mcp", nil)
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /not-mcp = %d, want %d (mux default for an unmounted path)", rec.Code, http.StatusNotFound)
@@ -81,7 +81,7 @@ func TestMount_InitializeHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client.Connect() error = %v, want nil", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	if session.InitializeResult() == nil {
 		t.Fatal("session.InitializeResult() = nil, want a populated result after Connect's initialize handshake")
