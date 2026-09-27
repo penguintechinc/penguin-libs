@@ -130,3 +130,39 @@ def test_benign_params_and_time_format_survive() -> None:
     """Benign query params and a bare HH:MM time value must not be mistaken for kv secrets."""
     assert redact_text("?page=2&sort=name") == "?page=2&sort=name"
     assert redact_text("time=12:30") == "time=12:30"
+
+
+def test_base64_padded_value_fully_redacted() -> None:
+    """A base64-encoded secret (incl. '==' padding) must redact in full, not truncate at '='."""
+    assert redact_text("token=YWJjMTIz==") == "token=[REDACTED]"
+
+
+def test_base64_padded_query_param_value_fully_redacted() -> None:
+    """Same as above, in query-string form, with a sibling benign param surviving."""
+    out = redact_text("?api_key=c2VjcmV0==&x=1")
+    assert "c2VjcmV0" not in out
+    assert out == "?api_key=[REDACTED]&x=1"
+
+
+def test_base64_padded_secret_key_fully_redacted() -> None:
+    """A bare 'secret=' with base64 padding at end-of-string is fully redacted."""
+    assert redact_text("secret=abcdef==") == "secret=[REDACTED]"
+
+
+def test_value_with_embedded_equals_not_partially_redacted() -> None:
+    """An '=' appearing mid-value (not just trailing padding) must not truncate the redaction."""
+    out = redact_text("password=P@ss==word")
+    assert "P@ss==word" not in out
+    assert out == "password=[REDACTED]"
+
+
+def test_standard_base64_alphabet_chars_fully_redacted() -> None:
+    """Standard base64 chars '/' and '+' inside a value must not stop redaction early."""
+    assert redact_text("token=ab/cd+ef==") == "token=[REDACTED]"
+
+
+def test_base64_value_after_non_sensitive_label_fully_redacted() -> None:
+    """A base64 secret must redact in full even when preceded by a non-sensitive 'label: '."""
+    out = redact_text("note: token=YWJjMTIz== error")
+    assert "YWJjMTIz" not in out
+    assert out == "note: token=[REDACTED] error"

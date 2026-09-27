@@ -58,22 +58,40 @@ _KEY_SPLIT = re.compile(r"[^a-z0-9]+")
 # dict-field path uses -- so there is exactly one source of truth for what counts
 # as sensitive, never a second word list.
 #
-# The value's second alternative is guarded by a negative lookahead that refuses to
-# start consuming where the upcoming text itself looks like a new key=/key: pair.
-# Without that guard, a non-sensitive outer key (e.g. "note:") greedily swallows an
-# inner sensitive one (e.g. "password=hunter2") whole as its own opaque value, and
-# the inner pair never gets a chance to be scanned on its own.
+# The value class deliberately allows =, /, + so a base64-encoded secret (incl.
+# "==" padding) redacts in full: "token=YWJjMTIz==" -> "token=[REDACTED]", not a
+# truncated "token=[REDACTED]Iz==" leaving part of the secret exposed.
+#
+# Two alternatives, split on whether the separator is immediately followed by the
+# value (no gap) or by whitespace before it (a gap):
+#   - No gap ("token=YWJjMTIz==", "api_key=sk-LIVE-1"): value starts consuming
+#     immediately, no guard. This is the only shape a token/query-param value ever
+#     takes, so base64 payloads containing their own "=" are never mistaken for a
+#     second key=value pair -- there is no whitespace inside them to raise the
+#     question in the first place.
+#   - Gap ("note: password=hunter2", "Authorization: Bearer x"): value is guarded
+#     by a single, one-time (not per-character) negative lookahead refusing to
+#     start where the text immediately looks like a fresh key=/key: pair. Without
+#     it, a non-sensitive label like "note:" would greedily swallow the following
+#     "password=hunter2" whole as its own opaque, never-rescanned value -- the
+#     inner sensitive pair would never get an independent chance to match. Because
+#     this guard only ever applies in the whitespace-gap branch, and a value never
+#     has a naturally occurring whitespace gap after its own separator, it cannot
+#     reproduce the earlier regression where a single per-character guard blocked
+#     matching a token's OWN internal "=" (e.g. base64 padding) from position 0.
 _KV = re.compile(
-    r"([A-Za-z0-9_.\-]+)(\s*[:=]\s*)"
-    r"((?:Bearer|Basic|Digest|Token)\s+[^\s&#,;?/]+"
-    r"|(?:(?![A-Za-z0-9_.\-]+\s*[:=])[^\s&#,;?/])+)",
+    r"([A-Za-z0-9_.\-]+)(\s*[:=])((?:Bearer|Basic|Digest|Token)\s+[^\s&#,;]+|[^\s&#,;?]+)"
+    r"|([A-Za-z0-9_.\-]+)(\s*[:=]\s+)(?![A-Za-z0-9_.\-]+\s*[:=])"
+    r"((?:Bearer|Basic|Digest|Token)\s+[^\s&#,;]+|[^\s&#,;?]+)",
     re.IGNORECASE,
 )
 
 
 def _redact_kv(m: "re.Match[str]") -> str:
     """Redact a _KV match's value when its key is sensitive; otherwise pass through."""
-    return f"{m.group(1)}{m.group(2)}[REDACTED]" if is_sensitive_key(m.group(1)) else m.group(0)
+    key = m.group(1) if m.group(1) is not None else m.group(4)
+    sep = m.group(2) if m.group(2) is not None else m.group(5)
+    return f"{key}{sep}[REDACTED]" if is_sensitive_key(key) else m.group(0)
 
 
 def is_sensitive_key(key: str) -> bool:

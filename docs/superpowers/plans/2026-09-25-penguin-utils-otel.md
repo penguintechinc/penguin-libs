@@ -1182,7 +1182,14 @@ def test_all_signals_and_redaction(otlp_collector):
     import penguintechinc_utils as u
     tel = u.init(service_name="itest")
     log = u.get_logger("itest")
-    log.info("marker_ok user planted_secret@example.com token=sk-PLANTED")
+    # Three redaction probes, each a guarantee the sanitizer makes (see Task 15 for the query-param rule):
+    #   email        -> free-text PII probe (redact_text email rule)
+    #   api_key kwarg -> sensitive-key probe (is_sensitive_key)
+    #   ?token= in URL -> sensitive query-param probe (redact_text query-param rule, Task 15)
+    log.info(
+        "marker_ok user planted_secret@example.com hit https://api.x/v1?token=sk-URLPLANTED",
+        api_key="sk-KEYPLANTED",
+    )
     with u.timed("itest.work"):
         time.sleep(0.01)
     tel.shutdown(); time.sleep(2)
@@ -1191,7 +1198,8 @@ def test_all_signals_and_redaction(otlp_collector):
     print(f"logRecords={logs} metrics={metrics} histograms={hist} spans={spans}")
     assert logs >= 1 and metrics >= 1 and hist >= 1 and spans >= 1
     blob = open(out).read()
-    assert "planted_secret@example.com" not in blob and "sk-PLANTED" not in blob
+    assert "planted_secret@example.com" not in blob
+    assert "sk-KEYPLANTED" not in blob and "sk-URLPLANTED" not in blob
     assert "marker_ok" in blob  # proves export actually happened (non-zero denominator)
 ```
 
@@ -1275,6 +1283,84 @@ Confirm `pyproject.toml` keeps `--cov-fail-under=90`. In `Makefile`, the existin
 ```bash
 git add tests/test_consumer_compat.py .github/workflows/ci.yml Makefile
 git commit -m "ci(python-utils): 3.11/3.12/3.13 test job, coverage + mypy gates, consumer compat"
+```
+
+---
+
+### Task 15: Harden redact_text (query-param secrets) + sanitize_log_data tuple/set recursion
+
+Added after Task 5's review: the spec (§2, and `security.md`/`critical-rules.md` Observability) requires that secrets never reach logs OR span attributes, including tokens in a URL query string (`http.url?token=…`) that the ASGI instrumentor records. `redact_text` today redacts emails only, so a URL token leaks through both the log path and (via `bridge.py`, which delegates to `redact_text`) the span path. The Task 5 reviewer also found `sanitize_log_data` never recurses into `tuple`/`set`, leaking PII inside a tuple-valued field on the log path. This task closes both in the single sanitizer, so logs, spans, and the future Rust port (via the shared vectors) all benefit. **Run before Task 13** (Task 13's redaction proof probes a URL token).
+
+**Files:**
+- Modify: `src/penguintechinc_utils/logging.py` (`redact_text`, `_sanitize_value`)
+- Modify: `tests/vectors/sanitizer_vectors.json` (add two vectors)
+- Test: `tests/test_sanitizer.py` (extend)
+
+**Interfaces:**
+- Consumes/Produces: same public names as Task 2 — `redact_text(value: str) -> str` and `sanitize_log_data(data: dict) -> dict` keep their signatures; behavior widens. No signature change.
+
+- [ ] **Step 1: Write the failing test** — extend `tests/test_sanitizer.py`:
+
+```python
+def test_redacts_sensitive_query_param_value():
+    out = redact_text("GET https://api.example.com/v1/x?token=sk-live-abc123&user=eve@example.com")
+    assert "sk-live-abc123" not in out          # token value redacted
+    assert "eve@example.com" not in out          # email still redacted
+    assert "token=[REDACTED]" in out             # replaced, not dropped
+
+def test_non_sensitive_query_param_survives():
+    out = redact_text("https://x/y?page=2&sort=name")
+    assert out == "https://x/y?page=2&sort=name"  # benign params untouched
+
+def test_sanitize_recurses_into_tuple_and_set():
+    out = sanitize_log_data({"t": ("ok", "eve@example.com")})
+    assert "eve@example.com" not in json.dumps(out)
+```
+
+Add to `tests/vectors/sanitizer_vectors.json` (the cross-language contract — the Rust port must match):
+
+```json
+  {"name": "sensitive_query_param", "input": {"event": "call ?api_key=sk-LIVE-1 done"}, "expected": {"event": "call ?api_key=[REDACTED] done"}},
+  {"name": "tuple_value_email", "input": {"t": ["ok", "eve@example.com"]}, "expected": {"t": ["ok", "[email]"]}}
+```
+
+> Note: the tuple vector's input uses a JSON array (JSON has no tuple); the Python test above additionally passes a real `tuple`/`set`. `sanitize_log_data` returns a `list` for any of list/tuple/set input.
+
+- [ ] **Step 2: Run to verify it fails** — `pytest tests/test_sanitizer.py -v` → FAIL (token survives; tuple not recursed).
+
+- [ ] **Step 3: Implement** in `logging.py`:
+
+```python
+# Sensitive query-parameter names (derived from the same intent as SENSITIVE_KEYS).
+_SENSITIVE_QS = re.compile(
+    r"(?i)([?&#]|^)([^=&#\s]*(?:token|api[_-]?key|secret|passw(?:ord|d)?|"
+    r"auth(?:orization)?|access[_-]?token|refresh[_-]?token|session|"
+    r"sig|signature|credential)[^=&#\s]*)=([^&#\s]+)"
+)
+
+def redact_text(value: str) -> str:
+    """Redact emails and sensitive query-parameter values anywhere in a string."""
+    value = EMAIL_REGEX.sub("[email]", value)
+    value = _SENSITIVE_QS.sub(lambda m: f"{m.group(1)}{m.group(2)}=[REDACTED]", value)
+    return value
+
+def _sanitize_value(value):
+    if isinstance(value, dict):
+        return sanitize_log_data(value)
+    if isinstance(value, (list, tuple, set)):
+        return [_sanitize_value(v) for v in value]  # returns a list for tuple/set too
+    if isinstance(value, str):
+        return redact_text(value)
+    return value
+```
+
+- [ ] **Step 4: Run to verify it passes** — `pytest tests/test_sanitizer.py -v` and the full suite (`pytest tests/ -v`, incl. `test_bridge.py`, so span redaction now picks up query params) → PASS. `ruff check` + `mypy --strict src/penguintechinc_utils/logging.py` clean.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/penguintechinc_utils/logging.py tests/test_sanitizer.py tests/vectors/sanitizer_vectors.json
+git commit -m "fix(python-utils): redact sensitive URL query-param values; recurse tuple/set in sanitizer"
 ```
 
 ---
