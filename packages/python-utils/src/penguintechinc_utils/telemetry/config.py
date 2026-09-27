@@ -1,4 +1,5 @@
 """Resolve telemetry configuration from explicit args, then env, then defaults."""
+
 from __future__ import annotations
 
 import logging
@@ -48,16 +49,12 @@ class TelemetryConfig:
             name = f"unknown_service:{os.path.basename(sys.argv[0]) or 'python'}"
             _LOG.warning("no service_name/OTEL_SERVICE_NAME set; using %r", name)
         fmt = (
-            log_format
-            or os.getenv("LOG_FORMAT")
-            or ("console" if sys.stdout.isatty() else "json")
+            log_format or os.getenv("LOG_FORMAT") or ("console" if sys.stdout.isatty() else "json")
         )
         if fmt not in ("json", "console"):
             if log_format is not None:
                 raise ValueError(f"invalid log_format argument: {log_format!r}")
-            _LOG.warning(
-                "ignoring invalid LOG_FORMAT=%r; defaulting to json", fmt
-            )
+            _LOG.warning("ignoring invalid LOG_FORMAT=%r; defaulting to json", fmt)
             fmt = "json"
         return cls(
             service_name=name,

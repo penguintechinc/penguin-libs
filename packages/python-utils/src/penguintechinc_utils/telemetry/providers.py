@@ -1,4 +1,5 @@
 """Construct OTel Tracer/Meter/Logger providers and (optionally) OTLP exporters."""
+
 from __future__ import annotations
 
 import logging
@@ -12,8 +13,7 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.trace.export import SpanExporter
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
 
 from .config import TelemetryConfig
 
@@ -55,6 +55,7 @@ def _exporters() -> tuple[SpanExporter, object, object]:
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
             OTLPSpanExporter as HTTPSpanExporter,
         )
+
         return HTTPSpanExporter(), HTTPMetricExporter(), HTTPLogExporter()
     else:
         from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
@@ -66,6 +67,7 @@ def _exporters() -> tuple[SpanExporter, object, object]:
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
             OTLPSpanExporter as GrpcSpanExporter,
         )
+
         return GrpcSpanExporter(), GrpcMetricExporter(), GrpcLogExporter()
 
 
