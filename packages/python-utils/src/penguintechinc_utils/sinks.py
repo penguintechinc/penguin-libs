@@ -13,6 +13,7 @@ import queue
 import socket
 import sys
 import threading
+import time
 from collections.abc import Callable, Sequence
 from typing import Any, Protocol, runtime_checkable
 
@@ -301,14 +302,18 @@ class KafkaSink:
         self._producer.close()
 
 
-# Sinks that talk to the network and can therefore block the caller for as long as
-# their timeouts and retries take. Named explicitly rather than guessed at: these
-# four are the ones the design spec moves behind a queue. StdoutSink, FileSink,
-# SyslogSink (a UDP sendto does not block) and CallbackSink stay synchronous,
-# because consumers' tests assert on a CallbackSink immediately after logging.
-BLOCKING_SINK_NAMES = frozenset(
-    {"CloudWatchSink", "GCPCloudLoggingSink", "KafkaSink", "KillKrillSink"}
-)
+# Sinks that talk to the network on the caller's thread and therefore need a queue in
+# front of them. Named explicitly rather than guessed at. KillKrillSink is deliberately
+# NOT here: it buffers and flushes on its own background thread, so wrapping it would
+# add a redundant thread and queue, and a consumer holding its own reference to call
+# close() would bypass the outer queue entirely. StdoutSink, FileSink, SyslogSink (a UDP
+# sendto does not block) and CallbackSink stay synchronous, because consumers' tests
+# assert on a CallbackSink immediately after logging.
+BLOCKING_SINK_NAMES = frozenset({"CloudWatchSink", "GCPCloudLoggingSink", "KafkaSink"})
+
+# Total seconds AsyncSink.close() may spend draining, matching KillKrillSink's budget:
+# shutdown must stay bounded even when the inner sink's network call never returns.
+SHUTDOWN_BUDGET = 5.0
 
 
 class AsyncSink:
@@ -391,21 +396,42 @@ class AsyncSink:
             finally:
                 self._queue.task_done()
 
-    def flush(self) -> None:
-        """Wait for queued events to be delivered, then flush the inner sink."""
-        self._queue.join()
-        self._inner.flush()
+    def flush(self, timeout: float = SHUTDOWN_BUDGET) -> None:
+        """Wait up to `timeout` for queued events to be delivered, then flush inner."""
+        self._drain(timeout)
+        try:
+            self._inner.flush()
+        except Exception:
+            self._errors += 1
 
-    def close(self) -> None:
-        """Drain the queue, stop the worker, and close the inner sink. Idempotent."""
+    def close(self, timeout: float = SHUTDOWN_BUDGET) -> None:
+        """Drain, stop the worker and close the inner sink within `timeout`. Idempotent.
+
+        Bounded, because this runs on the exit path: `Queue.join()` alone waits forever,
+        so one unreachable CloudWatch/GCP/Kafka endpoint would hang process shutdown
+        indefinitely. Past the deadline the undelivered remainder is counted as dropped.
+        """
         with self._lock:
             if self._closed:
                 return
             self._closed = True
-        self._queue.join()
+        deadline = time.monotonic() + timeout
+        self._drain(timeout)
         self._queue.put(self._SENTINEL)
-        self._thread.join(timeout=5)
-        self._inner.close()
+        self._thread.join(timeout=max(0.0, deadline - time.monotonic()))
+        try:
+            self._inner.close()
+        except Exception:
+            self._errors += 1
+
+    def _drain(self, timeout: float) -> None:
+        """Wait for the queue to empty, giving up after `timeout` seconds."""
+        deadline = time.monotonic() + timeout
+        while not self._queue.empty() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        remaining = self._queue.qsize()
+        if remaining:
+            self._dropped += remaining
 
 
 def wrap_blocking_sinks(

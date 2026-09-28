@@ -222,6 +222,127 @@ def test_async_sink_close_is_idempotent() -> None:
     sink.close()
 
 
+def test_async_sink_close_respects_a_budget() -> None:
+    """close() must return within its budget even if the inner sink never does.
+
+    `Queue.join()` alone waits forever, so one unreachable CloudWatch/Kafka endpoint
+    would hang process shutdown indefinitely.
+    """
+    sink = AsyncSink(_SlowSink(delay=30))
+    sink.emit({"event": "stuck"})
+    start = time.perf_counter()
+    sink.close(timeout=0.3)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 3.0, f"close took {elapsed:.2f}s despite a 0.3s budget"
+
+
+def test_async_sink_counts_undelivered_events_as_dropped_on_timeout() -> None:
+    """Whatever the budget could not deliver is counted, not silently forgotten."""
+    sink = AsyncSink(_SlowSink(delay=30))
+    for i in range(5):
+        sink.emit({"event": f"e{i}"})
+    sink.close(timeout=0.2)
+    assert sink.dropped > 0
+
+
+def test_async_sink_survives_a_failing_inner_flush_and_close() -> None:
+    """A sink that raises on flush/close must not raise out of shutdown."""
+
+    class _Hostile:
+        def emit(self, event: dict[str, Any]) -> None:
+            pass
+
+        def flush(self) -> None:
+            raise RuntimeError("flush exploded")
+
+        def close(self) -> None:
+            raise RuntimeError("close exploded")
+
+    sink = AsyncSink(_Hostile())
+    sink.flush(timeout=0.1)
+    sink.close(timeout=0.1)
+    assert sink.errors >= 2
+
+
+def test_killkrill_sink_is_not_double_wrapped() -> None:
+    """KillKrillSink already flushes on its own thread; a second queue is redundant.
+
+    Wrapping it would also mean a consumer holding its own reference and calling
+    close() bypasses the outer queue entirely.
+    """
+    from penguintechinc_utils.sinks import BLOCKING_SINK_NAMES
+
+    assert "KillKrillSink" not in BLOCKING_SINK_NAMES
+
+
+def test_legacy_sink_handler_closes_its_sinks() -> None:
+    """Closing the handler must flush and close every sink.
+
+    stdlib's logging.shutdown() atexit hook closes every handler, so this is what
+    keeps a buffered network-sink batch from being silently lost at exit.
+    """
+    events: list[str] = []
+
+    class _Recording:
+        def emit(self, event: dict[str, Any]) -> None:
+            pass
+
+        def flush(self) -> None:
+            events.append("flush")
+
+        def close(self) -> None:
+            events.append("close")
+
+    handler = _LegacySinkHandler([_Recording()])
+    handler.close()
+    assert events == ["flush", "close"]
+
+
+def test_legacy_sink_handler_close_isolates_a_failing_sink() -> None:
+    """One sink raising on close must not stop the others from being closed."""
+    closed: list[str] = []
+
+    class _Hostile:
+        def emit(self, event: dict[str, Any]) -> None:
+            pass
+
+        def flush(self) -> None:
+            raise RuntimeError("flush exploded")
+
+        def close(self) -> None:
+            raise RuntimeError("close exploded")
+
+    class _Good:
+        def emit(self, event: dict[str, Any]) -> None:
+            pass
+
+        def flush(self) -> None:
+            pass
+
+        def close(self) -> None:
+            closed.append("good")
+
+    handler = _LegacySinkHandler([_Hostile(), _Good()])
+    handler.close()  # must not raise
+    assert closed == ["good"]
+    assert handler.errors["_Hostile"] == 2
+
+
+def test_configure_logging_keeps_handlers_it_does_not_own() -> None:
+    """A handler installed by someone else must survive configure_logging().
+
+    Tearing off the whole root handler set silently removed the OTel log handler that
+    init() had installed (and pytest's caplog, and an app's own handler).
+    """
+    foreign = logging.StreamHandler()
+    logging.getLogger().addHandler(foreign)
+    try:
+        configure_logging(level=logging.INFO, json_output=True)
+        assert foreign in logging.getLogger().handlers
+    finally:
+        logging.getLogger().removeHandler(foreign)
+
+
 def test_network_sinks_are_wrapped_and_local_sinks_are_not() -> None:
     """Only the blocking network sinks go behind a queue.
 

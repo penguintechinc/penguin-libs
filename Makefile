@@ -174,7 +174,9 @@ test-unit: test ## Unit tests (alias for the full per-package test loop)
 
 test-integration: ## Integration tests (needs docker for a real OTLP collector)
 	@echo "=== python-utils: OTLP export + redaction proof vs a real collector ==="
-	cd packages/python-utils && pytest tests/integration -m integration -v -s
+	# --no-cov: the library runs in subprocesses here, so coverage sees 0% in the
+	# parent and pyproject's global --cov-fail-under would fail a passing run.
+	cd packages/python-utils && pytest tests/integration -m integration -v -s --no-cov
 
 test-e2e: ## End-to-end tests — none defined for a library repo
 	@echo "No e2e tests defined (library repo)"

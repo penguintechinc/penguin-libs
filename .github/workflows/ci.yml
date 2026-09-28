@@ -119,9 +119,12 @@ jobs:
       # Integration needs docker to run a real OTLP collector. Only on 3.13 so the
       # matrix does not start three collectors, and never silently skipped: docker is
       # always present on ubuntu-latest, so a skip here means the runner changed.
+      # --no-cov because the library runs in subprocesses here (OTel's global providers
+      # are one-shot per process), so coverage measures the parent at 0% and the global
+      # --cov-fail-under from pyproject would fail the step even with all tests passing.
       - name: Test (OTLP integration + redaction proof)
         if: matrix.python-version == '3.13'
-        run: cd packages/python-utils && pytest tests/integration -m integration -v -s
+        run: cd packages/python-utils && pytest tests/integration -m integration -v -s --no-cov
 
   build-python-aaa:
     name: Build & Test Python AAA

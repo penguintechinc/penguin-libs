@@ -11,6 +11,7 @@ import logging
 import re
 import sys
 import time
+import traceback
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, cast
 
@@ -118,6 +119,24 @@ _VALUE = re.compile(
 # Structural characters trimmed back off the end of a redacted value and re-emitted
 # after the placeholder, so redacting inside JSON leaves the JSON parseable.
 _VALUE_TRAILING = "'\"})]"
+
+# Marks a root-logger handler as one configure_logging installed, so re-configuring
+# replaces only its own handlers and leaves the OTel handler, pytest's caplog, and a
+# consuming app's own handlers alone.
+_OWNED_HANDLER_FLAG = "_penguin_utils_owned"
+
+_LOG = logging.getLogger(__name__)
+
+
+def format_exception_text(exc: BaseException) -> str:
+    """
+    Render an exception (with its traceback, if any) to text for redaction.
+
+    Kept as one helper so the log-record path and the structured-field path render
+    exceptions identically -- a secret in an exception message must not depend on
+    which of the two noticed it first.
+    """
+    return "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)).rstrip()
 
 
 def _end_of_separator(value: str, start: int) -> int:
@@ -265,6 +284,12 @@ def _sanitize_value(value: Any) -> Any:
     """
     if isinstance(value, dict):
         return sanitize_log_data(value)
+    if isinstance(value, BaseException):
+        # Rendered here rather than left as an object, because an exception's message
+        # is a very common place for a secret and nothing downstream would redact it:
+        # structlog injects raw exc_info into the event dict for foreign records, and
+        # a renderer stringifies it only at output time, after sanitizing has run.
+        return redact_text(format_exception_text(value))
     if isinstance(value, (list, tuple, set)):
         return [_sanitize_value(v) for v in value]
     if isinstance(value, str):
@@ -340,12 +365,35 @@ class _LegacySinkHandler(logging.Handler):
         event = record.msg
         payload = event if isinstance(event, dict) else {"event": record.getMessage()}
         for sink in self._sinks:
-            name = type(sink).__name__
             try:
                 sink.emit(sanitize_log_data(dict(payload)))
             except Exception as exc:
-                self.errors[name] = self.errors.get(name, 0) + 1
-                self._report(name, exc)
+                self._record_failure(type(sink).__name__, exc)
+
+    def close(self) -> None:
+        """Flush and close every sink, then the handler.
+
+        Nothing else would: `Telemetry.shutdown()` only knows about OTel providers, so
+        without this a buffered CloudWatch/GCP/Kafka/KillKrill batch is silently lost
+        at exit. stdlib's own `logging.shutdown()` atexit hook calls `close()` on every
+        handler, so wiring it here gets shutdown handling for free.
+        """
+        for sink in self._sinks:
+            for action in ("flush", "close"):
+                try:
+                    getattr(sink, action)()
+                except Exception as exc:
+                    self._record_failure(type(sink).__name__, exc)
+        super().close()
+
+    def _record_failure(self, name: str, exc: Exception) -> None:
+        """Count a sink failure and report it, rate-limited, to stderr.
+
+        One path for every failure -- emit, flush and close alike -- so the error
+        count means "this sink is broken" rather than "this sink broke while emitting".
+        """
+        self.errors[name] = self.errors.get(name, 0) + 1
+        self._report(name, exc)
 
     def _report(self, name: str, exc: Exception) -> None:
         """Write a rate-limited note to stderr that a sink is failing."""
@@ -393,10 +441,9 @@ def configure_logging(
     OTel bridge) serves both our own events and any third-party library's. `level`
     is applied to the root logger, so unlike 0.3.x it actually filters.
 
-    Replaces any handlers already on the root logger, rather than adding to them:
-    this owns the root handler set, so a caller that installed its own handler
-    beforehand loses it. Calling this repeatedly is therefore safe and never
-    doubles output.
+    Replaces only the handlers it installed itself, so calling it repeatedly never
+    doubles output, and calling it AFTER init() does not tear the OTel log handler
+    (or a caller's own handler) off the root logger.
 
     Network-bound sinks (CloudWatch/GCP/Kafka/KillKrill) are automatically put
     behind a bounded background queue so they cannot block a log call; stdout, file
@@ -421,13 +468,24 @@ def configure_logging(
     )
 
     root = logging.getLogger()
+    # Only OUR previous handlers go: tearing off everything on the root logger would
+    # silently remove the OTel handler init() installed (and pytest's caplog, and any
+    # handler the consuming app set up itself).
     for handler in list(root.handlers):
-        root.removeHandler(handler)
+        if getattr(handler, _OWNED_HANDLER_FLAG, False):
+            root.removeHandler(handler)
+            try:
+                handler.close()
+            except Exception as exc:
+                _LOG.debug("closing a replaced handler failed: %s", exc)
     console = logging.StreamHandler()
     console.setFormatter(formatter)
+    setattr(console, _OWNED_HANDLER_FLAG, True)
     root.addHandler(console)
     if sinks:
-        root.addHandler(_LegacySinkHandler(wrap_blocking_sinks(sinks)))
+        sink_handler = _LegacySinkHandler(wrap_blocking_sinks(sinks))
+        setattr(sink_handler, _OWNED_HANDLER_FLAG, True)
+        root.addHandler(sink_handler)
     root.setLevel(level)
 
     processors: list[Processor] = list(shared)

@@ -9,6 +9,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExportResult
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 import penguintechinc_utils.telemetry.bridge as bridge_mod
+from penguintechinc_utils.logging import SANITIZE_ERROR_PLACEHOLDER
 from penguintechinc_utils.telemetry.bridge import (
     SanitizingLogHandler,
     SanitizingSpanProcessorFactory,
@@ -232,15 +233,22 @@ def test_sanitize_record_dict_style_args_are_sanitized():
 
 
 def test_sanitize_record_args_failure_fails_closed(monkeypatch):
-    """If redact_text raises while sanitizing tuple args, args are cleared, not leaked."""
+    """If redact_text raises, nothing from msg or args survives on the record.
+
+    The record is now interpolated before redaction, so a failure leaves msg as the
+    error placeholder and args as None rather than an empty tuple. The guarantee is
+    the same one and is asserted directly: no raw value reaches any consumer.
+    """
 
     def _boom(_value):
         raise RuntimeError("sanitizer exploded")
 
     monkeypatch.setattr(bridge_mod, "redact_text", _boom)
-    record = _record(msg="static message", args=("eve@example.com",))
+    record = _record(msg="static message %s", args=("eve@example.com",))
     SanitizingLogHandler._sanitize_record(record)
-    assert record.args == ()
+    assert record.msg == SANITIZE_ERROR_PLACEHOLDER
+    assert not record.args
+    assert "eve@example.com" not in record.getMessage()
 
 
 def test_sanitize_record_extras_failure_fails_closed(monkeypatch):

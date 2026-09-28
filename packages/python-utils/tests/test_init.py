@@ -200,6 +200,21 @@ def test_sdk_disabled_env_stops_exporting_without_crashing(
     u.get_logger("disabled").info("still works")
 
 
+def test_later_configure_logging_does_not_drop_the_otel_handler() -> None:
+    """Calling the still-public configure_logging() after init() must not break export.
+
+    Adding a sink later is a plausible thing for a consumer to do, and it silently
+    removed the OTel log handler init() had installed -- telemetry just stopped, with
+    no warning and no failing call.
+    """
+    u.init(service_name="svc")
+    assert len(_otel_handlers()) == 1
+
+    u.configure_logging(level=logging.INFO, json_output=True)
+
+    assert len(_otel_handlers()) == 1, "configure_logging() tore off the OTel handler"
+
+
 def test_shutdown_swallows_provider_failures() -> None:
     """A provider that raises on flush or shutdown must not break process exit.
 

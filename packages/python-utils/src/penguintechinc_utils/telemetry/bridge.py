@@ -14,7 +14,12 @@ from opentelemetry.instrumentation.logging.handler import LoggingHandler
 from opentelemetry.sdk.trace import Event, ReadableSpan
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
 
-from ..logging import SANITIZE_ERROR_PLACEHOLDER, redact_text, sanitize_log_data
+from ..logging import (
+    SANITIZE_ERROR_PLACEHOLDER,
+    format_exception_text,
+    redact_text,
+    sanitize_log_data,
+)
 
 # structlog's own bookkeeping, attached to the record by ProcessorFormatter's
 # wrap_for_formatter. Useful to the console formatter, meaningless (and in `_logger`'s
@@ -51,22 +56,32 @@ class SanitizingLogHandler(LoggingHandler):
 
     @staticmethod
     def _sanitize_record(record: logging.LogRecord) -> None:
-        """Redact record.msg, record.args, and dict-valued extras; fail closed per field."""
-        try:
-            if isinstance(record.msg, str):
-                record.msg = redact_text(record.msg)
-        except Exception:
-            record.msg = SANITIZE_ERROR_PLACEHOLDER
+        """Redact the record's message, exception and dict extras; fail closed per field."""
+        if isinstance(record.msg, str):
+            # Interpolate FIRST, then redact the single resulting string. Redacting
+            # `msg` and `args` as independent pieces is arity-sensitive and unsafe:
+            # `log.warning("token=%s", val)` has its only `%s` matched as the value of
+            # `token=` and replaced, while `args` keeps its element, so the later
+            # `record.getMessage()` raises TypeError -- out of the ORIGINAL caller's
+            # log call, which no emit() here catches.
+            try:
+                record.msg = redact_text(record.getMessage())
+            except Exception:
+                record.msg = SANITIZE_ERROR_PLACEHOLDER
+            record.args = None
+        else:
+            # A structlog event dict: never stringify it, ProcessorFormatter needs it.
+            try:
+                if isinstance(record.args, dict):
+                    record.args = sanitize_log_data(record.args)
+                elif record.args:
+                    record.args = tuple(
+                        redact_text(a) if isinstance(a, str) else a for a in record.args
+                    )
+            except Exception:
+                record.args = ()
 
-        try:
-            if isinstance(record.args, dict):
-                record.args = sanitize_log_data(record.args)
-            elif record.args:
-                record.args = tuple(
-                    redact_text(a) if isinstance(a, str) else a for a in record.args
-                )
-        except Exception:
-            record.args = ()
+        SanitizingLogHandler._sanitize_exception(record)
 
         for key, value in list(vars(record).items()):
             if key in ("msg", "args") or not isinstance(value, dict):
@@ -75,6 +90,27 @@ class SanitizingLogHandler(LoggingHandler):
                 setattr(record, key, sanitize_log_data(value))
             except Exception:
                 setattr(record, key, {"error": SANITIZE_ERROR_PLACEHOLDER})
+
+    @staticmethod
+    def _sanitize_exception(record: logging.LogRecord) -> None:
+        """Replace raw exc_info with a redacted, pre-rendered traceback.
+
+        `logger.exception(...)` is everyday usage and an exception message is an
+        everyday place for a secret, but nothing was redacting it: OTel's
+        LoggingHandler reads `record.exc_info` straight into exception.message and
+        exception.stacktrace. Rendering to `exc_text` (which stdlib formatters emit
+        verbatim) and clearing `exc_info` closes that path and every other consumer
+        of the raw tuple at once, while keeping the type and traceback readable.
+        """
+        if record.exc_info is None:
+            return
+        try:
+            exc = record.exc_info[1]
+            rendered = format_exception_text(exc) if exc is not None else str(record.exc_info)
+            record.exc_text = redact_text(rendered)
+        except Exception:
+            record.exc_text = SANITIZE_ERROR_PLACEHOLDER
+        record.exc_info = None
 
 
 class SanitizingFilter(logging.Filter):
