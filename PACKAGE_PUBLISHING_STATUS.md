@@ -29,7 +29,7 @@ All 32 published artifacts in the penguin-libs monorepo are configured for autom
 | 16 | python-email | PyPI | penguin-email | `penguin-email-v*` | `publish-python-email` | ✅ Configured |
 | 17 | python-limiter | PyPI | penguin-limiter | `penguin-limiter-v*` | `publish-python-limiter` | ✅ Configured |
 | 18 | python-crypto | PyPI | penguin-crypto | `penguin-crypto-v*` | `publish-python-crypto.yml` | 🔀 Superseded — folded into `penguin-security[crypto]` as `penguin_security.crypto` (never published; see root README) |
-| 19 | python-security | PyPI | penguin-security | `penguin-security-v*` | `publish-python-security.yml` | 🔜 Pending first publish (now includes `penguin_security.crypto`, formerly penguin-crypto) |
+| 19 | python-security | PyPI | penguin-security | `penguin-security-v*` | `publish-python-security.yml` | 🔜 Pending first publish (now includes `penguin_security.crypto`, formerly penguin-crypto) — `0.1.0` was tagged but never published due to a publish-action bug (see #126); `0.1.1` is the first release |
 | 20 | python-http | PyPI | penguin-http | `penguin-http-v*` | `publish-python-http.yml` | 🔜 Pending first publish |
 | 21 | python-rpc | PyPI | penguin-rpc | `penguin-rpc-v*` | `publish-python-rpc` | 🔜 Pending first publish |
 | 22 | go-common | GitHub (go get) | github.com/.../go-common | `v*` | `validate-go-common` | ✅ Configured |
