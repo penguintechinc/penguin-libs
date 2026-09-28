@@ -1,21 +1,25 @@
 version: v2
 plugins:
   # Go protobuf messages
-  - remote: buf.build/protocolbuffers/go
+  # Pinned exact version — the unpinned remote plugin silently tracks
+  # upstream protoc-gen-go's latest release, so every generate stamps a
+  # different version comment into checked-in code and permanently fails
+  # `make prpc-generate-check` (see critical-rules.md Dependency Pinning).
+  - remote: buf.build/protocolbuffers/go:v1.36.12
     out: ../gen/go
     opt: paths=source_relative
   # ConnectRPC Go handlers + clients
-  - remote: buf.build/connectrpc/go
+  - remote: buf.build/connectrpc/go:v1.19.1
     out: ../gen/go
     opt: paths=source_relative
   # Python protobuf messages
-  - remote: buf.build/protocolbuffers/python
+  - remote: buf.build/protocolbuffers/python:v36.2
     out: ../packages/python-libs/src/penguin_libs/gen
   # go-rpc: Go protobuf messages (prpc/* only — scoped via `buf generate --path prpc`)
-  - remote: buf.build/protocolbuffers/go
+  - remote: buf.build/protocolbuffers/go:v1.36.12
     out: ../packages/go-rpc/gen
     opt: paths=source_relative
   # go-rpc: ConnectRPC Go handlers + clients (prpc/* only — scoped via `buf generate --path prpc`)
-  - remote: buf.build/connectrpc/go
+  - remote: buf.build/connectrpc/go:v1.19.1
     out: ../packages/go-rpc/gen
     opt: paths=source_relative
