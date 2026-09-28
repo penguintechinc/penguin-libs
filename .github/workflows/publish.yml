@@ -105,14 +105,12 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -180,7 +178,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: packages/python-libs/dist/
 
@@ -236,7 +234,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: packages/python-licensing/dist/
 
@@ -292,7 +290,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: packages/python-secrets/dist/
 
@@ -348,7 +346,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: packages/python-utils/dist/
 
@@ -503,7 +501,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: packages/python-aaa/dist/
 
@@ -559,7 +557,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: packages/python-dal/dist/
 
@@ -597,14 +595,12 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -698,14 +694,12 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -770,7 +764,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: packages/python-pytest/dist/
 
@@ -826,7 +820,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: packages/python-email/dist/
 
@@ -882,7 +876,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: packages/python-limiter/dist/
 
@@ -938,7 +932,7 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: packages/python-rpc/dist/
 
@@ -1073,14 +1067,12 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -1130,14 +1122,12 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -1187,14 +1177,12 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -1244,14 +1232,12 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -1301,14 +1287,12 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
