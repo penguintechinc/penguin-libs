@@ -76,7 +76,14 @@ const KNOWN_SURFACES: &[&str] = &["ingest", "process", "action", "presentation"]
 
 const KNOWN_PROVIDERS: &[&str] = &["builtin", "thirdparty"];
 const KNOWN_EXECUTION_MODELS: &[&str] = &["native", "thirdparty"];
-const KNOWN_LANGUAGES: &[&str] = &["python", "rust", "javascript", "typescript", "other"];
+const KNOWN_LANGUAGES: &[&str] = &[
+    "python",
+    "rust",
+    "javascript",
+    "typescript",
+    "csharp",
+    "other",
+];
 const KNOWN_ARTIFACTS: &[&str] = &["source", "prebuilt"];
 const KNOWN_PLATFORMS: &[&str] = &["twitch", "discord", "slack", "youtube", "kick", "waddles"];
 const ALLOWED_EGRESS_METHODS: &[&str] = &["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"];
@@ -341,7 +348,7 @@ pub fn validate(raw: &RawManifest, ctx: &ValidationContext<'_>) -> Result<Manife
         ));
     }
 
-    // V17: language is one of the five allowed values; "other" only with
+    // V17: language is one of the six allowed values; "other" only with
     // artifact: prebuilt.
     if !KNOWN_LANGUAGES.contains(&language) {
         return Err(ManifestError::new(
@@ -790,6 +797,31 @@ mod tests {
         raw.module = Some("community".to_string());
         let err = validate(&raw, &ValidationContext::default()).expect_err("must fail V6");
         assert_eq!(err.reason, Reason::FeaturePrefixMismatch);
+    }
+
+    #[test]
+    fn v17_accepts_every_known_language_including_csharp() {
+        for lang in KNOWN_LANGUAGES {
+            let mut raw = base_manifest();
+            raw.language = Some((*lang).to_string());
+            if *lang == "other" {
+                // "other" is only legal with artifact: prebuilt (V17's
+                // second check) -- covered separately below, not here.
+                continue;
+            }
+            let manifest = validate(&raw, &ValidationContext::default())
+                .unwrap_or_else(|err| panic!("language {lang:?} must be accepted: {err:?}"));
+            assert_eq!(manifest.language, *lang);
+        }
+    }
+
+    #[test]
+    fn v17_rejects_csharp_typo_as_unsupported_language() {
+        let mut raw = base_manifest();
+        raw.language = Some("csharpe".to_string());
+        let err = validate(&raw, &ValidationContext::default())
+            .expect_err("misspelled language must fail V17");
+        assert_eq!(err.reason, Reason::UnsupportedLanguage);
     }
 
     #[test]

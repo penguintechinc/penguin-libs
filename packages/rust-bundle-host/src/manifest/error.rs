@@ -47,7 +47,7 @@ pub enum Reason {
     IngestNotPluggable,
     /// V16: `stages` is empty.
     NoStagesDeclared,
-    /// V17: `language` is outside the five allowed values, or `other` is
+    /// V17: `language` is outside the six allowed values, or `other` is
     /// used without `artifact: prebuilt`.
     UnsupportedLanguage,
     /// V18: `artifact: prebuilt` is used while `bundles.allow_prebuilt` is
