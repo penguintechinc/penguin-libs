@@ -34,7 +34,7 @@ class TestSanitizeHtml:
         """Test that javascript: URLs are removed."""
         from penguin_security import sanitize_html
 
-        result = sanitize_html('<a href="javascript:alert(\'xss\')">link</a>')
+        result = sanitize_html("<a href=\"javascript:alert('xss')\">link</a>")
         assert "javascript:" not in result
         assert "link" in result
 
@@ -457,11 +457,10 @@ class TestVerifyPassword:
         assert variance < 0.5  # Within 50% variance
 
     def test_verify_password_invalid_hash(self) -> None:
-        """Test verification with invalid hash."""
+        """Test verification with invalid hash fails closed (no raise)."""
         from penguin_security import verify_password
 
-        with pytest.raises((ValueError, TypeError)):
-            verify_password("password", "invalid_hash")
+        assert verify_password("password", "invalid_hash") is False
 
     def test_verify_password_none_password(self) -> None:
         """Test handling of None password."""
@@ -477,6 +476,389 @@ class TestVerifyPassword:
 
         with pytest.raises(TypeError):
             verify_password("password", None)  # type: ignore
+
+
+class TestPasswordArgon2idMigration:
+    """Tests proving the PBKDF2 -> Argon2id migration is backward compatible.
+
+    penguin_security.password used to hash new passwords with PBKDF2-SHA256.
+    It now hashes new passwords with Argon2id, but must still verify hashes
+    created by the old code path, since existing stored hashes cannot be
+    rehashed without the original plaintext.
+    """
+
+    def test_new_hash_uses_argon2id(self) -> None:
+        """Newly created hashes are Argon2id, not PBKDF2."""
+        from penguin_security import hash_password
+
+        hashed = hash_password("test_password")
+        algorithm = hashed.split("$")[0]
+        assert algorithm == "argon2id"
+
+    def test_new_hash_encodes_kdf_parameters(self) -> None:
+        """Argon2id hashes encode memory/time/parallelism cost params."""
+        from penguin_security import hash_password
+
+        hashed = hash_password("test_password")
+        _, params, _salt, _digest = hashed.split("$")
+        assert "m=" in params
+        assert "t=" in params
+        assert "p=" in params
+
+    def test_legacy_pbkdf2_hash_still_verifies(self) -> None:
+        """A hash produced by the old PBKDF2-SHA256 code path still verifies.
+
+        This hash was generated before the Argon2id migration and represents
+        what is already sitting in production databases. It must continue to
+        verify correctly with no rehash required to succeed.
+        """
+        import hashlib
+
+        from penguin_security import verify_password
+
+        password = "legacy_password"  # noqa: S105 -- test fixture placeholder, not a real credential
+        iterations = 100000
+        salt = "0123456789abcdef0123456789abcdef"
+        hash_obj = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt.encode("utf-8"),
+            iterations,
+        )
+        legacy_hash = f"pbkdf2_sha256${iterations}${salt}${hash_obj.hex()}"
+
+        assert verify_password(password, legacy_hash) is True
+        assert verify_password("wrong_password", legacy_hash) is False
+
+    def test_needs_rehash_true_for_legacy_pbkdf2(self) -> None:
+        """A legacy PBKDF2 hash always needs a rehash."""
+        from penguin_security import needs_rehash
+
+        legacy_hash = "pbkdf2_sha256$100000$deadbeef$" + "0" * 64
+        assert needs_rehash(legacy_hash) is True
+
+    def test_needs_rehash_false_for_current_argon2id(self) -> None:
+        """A freshly created Argon2id hash does not need a rehash."""
+        from penguin_security import hash_password, needs_rehash
+
+        hashed = hash_password("test_password")
+        assert needs_rehash(hashed) is False
+
+    def test_needs_rehash_true_for_outdated_argon2id_params(self) -> None:
+        """An Argon2id hash with weaker-than-current params needs a rehash."""
+        from penguin_security import needs_rehash
+
+        outdated_hash = "argon2id$m=8,t=1,p=1$deadbeef$" + "0" * 64
+        assert needs_rehash(outdated_hash) is True
+
+    def test_needs_rehash_invalid_hash_raises(self) -> None:
+        """An unparseable hash raises rather than silently returning a verdict."""
+        from penguin_security import needs_rehash
+
+        with pytest.raises(ValueError):
+            needs_rehash("not-a-valid-hash")
+
+    def test_migration_flow_rehash_and_reverify(self) -> None:
+        """End-to-end: detect a legacy hash, rehash it, and re-verify."""
+        import hashlib
+
+        from penguin_security import hash_password, needs_rehash, verify_password
+        from penguin_security.password import _verify_pbkdf2_sha256
+
+        password = "migrate_me"  # noqa: S105 -- test fixture placeholder, not a real credential
+        salt = "fedcba9876543210fedcba9876543210"
+        computed = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000
+        ).hex()
+        legacy_hash = f"pbkdf2_sha256$100000${salt}${computed}"
+        assert _verify_pbkdf2_sha256(password, legacy_hash) is True
+
+        assert verify_password(password, legacy_hash) is True
+        assert needs_rehash(legacy_hash) is True
+
+        new_hash = hash_password(password)
+        assert needs_rehash(new_hash) is False
+        assert verify_password(password, new_hash) is True
+
+    def test_verify_password_invalid_format_returns_false(self) -> None:
+        """An unparseable hash fails closed (returns False), never raises."""
+        from penguin_security import verify_password
+
+        assert verify_password("password", "not-a-valid-hash") is False
+
+    def test_verify_password_unsupported_algorithm_returns_false(self) -> None:
+        """A well-formed hash with an unknown algorithm fails closed."""
+        from penguin_security import verify_password
+
+        assert verify_password("password", "bcrypt$12$salt$hash") is False
+
+    def test_needs_rehash_type_error_for_non_string(self) -> None:
+        """needs_rehash rejects non-string input with TypeError."""
+        from penguin_security import needs_rehash
+
+        with pytest.raises(TypeError):
+            needs_rehash(None)  # type: ignore[arg-type]
+
+    def test_needs_rehash_unsupported_algorithm_raises(self) -> None:
+        """needs_rehash raises for a well-formed hash with an unknown algorithm.
+
+        Unlike verify_password, needs_rehash is only ever called on a hash
+        that has already verified successfully, so malformed input signals
+        an internal invariant violation and should raise, not fail closed.
+        """
+        from penguin_security import needs_rehash
+
+        with pytest.raises(ValueError):
+            needs_rehash("bcrypt$12$salt$hash")
+
+    def test_argon2id_malformed_params_returns_false(self) -> None:
+        """A malformed argon2id params segment fails closed, not KeyError/IndexError."""
+        from penguin_security import verify_password
+
+        assert verify_password("password", "argon2id$not-valid-params$deadbeef$" + "0" * 64) is (
+            False
+        )
+
+    def test_argon2id_missing_params_returns_false(self) -> None:
+        """An argon2id hash missing a required cost parameter fails closed."""
+        from penguin_security import verify_password
+
+        assert verify_password("password", "argon2id$m=8,t=1$deadbeef$" + "0" * 64) is False
+
+    def test_argon2id_invalid_hex_encoding_returns_false(self) -> None:
+        """Non-hex salt/hash segments in an argon2id hash fail closed."""
+        from penguin_security import verify_password
+
+        assert verify_password("password", "argon2id$m=8,t=1,p=1$not-hex-zzz$" + "0" * 64) is False
+
+    def test_pbkdf2_invalid_iterations_returns_false(self) -> None:
+        """A legacy pbkdf2 hash with a non-integer iterations field fails closed."""
+        from penguin_security import verify_password
+
+        assert verify_password("password", "pbkdf2_sha256$not-a-number$deadbeef$" + "0" * 64) is (
+            False
+        )
+
+    def test_verify_password_truncated_hash_returns_false(self) -> None:
+        """A hash missing a $-separated segment fails closed."""
+        from penguin_security import verify_password
+
+        assert verify_password("password", "argon2id$m=8,t=1,p=1$deadbeef") is False
+
+    def test_verify_password_truncated_hex_returns_false(self) -> None:
+        """A hash with an odd-length (truncated) hex segment fails closed."""
+        from penguin_security import verify_password
+
+        assert verify_password("password", "argon2id$m=8,t=1,p=1$dead$beef0") is False
+
+    def test_verify_password_empty_string_hash_returns_false(self) -> None:
+        """A completely empty hash string fails closed."""
+        from penguin_security import verify_password
+
+        assert verify_password("password", "") is False
+
+
+class TestPasswordLengthLimit:
+    """Tests for the maximum password length bound."""
+
+    def test_hash_password_at_max_length_accepted(self) -> None:
+        """A password exactly at the byte limit is accepted."""
+        from penguin_security import hash_password
+
+        hashed = hash_password("x" * 4096)
+        assert isinstance(hashed, str)
+
+    def test_hash_password_over_max_length_raises(self) -> None:
+        """A password over the byte limit raises ValueError."""
+        from penguin_security import hash_password
+
+        with pytest.raises(ValueError):
+            hash_password("x" * 4097)
+
+    def test_verify_password_over_max_length_returns_false(self) -> None:
+        """An oversize password to verify_password fails closed, never runs Argon2id."""
+        from penguin_security import hash_password, verify_password
+
+        hashed = hash_password("normal_password")
+        assert verify_password("x" * 4097, hashed) is False
+
+    def test_verify_password_at_max_length_still_checked_normally(self) -> None:
+        """A password exactly at the byte limit is verified normally (not rejected)."""
+        from penguin_security import hash_password, verify_password
+
+        password = "x" * 4096
+        hashed = hash_password(password)
+        assert verify_password(password, hashed) is True
+        assert verify_password("y" * 4096, hashed) is False
+
+
+class TestArgon2AndPbkdf2ParamBounds:
+    """Tests proving cost parameters parsed from a stored hash are bounded.
+
+    Without this, a corrupted or attacker-planted hash could specify e.g. an
+    absurd Argon2id memory_cost and turn verify_password into a
+    denial-of-service. Bounds are checked *before* any real KDF computation
+    is attempted, and violations fail closed (False) with a WARNING log
+    containing no hash material.
+    """
+
+    def test_argon2_params_in_bounds_accepts_minimum(self) -> None:
+        from penguin_security.password import _argon2_params_in_bounds
+
+        assert _argon2_params_in_bounds({"m": 1, "t": 1, "p": 1}) is True
+
+    def test_argon2_params_in_bounds_accepts_maximum(self) -> None:
+        from penguin_security.password import _argon2_params_in_bounds
+
+        assert _argon2_params_in_bounds({"m": 256 * 1024, "t": 10, "p": 8}) is True
+
+    def test_argon2_params_in_bounds_rejects_memory_below_minimum(self) -> None:
+        from penguin_security.password import _argon2_params_in_bounds
+
+        assert _argon2_params_in_bounds({"m": 0, "t": 1, "p": 1}) is False
+
+    def test_argon2_params_in_bounds_rejects_memory_above_maximum(self) -> None:
+        from penguin_security.password import _argon2_params_in_bounds
+
+        assert _argon2_params_in_bounds({"m": 256 * 1024 + 1, "t": 1, "p": 1}) is False
+
+    def test_argon2_params_in_bounds_rejects_time_below_minimum(self) -> None:
+        from penguin_security.password import _argon2_params_in_bounds
+
+        assert _argon2_params_in_bounds({"m": 8, "t": 0, "p": 1}) is False
+
+    def test_argon2_params_in_bounds_rejects_time_above_maximum(self) -> None:
+        from penguin_security.password import _argon2_params_in_bounds
+
+        assert _argon2_params_in_bounds({"m": 8, "t": 11, "p": 1}) is False
+
+    def test_argon2_params_in_bounds_rejects_parallelism_below_minimum(self) -> None:
+        from penguin_security.password import _argon2_params_in_bounds
+
+        assert _argon2_params_in_bounds({"m": 8, "t": 1, "p": 0}) is False
+
+    def test_argon2_params_in_bounds_rejects_parallelism_above_maximum(self) -> None:
+        from penguin_security.password import _argon2_params_in_bounds
+
+        assert _argon2_params_in_bounds({"m": 8, "t": 1, "p": 9}) is False
+
+    def test_verify_password_rejects_argon2id_memory_over_bound(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from penguin_security import verify_password
+
+        oversized_hash = "argon2id$m=99999999,t=1,p=1$" + "00" * 16 + "$" + "00" * 32
+        with caplog.at_level("WARNING"):
+            assert verify_password("password", oversized_hash) is False
+        assert "bounds" in caplog.text.lower()
+        # No hash material (salt/derived-hash hex) leaked into the log message.
+        assert "00" * 16 not in caplog.text
+
+    def test_verify_password_rejects_argon2id_time_over_bound(self) -> None:
+        from penguin_security import verify_password
+
+        hashed = "argon2id$m=8,t=999,p=1$" + "00" * 16 + "$" + "00" * 32
+        assert verify_password("password", hashed) is False
+
+    def test_verify_password_rejects_argon2id_parallelism_over_bound(self) -> None:
+        from penguin_security import verify_password
+
+        hashed = "argon2id$m=8,t=1,p=999$" + "00" * 16 + "$" + "00" * 32
+        assert verify_password("password", hashed) is False
+
+    def test_pbkdf2_iterations_at_minimum_boundary_accepted(self) -> None:
+        """The minimum accepted iteration count still runs a real, correct verification."""
+        import hashlib
+
+        from penguin_security import verify_password
+
+        password = "boundary_pw"  # noqa: S105 -- test fixture placeholder, not a real credential
+        salt = "0123456789abcdef0123456789abcdef"
+        iterations = 10_000
+        computed = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations
+        ).hex()
+        hashed = f"pbkdf2_sha256${iterations}${salt}${computed}"
+        assert verify_password(password, hashed) is True
+        assert verify_password("wrong", hashed) is False
+
+    def test_pbkdf2_iterations_below_minimum_rejected(self) -> None:
+        from penguin_security import verify_password
+
+        # Bound check short-circuits before PBKDF2 runs -- no need for a real digest.
+        hashed = "pbkdf2_sha256$9999$" + "0" * 32 + "$" + "0" * 64
+        assert verify_password("password", hashed) is False
+
+    def test_pbkdf2_iterations_above_maximum_rejected(self) -> None:
+        from penguin_security import verify_password
+
+        hashed = "pbkdf2_sha256$2000001$" + "0" * 32 + "$" + "0" * 64
+        assert verify_password("password", hashed) is False
+
+    def test_verify_password_wraps_unexpected_argon2_exception(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An unexpected argon2-cffi exception fails closed, never propagates."""
+        from penguin_security import password as password_module
+
+        def _boom(*_args: object, **_kwargs: object) -> bytes:
+            raise RuntimeError("simulated argon2-cffi internal failure")
+
+        monkeypatch.setattr(password_module, "hash_secret_raw", _boom)
+        hashed = "argon2id$m=8,t=1,p=1$" + "00" * 16 + "$" + "00" * 32
+        assert password_module.verify_password("password", hashed) is False
+
+    def test_hash_password_wraps_unexpected_argon2_exception(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An unexpected argon2-cffi exception during hashing raises ValueError."""
+        from penguin_security import password as password_module
+
+        def _boom(*_args: object, **_kwargs: object) -> bytes:
+            raise RuntimeError("simulated argon2-cffi internal failure")
+
+        monkeypatch.setattr(password_module, "hash_secret_raw", _boom)
+        with pytest.raises(ValueError):
+            password_module.hash_password("test_password")
+
+
+class TestNeedsRehashSaltAndKeyLength:
+    """Tests proving needs_rehash also fires on salt/key length drift."""
+
+    def test_needs_rehash_true_for_short_salt(self) -> None:
+        from penguin_security import needs_rehash
+
+        short_salt_hex = "00" * 8  # 8 bytes, not the current 32-byte default
+        stored_hash_hex = "00" * 32  # correct key length
+        hashed = f"argon2id$m=65536,t=3,p=4${short_salt_hex}${stored_hash_hex}"
+        assert needs_rehash(hashed) is True
+
+    def test_needs_rehash_true_for_short_key(self) -> None:
+        from penguin_security import needs_rehash
+
+        salt_hex = "00" * 32  # correct salt length
+        short_key_hex = "00" * 16  # 16 bytes, not the current 32-byte default
+        hashed = f"argon2id$m=65536,t=3,p=4${salt_hex}${short_key_hex}"
+        assert needs_rehash(hashed) is True
+
+    def test_needs_rehash_false_when_lengths_match_current_defaults(self) -> None:
+        from penguin_security import hash_password, needs_rehash
+
+        # hash_password always produces salt/key lengths matching current defaults.
+        hashed = hash_password("test_password")
+        assert needs_rehash(hashed) is False
+
+    def test_needs_rehash_invalid_hex_raises(self) -> None:
+        """Current-params argon2id hash with unparseable hex salt/key raises.
+
+        Reaching the salt/key-length check requires current cost params (so
+        the earlier `params != current` short-circuit doesn't fire first).
+        """
+        from penguin_security import needs_rehash
+
+        hashed = "argon2id$m=65536,t=3,p=4$not-hex-zzz$" + "00" * 32
+        with pytest.raises(ValueError):
+            needs_rehash(hashed)
 
 
 class TestCheckRateLimit:

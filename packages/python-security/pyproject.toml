@@ -19,15 +19,22 @@ classifiers = [
 ]
 dependencies = [
     "pydantic>=2.0",
+    # Argon2id password hashing (hash_password/verify_password/needs_rehash).
+    # Lightweight, single-purpose -- unlike penguin_security.crypto's `crypto`
+    # extra (cryptography + KMS clients), password hashing is base-package
+    # functionality and must not require an optional extra.
+    # Exact-pinned per the dependency pinning rule (security-sensitive dep).
+    "argon2-cffi==25.1.0",
 ]
 
 [project.optional-dependencies]
 # Heavy crypto dependencies for penguin_security.crypto (formerly the
 # standalone penguin-crypto package). Pins match penguin-crypto's own
 # dependency set exactly. The base install never gains these transitively.
+# (argon2-cffi is already a base dependency, exact-pinned above, for
+# password hashing -- not repeated here.)
 crypto = [
     "cryptography>=42.0.0",
-    "argon2-cffi>=23.1.0",
 ]
 # AwsKmsKek only -- kept separate from `crypto` (matching penguin-crypto's
 # own extras split) so importing penguin_security.crypto.envelope never
@@ -47,7 +54,6 @@ dev = [
     "pip-audit>=2.7",
     "flask>=3.0",
     "cryptography>=42.0.0",
-    "argon2-cffi>=23.1.0",
     "boto3>=1.34",
 ]
 
