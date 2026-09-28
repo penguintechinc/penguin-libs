@@ -113,7 +113,7 @@ func calcBackoff(cfg RetryConfig, attempt int) time.Duration {
 		backoff = float64(cfg.MaxBackoff)
 	}
 	if cfg.Jitter {
-		backoff *= 0.5 + rand.Float64()
+		backoff *= 0.5 + rand.Float64() //#nosec G404 -- retry-backoff jitter has no security relevance; crypto/rand would be pure overhead here
 	}
 	return time.Duration(backoff)
 }
