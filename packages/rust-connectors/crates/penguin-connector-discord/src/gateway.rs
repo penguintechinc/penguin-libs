@@ -32,7 +32,9 @@ pub const OP_DISPATCH: u8 = 0;
 pub const OP_HEARTBEAT: u8 = 1;
 /// Identify — the client's login, sent once right after `HELLO`.
 pub const OP_IDENTIFY: u8 = 2;
-/// Resume — reconnect to a prior session (not implemented by this crate yet).
+/// Resume — reconnect to a prior session, replaying missed dispatches
+/// instead of a fresh `IDENTIFY`. See [`build_resume`], [`resume`], and
+/// [`GatewaySession::resume_handshake`].
 pub const OP_RESUME: u8 = 6;
 /// Reconnect — the gateway is asking the client to reconnect.
 pub const OP_RECONNECT: u8 = 7;
@@ -51,16 +53,14 @@ pub const OP_HEARTBEAT_ACK: u8 = 11;
 /// failure modes: reconnecting forever against a fatal close (e.g. a
 /// revoked token, `4004`) causes a reconnect storm, and treating any close
 /// as fully resumable when Discord says otherwise (`4007`/`4009`) causes a
-/// `RESUME` attempt that will itself fail. This crate does not implement
-/// `RESUME` yet (see [`DiscordError::ResumeRequested`]), so today
-/// `Resumable` and `ReconnectFresh` both mean "reconnect via a fresh
-/// handshake" to the caller — the distinction is preserved for when
-/// `RESUME` lands, and so callers can log/alert differently on the two.
+/// `RESUME` attempt that will itself fail. This classification only labels
+/// the close code; it is the caller's choice whether to actually attempt
+/// [`resume`]/[`GatewaySession::resume_handshake`] on a `Resumable` close
+/// or always fall back to a fresh `IDENTIFY`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CloseCodeClass {
-    /// The session could be resumed with `RESUME` (once implemented) using
-    /// the stored session id + last sequence number. Codes: `4000`-`4003`,
-    /// `4005`, `4008`.
+    /// The session can be resumed with `RESUME` using the stored session
+    /// id + last sequence number. Codes: `4000`-`4003`, `4005`, `4008`.
     Resumable,
     /// Reconnect is possible, but Discord has said the session itself
     /// cannot be resumed — a fresh `IDENTIFY` is required. Codes: `4007`
@@ -141,6 +141,23 @@ pub fn build_identify(token: &str, intents: u64) -> GatewayPayload {
                 "browser": "penguin-connector-discord",
                 "device": "penguin-connector-discord",
             },
+        }),
+        s: None,
+        t: None,
+    }
+}
+
+/// Build the `RESUME` payload sent once, immediately after `HELLO`, in
+/// place of `IDENTIFY` when reconnecting with a still-valid session (never
+/// logged — carries the bot token exactly like `IDENTIFY` does).
+#[must_use]
+pub fn build_resume(token: &str, session_id: &str, seq: Option<u64>) -> GatewayPayload {
+    GatewayPayload {
+        op: OP_RESUME,
+        d: serde_json::json!({
+            "token": token,
+            "session_id": session_id,
+            "seq": seq,
         }),
         s: None,
         t: None,
@@ -263,6 +280,22 @@ pub fn normalize_message_create(
     })
 }
 
+/// A live session's `RESUME`-capable state — `READY`'s `session_id` and
+/// `resume_gateway_url`, plus the last dispatch sequence number seen. See
+/// [`GatewaySession::session_info`] (the getter callers persist for a
+/// future reconnect) and [`resume`]/[`GatewaySession::resume_handshake`]
+/// (the reconnect that consumes it).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GatewaySessionInfo {
+    /// Discord's opaque session id from `READY`, sent back in `RESUME`.
+    pub session_id: String,
+    /// Last dispatch sequence number seen, sent back in `RESUME`.
+    pub seq: Option<u64>,
+    /// The per-session resume URL Discord's `READY` provides — `RESUME`
+    /// must reconnect to this URL, not the original gateway URL.
+    pub resume_gateway_url: String,
+}
+
 /// Gateway connection configuration.
 #[derive(Debug, Clone)]
 pub struct GatewayConfig {
@@ -305,6 +338,14 @@ pub struct GatewaySession<S> {
     /// [`GatewaySession::next_chat_message`] errors out to force a
     /// reconnect rather than heartbeating forever.
     awaiting_ack: bool,
+    /// Set from `READY`'s `session_id` on a fresh `IDENTIFY`, or carried
+    /// straight through on a `RESUME` (the caller already knows it). `None`
+    /// until either has happened.
+    session_id: Option<String>,
+    /// Set from `READY`'s `resume_gateway_url` on a fresh `IDENTIFY`, or
+    /// carried straight through on a `RESUME` (it doesn't change across a
+    /// successful resume). `None` until either has happened.
+    resume_gateway_url: Option<String>,
 }
 
 impl<S> std::fmt::Debug for GatewaySession<S> {
@@ -317,6 +358,7 @@ impl<S> std::fmt::Debug for GatewaySession<S> {
             .field("seq", &self.seq)
             .field("self_user_id", &self.self_user_id)
             .field("awaiting_ack", &self.awaiting_ack)
+            .field("session_id", &self.session_id)
             .finish_non_exhaustive()
     }
 }
@@ -371,6 +413,87 @@ where
             seq: None,
             self_user_id: None,
             awaiting_ack: false,
+            session_id: None,
+            resume_gateway_url: None,
+        })
+    }
+
+    /// Read the expected `HELLO` frame and send `RESUME` (opcode 6) in
+    /// response instead of a fresh `IDENTIFY` — reconnects to a prior
+    /// session using `session`'s `session_id`/`seq`, exempt from Discord's
+    /// `IDENTIFY` rate limit entirely. `ws` must already be connected to
+    /// `session.resume_gateway_url` (see [`resume`], which does this for
+    /// the real network case) and have completed the WebSocket upgrade.
+    ///
+    /// A successful resume does not raise `READY` again — Discord replays
+    /// missed dispatches followed by a `RESUMED` dispatch instead — so
+    /// `session_id`/`resume_gateway_url` are carried straight from `session`
+    /// rather than re-parsed from a frame. If the session turns out not to
+    /// be resumable after all, the gateway sends `INVALID_SESSION` (opcode
+    /// 9) like any other dispatch frame, surfaced from
+    /// [`GatewaySession::next_chat_message`] as
+    /// [`DiscordError::SessionInvalidated`] exactly as it would be after a
+    /// fresh `IDENTIFY`.
+    pub async fn resume_handshake(
+        mut ws: WebSocketStream<S>,
+        token: &str,
+        session: &GatewaySessionInfo,
+    ) -> Result<Self, DiscordError> {
+        let frame = ws
+            .next()
+            .await
+            .ok_or(DiscordError::ClosedDuringHandshake)?
+            .map_err(|e| DiscordError::Transport(e.to_string()))?;
+        let text = match frame {
+            Message::Text(text) => text.to_string(),
+            _ => return Err(DiscordError::UnexpectedOpcode(u8::MAX)),
+        };
+        let hello = parse_payload(&text)?;
+        if hello.op != OP_HELLO {
+            return Err(DiscordError::UnexpectedOpcode(hello.op));
+        }
+        let heartbeat_interval = parse_hello(&hello)?;
+
+        let resume = build_resume(token, &session.session_id, session.seq);
+        // Permanent DEBUG-level observability (critical-rules.md
+        // Observability: log generously at DEBUG) -- session id and
+        // sequence sent on the wire, never the token.
+        tracing::debug!(
+            session_id = %session.session_id,
+            seq = session.seq,
+            heartbeat_interval_ms = heartbeat_interval.as_millis() as u64,
+            "sending RESUME"
+        );
+        let resume_text =
+            serde_json::to_string(&resume).map_err(|e| DiscordError::Decode(e.to_string()))?;
+        ws.send(Message::text(resume_text))
+            .await
+            .map_err(|e| DiscordError::Transport(e.to_string()))?;
+
+        Ok(Self {
+            ws,
+            heartbeat_interval,
+            seq: session.seq,
+            self_user_id: None,
+            awaiting_ack: false,
+            session_id: Some(session.session_id.clone()),
+            resume_gateway_url: Some(session.resume_gateway_url.clone()),
+        })
+    }
+
+    /// A snapshot of this session's `session_id`/`seq`/`resume_gateway_url`
+    /// for a caller to persist and later hand back to [`resume`]/
+    /// [`GatewaySession::resume_handshake`] — `None` until a `READY` (fresh
+    /// `IDENTIFY`) or `resume_handshake` call has populated both the
+    /// session id and resume URL.
+    #[must_use]
+    pub fn session_info(&self) -> Option<GatewaySessionInfo> {
+        let session_id = self.session_id.clone()?;
+        let resume_gateway_url = self.resume_gateway_url.clone()?;
+        Some(GatewaySessionInfo {
+            session_id,
+            seq: self.seq,
+            resume_gateway_url,
         })
     }
 
@@ -427,10 +550,27 @@ where
                 OP_HEARTBEAT => self.send_heartbeat().await?,
                 OP_HEARTBEAT_ACK => self.awaiting_ack = false,
                 OP_RECONNECT => return Err(DiscordError::ResumeRequested),
-                OP_INVALID_SESSION => return Err(DiscordError::SessionInvalidated),
+                OP_INVALID_SESSION => {
+                    // Discord's own opcode-9 `d` payload: `true` permits an
+                    // immediate `RESUME` attempt, `false` requires a fresh
+                    // `IDENTIFY` -- never collapse this to a fixed value.
+                    let resumable = payload.d.as_bool().unwrap_or(false);
+                    tracing::warn!(resumable, "discord gateway sent INVALID_SESSION");
+                    return Err(DiscordError::SessionInvalidated { resumable });
+                }
                 OP_DISPATCH => match payload.t.as_deref() {
                     Some("READY") => {
                         self.self_user_id = extract_ready_self_id(&payload.d);
+                        self.session_id = payload
+                            .d
+                            .get("session_id")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_string);
+                        self.resume_gateway_url = payload
+                            .d
+                            .get("resume_gateway_url")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_string);
                         let guilds = payload.d.get("guilds").and_then(|g| g.as_array());
                         let guild_count = guilds.map(Vec::len);
                         let unavailable_count = guilds.map(|a| {
@@ -443,10 +583,18 @@ where
                         });
                         tracing::debug!(
                             self_user_id = self.self_user_id.as_deref(),
+                            session_id = self.session_id.as_deref(),
                             guild_count,
                             unavailable_count,
                             guild_ids = ?guilds.map(|a| a.iter().filter_map(|g| g.get("id").and_then(serde_json::Value::as_str)).collect::<Vec<_>>()),
                             "READY received"
+                        );
+                    }
+                    Some("RESUMED") => {
+                        tracing::debug!(
+                            session_id = self.session_id.as_deref(),
+                            seq = self.seq,
+                            "RESUMED received, session resumed successfully"
                         );
                     }
                     Some("GUILD_CREATE") => {
@@ -566,6 +714,32 @@ pub async fn connect(
     GatewaySession::handshake(ws, cfg).await
 }
 
+/// Discord's per-session resume URLs arrive bare (no `v`/`encoding` query
+/// string) — appends the same `v=10&encoding=json` pair
+/// [`DEFAULT_GATEWAY_URL`] hardcodes, unless the URL already carries a
+/// query string (defensive: never double-append).
+fn ensure_gateway_query_params(url: &str) -> String {
+    if url.contains('?') {
+        url.to_string()
+    } else {
+        format!("{}/?v=10&encoding=json", url.trim_end_matches('/'))
+    }
+}
+
+/// Connect to `session.resume_gateway_url` over TLS and complete the
+/// `HELLO`/`RESUME` handshake — reconnects a prior session (exempt from
+/// Discord's `IDENTIFY` rate limit) instead of a fresh `IDENTIFY`.
+pub async fn resume(
+    cfg: &GatewayConfig,
+    session: &GatewaySessionInfo,
+) -> Result<GatewaySession<MaybeTlsStream<tokio::net::TcpStream>>, DiscordError> {
+    let url = ensure_gateway_query_params(&session.resume_gateway_url);
+    let (ws, _response) = tokio_tungstenite::connect_async(url.as_str())
+        .await
+        .map_err(|e| DiscordError::Transport(e.to_string()))?;
+    GatewaySession::resume_handshake(ws, &cfg.token, session).await
+}
+
 /// Receiver: one persistent Gateway connection, yielding raw
 /// `MESSAGE_CREATE` payloads via [`GatewaySession::next_chat_message`].
 pub struct DiscordGatewayReceiver {
@@ -585,6 +759,18 @@ impl DiscordGatewayReceiver {
         &self,
     ) -> Result<GatewaySession<MaybeTlsStream<tokio::net::TcpStream>>, DiscordError> {
         connect(&self.config).await
+    }
+
+    /// Resume a prior session (see [`GatewaySession::session_info`]) instead
+    /// of a fresh `IDENTIFY`, returning a live [`GatewaySession`] to poll
+    /// with [`GatewaySession::next_chat_message`]. Uses this receiver's
+    /// configured bot token; `session` supplies the `session_id`/`seq`/
+    /// `resume_gateway_url` to reconnect to.
+    pub async fn resume(
+        &self,
+        session: &GatewaySessionInfo,
+    ) -> Result<GatewaySession<MaybeTlsStream<tokio::net::TcpStream>>, DiscordError> {
+        resume(&self.config, session).await
     }
 }
 
@@ -1053,7 +1239,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn next_chat_message_invalid_session_opcode_is_not_resumable() {
+    async fn next_chat_message_invalid_session_false_is_not_resumable() {
         let (mut session, mut server_ws) = handshake_over_duplex(60_000).await;
         server_ws
             .send(Message::text(r#"{"op":9,"d":false}"#))
@@ -1063,7 +1249,46 @@ mod tests {
             .next_chat_message()
             .await
             .expect_err("invalid session opcode should error");
-        assert!(matches!(err, DiscordError::SessionInvalidated));
+        assert!(matches!(
+            err,
+            DiscordError::SessionInvalidated { resumable: false }
+        ));
+    }
+
+    #[tokio::test]
+    async fn next_chat_message_invalid_session_true_is_resumable() {
+        let (mut session, mut server_ws) = handshake_over_duplex(60_000).await;
+        server_ws
+            .send(Message::text(r#"{"op":9,"d":true}"#))
+            .await
+            .expect("send invalid session");
+        let err = session
+            .next_chat_message()
+            .await
+            .expect_err("invalid session opcode should error");
+        assert!(matches!(
+            err,
+            DiscordError::SessionInvalidated { resumable: true }
+        ));
+    }
+
+    #[tokio::test]
+    async fn next_chat_message_invalid_session_missing_d_defaults_to_not_resumable() {
+        // Malformed/unexpected payload shape -- err on the side of a fresh
+        // IDENTIFY rather than assuming resumability that wasn't declared.
+        let (mut session, mut server_ws) = handshake_over_duplex(60_000).await;
+        server_ws
+            .send(Message::text(r#"{"op":9,"d":null}"#))
+            .await
+            .expect("send invalid session");
+        let err = session
+            .next_chat_message()
+            .await
+            .expect_err("invalid session opcode should error");
+        assert!(matches!(
+            err,
+            DiscordError::SessionInvalidated { resumable: false }
+        ));
     }
 
     #[tokio::test]
@@ -1237,5 +1462,159 @@ mod tests {
             .await
             .expect_err("invalid URL should fail");
         assert!(matches!(err, DiscordError::Transport(_)));
+    }
+
+    // --- OP_RESUME ----------------------------------------------------
+
+    fn resumable_session() -> GatewaySessionInfo {
+        GatewaySessionInfo {
+            session_id: "sess-abc".to_string(),
+            seq: Some(7),
+            resume_gateway_url: "wss://resume.example".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn ready_populates_session_info() {
+        let (mut session, mut server_ws) = handshake_over_duplex(60_000).await;
+        assert_eq!(session.session_info(), None);
+
+        server_ws
+            .send(Message::text(
+                r#"{"op":0,"s":3,"t":"READY","d":{"user":{"id":"1000","username":"bot"},
+                   "session_id":"sess-xyz","resume_gateway_url":"wss://resume.example"}}"#,
+            ))
+            .await
+            .expect("send ready");
+        server_ws
+            .send(Message::text(
+                r#"{"op":0,"s":4,"t":"MESSAGE_CREATE","d":{"id":"1","channel_id":"2",
+                   "author":{"id":"3","username":"al","bot":false},"content":"hi"}}"#,
+            ))
+            .await
+            .expect("send message_create");
+
+        session
+            .next_chat_message()
+            .await
+            .expect("should not error")
+            .expect("message present");
+
+        assert_eq!(
+            session.session_info(),
+            Some(GatewaySessionInfo {
+                session_id: "sess-xyz".to_string(),
+                seq: Some(4),
+                resume_gateway_url: "wss://resume.example".to_string(),
+            })
+        );
+    }
+
+    /// Resume handshake over an in-memory duplex pipe: `HELLO` then a
+    /// `RESUME` (not `IDENTIFY`) carrying the stored token/session
+    /// id/seq, then a replayed dispatch followed by `RESUMED`.
+    #[tokio::test]
+    async fn resume_handshake_sends_resume_and_receives_resumed() {
+        let (client_io, server_io) = tokio::io::duplex(16384);
+        let mut server_ws =
+            tokio_tungstenite::WebSocketStream::from_raw_socket(server_io, Role::Server, None)
+                .await;
+        let client_ws =
+            tokio_tungstenite::WebSocketStream::from_raw_socket(client_io, Role::Client, None)
+                .await;
+
+        let send_hello = server_ws.send(Message::text(
+            r#"{"op":10,"d":{"heartbeat_interval":60000}}"#,
+        ));
+        let session = resumable_session();
+        let handshake = GatewaySession::resume_handshake(client_ws, "test-token", &session);
+        let (send_result, handshake_result) = tokio::join!(send_hello, handshake);
+        send_result.expect("send hello");
+        let mut session_conn = handshake_result.expect("resume handshake");
+
+        let resume_frame = server_ws
+            .next()
+            .await
+            .expect("resume frame")
+            .expect("ok frame");
+        let resume =
+            parse_payload(&resume_frame.into_text().expect("text frame")).expect("decode resume");
+        assert_eq!(resume.op, OP_RESUME);
+        assert_eq!(resume.d["token"], "test-token");
+        assert_eq!(resume.d["session_id"], "sess-abc");
+        assert_eq!(resume.d["seq"], 7);
+
+        // A successful resume replays missed dispatches and then RESUMED --
+        // session_id/resume_gateway_url were already known pre-handshake.
+        assert_eq!(
+            session_conn.session_info(),
+            Some(GatewaySessionInfo {
+                session_id: "sess-abc".to_string(),
+                seq: Some(7),
+                resume_gateway_url: "wss://resume.example".to_string(),
+            })
+        );
+
+        server_ws
+            .send(Message::text(
+                r#"{"op":0,"s":8,"t":"MESSAGE_CREATE","d":{"id":"1","channel_id":"2",
+                   "author":{"id":"3","username":"zed","bot":false},"content":"replayed"}}"#,
+            ))
+            .await
+            .expect("send replayed message_create");
+        server_ws
+            .send(Message::text(r#"{"op":0,"s":9,"t":"RESUMED","d":{}}"#))
+            .await
+            .expect("send resumed");
+
+        let msg = session_conn
+            .next_chat_message()
+            .await
+            .expect("should not error")
+            .expect("message present");
+        assert_eq!(msg.author_username, "zed");
+        // The sequence tracks forward past the replayed dispatch even
+        // though RESUMED itself hasn't been consumed yet.
+        assert_eq!(session_conn.session_info().unwrap().seq, Some(8));
+    }
+
+    #[tokio::test]
+    async fn resume_rejects_an_invalid_gateway_url() {
+        let cfg = GatewayConfig::new("test-token");
+        let mut session = resumable_session();
+        session.resume_gateway_url = "not a valid url".to_string();
+        let err = resume(&cfg, &session)
+            .await
+            .expect_err("invalid URL should fail");
+        assert!(matches!(err, DiscordError::Transport(_)));
+    }
+
+    #[tokio::test]
+    async fn receiver_resume_wrapper_surfaces_the_same_resume_error() {
+        let cfg = GatewayConfig::new("test-token");
+        let receiver = DiscordGatewayReceiver::new(cfg);
+        let mut session = resumable_session();
+        session.resume_gateway_url = "not a valid url".to_string();
+        let err = receiver
+            .resume(&session)
+            .await
+            .expect_err("invalid URL should fail");
+        assert!(matches!(err, DiscordError::Transport(_)));
+    }
+
+    #[test]
+    fn ensure_gateway_query_params_appends_when_missing() {
+        assert_eq!(
+            ensure_gateway_query_params("wss://resume.example"),
+            "wss://resume.example/?v=10&encoding=json"
+        );
+    }
+
+    #[test]
+    fn ensure_gateway_query_params_leaves_existing_query_alone() {
+        assert_eq!(
+            ensure_gateway_query_params("wss://resume.example/?v=10&encoding=json"),
+            "wss://resume.example/?v=10&encoding=json"
+        );
     }
 }
