@@ -358,12 +358,13 @@ def test_scan_cost_stays_near_linear(unit: str) -> None:
         redact_text(text)
         return time.perf_counter() - start
 
-    elapsed(20_000)  # warm up, so import/JIT-ish costs do not skew the ratio
-    small = elapsed(20_000)
+    elapsed(10_000)  # warm up, so first-call costs do not skew the ratio
+    small = elapsed(10_000)
     large = elapsed(80_000)
-    # 4x the input must not cost anywhere near 16x (quadratic); 8x allows plenty
-    # of slack for timer noise while still failing hard on n^2.
-    assert large < max(small * 8.0, 0.05), f"{unit!r}: 20k={small:.4f}s 80k={large:.4f}s"
+    # An 8x input increase costs ~8x if linear and ~64x if quadratic, so the two are
+    # far enough apart that a 24x bound tolerates timer noise and the uneven overhead
+    # of running under coverage while still failing hard on n^2.
+    assert large < max(small * 24.0, 0.05), f"{unit!r}: 10k={small:.4f}s 80k={large:.4f}s"
 
 
 def test_separator_with_no_key_in_front_is_left_alone() -> None:
