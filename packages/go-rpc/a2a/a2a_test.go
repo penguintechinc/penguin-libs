@@ -80,7 +80,7 @@ func TestMount_ServesCardAndReachesHandler(t *testing.T) {
 
 	// Agent card: GET succeeds with exact bytes and JSON content type.
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, WellKnownAgentCardPath, nil))
+	mux.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, WellKnownAgentCardPath, nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET %s status = %d, want %d", WellKnownAgentCardPath, rec.Code, http.StatusOK)
 	}
@@ -93,14 +93,14 @@ func TestMount_ServesCardAndReachesHandler(t *testing.T) {
 
 	// Agent card: non-GET is rejected, not forwarded anywhere.
 	recPost := httptest.NewRecorder()
-	mux.ServeHTTP(recPost, httptest.NewRequest(http.MethodPost, WellKnownAgentCardPath, nil))
+	mux.ServeHTTP(recPost, httptest.NewRequestWithContext(context.Background(), http.MethodPost, WellKnownAgentCardPath, nil))
 	if recPost.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("POST %s status = %d, want %d", WellKnownAgentCardPath, recPost.Code, http.StatusMethodNotAllowed)
 	}
 
 	// JSON-RPC endpoint: request reaches the supplied handler unmodified.
 	recRPC := httptest.NewRecorder()
-	mux.ServeHTTP(recRPC, httptest.NewRequest(http.MethodPost, JSONRPCPath, strings.NewReader(`{"jsonrpc":"2.0"}`)))
+	mux.ServeHTTP(recRPC, httptest.NewRequestWithContext(context.Background(), http.MethodPost, JSONRPCPath, strings.NewReader(`{"jsonrpc":"2.0"}`)))
 	if recRPC.Code != http.StatusOK {
 		t.Fatalf("POST %s status = %d, want %d", JSONRPCPath, recRPC.Code, http.StatusOK)
 	}
@@ -179,11 +179,15 @@ func TestMountAgent_SDKRoundTrip(t *testing.T) {
 	defer cancel()
 
 	// Confirm the served card matches what the client will discover.
-	resp, err := http.Get(serverURL + WellKnownAgentCardPath)
+	cardReq, err := http.NewRequestWithContext(ctx, http.MethodGet, serverURL+WellKnownAgentCardPath, nil)
+	if err != nil {
+		t.Fatalf("build agent card request error = %v, want nil", err)
+	}
+	resp, err := http.DefaultClient.Do(cardReq)
 	if err != nil {
 		t.Fatalf("GET agent card error = %v, want nil", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var gotCard a2a.AgentCard
 	if err := json.NewDecoder(resp.Body).Decode(&gotCard); err != nil {
 		t.Fatalf("decode agent card error = %v, want nil", err)

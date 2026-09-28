@@ -32,9 +32,16 @@ func TestPoolGetPut(t *testing.T) {
 	if v != 42 {
 		t.Fatalf("Get() = %d, want 42", v)
 	}
+	// sync.Pool gives no guarantee that a value handed to Put is the value
+	// a subsequent Get returns — the runtime may drop pooled items at any
+	// time (notably under GC pressure, which -race amplifies), reclaiming
+	// them via a fresh call to the pool's alloc func instead. Assert only
+	// the documented contract: every Get() yields a value the pool is
+	// allowed to produce, either the freshly allocated 42 or the recycled
+	// 99, never anything else (e.g. a zero value from a bad pointer cast).
 	pool.Put(99, 0)
 	v2 := pool.Get(0)
-	if v2 != 99 {
-		t.Fatalf("Get() after Put() = %d, want 99", v2)
+	if v2 != 42 && v2 != 99 {
+		t.Fatalf("Get() after Put() = %d, want 42 or 99", v2)
 	}
 }
