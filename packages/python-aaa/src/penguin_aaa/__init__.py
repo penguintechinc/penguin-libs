@@ -38,6 +38,7 @@ def __getattr__(name: str) -> object:
     if name == "create_oidc_blueprint":
         try:
             from penguin_aaa.endpoints.flask_bp import create_oidc_blueprint
+
             return create_oidc_blueprint
         except ImportError as e:
             raise ImportError(
