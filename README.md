@@ -12,7 +12,7 @@ Shared libraries for Penguin Tech applications across all languages.
 | Package | Version | Coverage | Description |
 |---------|---------|----------|-------------|
 | [penguin-aaa](./packages/python-aaa) | 0.2.0 | 99% | Authentication, authorization, and audit (OIDC, RBAC, SPIFFE, tenant isolation) |
-| [penguin-crypto](./packages/python-crypto) | 0.1.0 | — | Cryptographic primitives and key handling |
+| [penguin-crypto](./packages/python-crypto) | 0.1.0 | — | **Superseded** — folded into [penguin-security](./packages/python-security)'s optional `crypto` extra (see below) |
 | [penguin-dal](./packages/python-dal) | 0.3.0 | 98% | Database access layer — PyDAL-style API over SQLAlchemy, plus storage/cache/stream/document backends |
 | [penguin-email](./packages/python-email) | 0.1.0 | — | SMTP delivery helpers |
 | [penguin-http](./packages/python-http) | 0.1.0 | — | HTTP client utilities |
@@ -21,7 +21,7 @@ Shared libraries for Penguin Tech applications across all languages.
 | [penguin-limiter](./packages/python-limiter) | 0.1.0 | — | Rate limiting middleware (HTTP + gRPC) |
 | [penguin-pytest](./packages/python-pytest) | 0.1.0 | — | Shared pytest fixtures and helpers |
 | [penguin-sal](./packages/python-secrets) | 0.2.1 | 100% | Secrets and authentication library |
-| [penguin-security](./packages/python-security) | 0.1.0 | — | Security primitives and hardening helpers |
+| [penguin-security](./packages/python-security) | 0.1.0 | — | Security primitives and hardening helpers, plus crypto/envelope encryption (optional `crypto` extra, formerly penguin-crypto) |
 | [penguin-utils](./packages/python-utils) | 0.2.0 | 99% | Sanitized logging and Flask utilities |
 | [penguin-rpc](./packages/python-rpc) | 0.1.0 | 100% | pRPC — Connect RPC over HTTP/3/QUIC, Python implementation (Apache-2.0) |
 
@@ -256,6 +256,26 @@ penguin-libs/
 ├── docs/                    # Documentation
 ├── package.json             # Workspace root
 └── README.md
+```
+
+## Superseded Packages
+
+**penguin-crypto** (`packages/python-crypto`, superseded 2026-09): Never published to PyPI (no working trusted publisher); `penguin-security` does, so the crypto module (symmetric/hybrid encryption, key derivation, ECC, hashing, per-tenant envelope encryption) moved there instead. The package directory and its `release/python-crypto/v0.1.x` branch remain for history but are frozen — no new features, PyPI publishing disabled.
+
+Migration: `penguin_crypto.X` → `penguin_security.crypto.X` (same public API, new import path, behind the optional `penguin-security[crypto]` extra since the base `penguin-security` install must not gain new dependencies):
+
+```python
+# Before
+from penguin_crypto import encrypt, decrypt
+from penguin_crypto.envelope import build_aad, envelope_encrypt
+
+# After
+from penguin_security.crypto import encrypt, decrypt
+from penguin_security.crypto.envelope import build_aad, envelope_encrypt
+```
+
+```bash
+pip install "penguin-security[crypto]"   # was: pip install penguin-crypto
 ```
 
 ## Contributing
