@@ -9,9 +9,11 @@ All sinks implement the Sink Protocol so they can be composed freely.
 import json
 import logging
 import logging.handlers
+import queue
 import socket
 import sys
-from collections.abc import Callable
+import threading
+from collections.abc import Callable, Sequence
 from typing import Any, Protocol, runtime_checkable
 
 
@@ -297,3 +299,124 @@ class KafkaSink:
     def close(self) -> None:
         """Close the Kafka sink."""
         self._producer.close()
+
+
+# Sinks that talk to the network and can therefore block the caller for as long as
+# their timeouts and retries take. Named explicitly rather than guessed at: these
+# four are the ones the design spec moves behind a queue. StdoutSink, FileSink,
+# SyslogSink (a UDP sendto does not block) and CallbackSink stay synchronous,
+# because consumers' tests assert on a CallbackSink immediately after logging.
+BLOCKING_SINK_NAMES = frozenset(
+    {"CloudWatchSink", "GCPCloudLoggingSink", "KafkaSink", "KillKrillSink"}
+)
+
+
+class AsyncSink:
+    """
+    Wrap a blocking sink with a bounded queue drained by a background thread.
+
+    Keeps a slow or unreachable network sink off the caller's thread entirely. When
+    the queue is full the OLDEST event is dropped, so the newest -- usually the most
+    relevant -- still gets through, and the drop is counted rather than hidden.
+
+    Args:
+        inner: The sink to deliver to.
+        maxsize: Queue capacity; beyond it, the oldest queued event is dropped.
+    """
+
+    _SENTINEL = object()
+
+    def __init__(self, inner: "Sink", maxsize: int = 10000) -> None:
+        self._inner = inner
+        self._queue: queue.Queue[Any] = queue.Queue(maxsize=maxsize)
+        self._dropped = 0
+        self._errors = 0
+        self._closed = False
+        self._lock = threading.Lock()
+        self._thread = threading.Thread(
+            target=self._run,
+            name=f"penguin-asyncsink-{type(inner).__name__}",
+            daemon=True,
+        )
+        self._thread.start()
+
+    @property
+    def inner(self) -> "Sink":
+        """The wrapped sink."""
+        return self._inner
+
+    @property
+    def dropped(self) -> int:
+        """Events discarded because the queue was full."""
+        return self._dropped
+
+    @property
+    def errors(self) -> int:
+        """Deliveries the inner sink raised on."""
+        return self._errors
+
+    def emit(self, event: dict[str, Any]) -> None:
+        """Queue an event for background delivery; never blocks and never raises."""
+        try:
+            self._queue.put_nowait(event)
+            return
+        except queue.Full:
+            pass
+        # Full: discard the head to make room, then retry. A log call must never wait
+        # on queue space, so dropping the oldest is the only acceptable answer.
+        try:
+            self._queue.get_nowait()
+            self._queue.task_done()
+        except queue.Empty:  # pragma: no cover - needs an exact producer/consumer race
+            pass
+        self._dropped += 1
+        try:
+            self._queue.put_nowait(event)
+        except queue.Full:  # pragma: no cover - needs an exact producer/consumer race
+            self._dropped += 1
+
+    def _run(self) -> None:
+        """Background worker: deliver queued events until the sentinel arrives."""
+        while True:
+            item = self._queue.get()
+            if item is self._SENTINEL:
+                self._queue.task_done()
+                return
+            try:
+                self._inner.emit(item)
+            except Exception:
+                # A failing sink must never kill the worker: the next event, and
+                # every event after it, still has to be delivered.
+                self._errors += 1
+            finally:
+                self._queue.task_done()
+
+    def flush(self) -> None:
+        """Wait for queued events to be delivered, then flush the inner sink."""
+        self._queue.join()
+        self._inner.flush()
+
+    def close(self) -> None:
+        """Drain the queue, stop the worker, and close the inner sink. Idempotent."""
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+        self._queue.join()
+        self._queue.put(self._SENTINEL)
+        self._thread.join(timeout=5)
+        self._inner.close()
+
+
+def wrap_blocking_sinks(
+    sinks: Sequence["Sink"],
+    blocking_names: frozenset[str] = BLOCKING_SINK_NAMES,
+) -> list["Sink"]:
+    """
+    Put each network-bound sink behind an AsyncSink, passing local sinks through.
+
+    Selection is by class name so an already-wrapped sink, or a caller's own custom
+    sink, is left exactly as given -- this must never silently make a synchronous
+    sink asynchronous for a consumer who was relying on it being synchronous.
+    """
+    return [AsyncSink(s) if type(s).__name__ in blocking_names else s for s in sinks]

@@ -9,6 +9,8 @@ Built on structlog for structured, production-ready logging.
 import functools
 import logging
 import re
+import sys
+import time
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, cast
 
@@ -310,16 +312,51 @@ def _sanitize_processor(logger: Any, method: str, event_dict: EventDict) -> Even
     return cast(EventDict, sanitize_log_data(cast(dict[str, Any], event_dict)))
 
 
-class _SinkProcessor:
-    """structlog processor that forwards events to registered sinks."""
+class _LegacySinkHandler(logging.Handler):
+    """
+    Fan a stdlib record out to the 0.3.x sinks, isolating each sink's failures.
 
-    def __init__(self, sinks: Sequence["Sink"]) -> None:
+    0.3.x dispatched from inside the structlog chain with no try/except, so one
+    failing sink raised into the caller's log call and every sink after it was
+    skipped. Here a failure is counted per sink class and reported to stderr at most
+    once per interval, so a broken sink is visible without flooding the very output
+    stream it is failing to write to. Sitting on the root logger also means
+    third-party records reach sinks, which the structlog-chain version could not do.
+
+    Args:
+        sinks: Sinks to deliver each record to.
+        error_interval: Minimum seconds between stderr reports about a given sink.
+    """
+
+    def __init__(self, sinks: Sequence["Sink"], error_interval: float = 60.0) -> None:
+        super().__init__()
         self._sinks = list(sinks)
+        self._error_interval = error_interval
+        self.errors: dict[str, int] = {}
+        self._last_reported: dict[str, float] = {}
 
-    def __call__(self, logger: Any, method: str, event_dict: EventDict) -> EventDict:
+    def emit(self, record: logging.LogRecord) -> None:
+        """Deliver a sanitized copy of the record to every sink, isolating failures."""
+        event = record.msg
+        payload = event if isinstance(event, dict) else {"event": record.getMessage()}
         for sink in self._sinks:
-            sink.emit(dict(event_dict))
-        return event_dict
+            name = type(sink).__name__
+            try:
+                sink.emit(sanitize_log_data(dict(payload)))
+            except Exception as exc:
+                self.errors[name] = self.errors.get(name, 0) + 1
+                self._report(name, exc)
+
+    def _report(self, name: str, exc: Exception) -> None:
+        """Write a rate-limited note to stderr that a sink is failing."""
+        now = time.monotonic()
+        if now - self._last_reported.get(name, -self._error_interval) < self._error_interval:
+            return
+        self._last_reported[name] = now
+        print(
+            f"penguin-utils: log sink {name} failed ({type(exc).__name__}): {exc}",
+            file=sys.stderr,
+        )
 
 
 def _shared_processors() -> list[Processor]:
@@ -361,11 +398,17 @@ def configure_logging(
     beforehand loses it. Calling this repeatedly is therefore safe and never
     doubles output.
 
+    Network-bound sinks (CloudWatch/GCP/Kafka/KillKrill) are automatically put
+    behind a bounded background queue so they cannot block a log call; stdout, file
+    and callback sinks stay synchronous.
+
     Args:
         level: Minimum logging level (default: INFO). Now enforced.
         json_output: Render as JSON lines when True, console format when False.
         sinks: Optional sequence of Sink instances to receive every event.
     """
+    from .sinks import wrap_blocking_sinks
+
     shared = _shared_processors()
     renderer: Processor = (
         structlog.processors.JSONRenderer()
@@ -383,11 +426,11 @@ def configure_logging(
     console = logging.StreamHandler()
     console.setFormatter(formatter)
     root.addHandler(console)
+    if sinks:
+        root.addHandler(_LegacySinkHandler(wrap_blocking_sinks(sinks)))
     root.setLevel(level)
 
     processors: list[Processor] = list(shared)
-    if sinks:
-        processors.append(_SinkProcessor(sinks))
     processors.append(structlog.stdlib.ProcessorFormatter.wrap_for_formatter)
 
     structlog.configure(
