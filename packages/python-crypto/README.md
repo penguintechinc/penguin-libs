@@ -1,4 +1,27 @@
-# penguin-crypto
+# penguin-crypto (superseded)
+
+> **This package is superseded and frozen.** `penguin-crypto` was never
+> published to PyPI (no working trusted publisher). Its crypto module has
+> moved to [`penguin-security`](../python-security)'s optional `crypto`
+> extra as `penguin_security.crypto` -- same public API, new import path:
+>
+> ```python
+> # Before
+> from penguin_crypto import encrypt, decrypt
+> from penguin_crypto.envelope import build_aad, envelope_encrypt
+>
+> # After
+> from penguin_security.crypto import encrypt, decrypt
+> from penguin_security.crypto.envelope import build_aad, envelope_encrypt
+> ```
+>
+> ```bash
+> pip install "penguin-security[crypto]"   # was: pip install penguin-crypto
+> ```
+>
+> This directory and the `release/python-crypto/v0.1.x` branch remain for
+> history only -- no new features, and PyPI publishing is disabled. The
+> content below describes the pre-migration API.
 
 PenguinTech cryptographic utilities: symmetric/hybrid/ECC primitives plus
 per-tenant envelope encryption (AES-256-GCM field encryption, KMS DEK
