@@ -21,7 +21,7 @@ Shared libraries for Penguin Tech applications across all languages.
 | [penguin-limiter](./packages/python-limiter) | 0.1.0 | — | Rate limiting middleware (HTTP + gRPC) |
 | [penguin-pytest](./packages/python-pytest) | 0.1.0 | — | Shared pytest fixtures and helpers |
 | [penguin-sal](./packages/python-secrets) | 0.2.1 | 100% | Secrets and authentication library |
-| [penguin-security](./packages/python-security) | 0.1.0 | — | Security primitives and hardening helpers, plus crypto/envelope encryption (optional `crypto` extra, formerly penguin-crypto) |
+| [penguin-security](./packages/python-security) | 0.1.1 | — | Security primitives and hardening helpers, plus crypto/envelope encryption (optional `crypto` extra, formerly penguin-crypto) |
 | [penguin-utils](./packages/python-utils) | 0.2.0 | 99% | Sanitized logging and Flask utilities |
 | [penguin-rpc](./packages/python-rpc) | 0.1.0 | 100% | pRPC — Connect RPC over HTTP/3/QUIC, Python implementation (Apache-2.0) |
 
