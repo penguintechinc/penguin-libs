@@ -65,7 +65,6 @@ jobs:
           python-version: '3.13'
       - run: pip install build pytest pytest-asyncio requests bandit pip-audit
       - run: |
-          pip install -e "packages/python-crypto"
           pip install -e "packages/python-security"
           pip install -e "packages/python-http"
           pip install -e "packages/python-libs[all,dev]"
