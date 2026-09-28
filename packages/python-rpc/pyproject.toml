@@ -34,7 +34,7 @@ mcp = []
 a2a = []
 ziti = []
 all = ["penguin-rpc[h3,mcp,a2a,ziti]"]
-dev = ["pytest==8.4.1", "pytest-cov==6.2.1", "mypy==1.16.1", "ruff==0.12.3", "bandit==1.8.5"]
+dev = ["pytest==9.0.3", "pytest-cov==6.2.1", "mypy==1.16.1", "ruff==0.12.3", "bandit==1.8.5"]
 
 [project.urls]
 Homepage = "https://www.penguintech.io"
