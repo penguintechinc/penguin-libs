@@ -259,11 +259,12 @@ jobs:
       contents: read
       id-token: write
     environment: pypi-secrets
-    if: |
-      github.event_name == 'workflow_dispatch' &&
-      (github.event.inputs.package == 'python-secrets' || github.event.inputs.package == 'all') ||
-      startsWith(github.ref, 'refs/tags/penguin-secrets-v') ||
-      startsWith(github.ref, 'refs/tags/v')
+    # SUPERSEDED: penguin-sal (packages/python-secrets) is folded into
+    # penguin-aaa as penguin_aaa.secrets (see penguin-aaa CHANGELOG /
+    # docs/penguin-sal/README.md). No further penguin-sal releases are
+    # published — this job is fail-closed disabled, never re-enable without
+    # removing the superseded notice first.
+    if: false
 
     defaults:
       run:

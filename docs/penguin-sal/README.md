@@ -1,5 +1,12 @@
 # penguin-sal
 
+> **Superseded.** `penguin-sal` is folded into `penguin-aaa` as
+> `penguin_aaa.secrets`, installed via the `penguin-aaa[secrets]` (or
+> per-backend `penguin-aaa[secrets-<backend>]`) extra. No further versions of
+> `penguin-sal` are published — this branch and its history are kept for
+> reference only. Migrate imports: `penguin_sal.X` → `penguin_aaa.secrets.X`.
+> See the `penguin-aaa` docs on the `release/python-aaa/v0.2.x` line.
+
 Secrets and Adapters Library for Python. Provides a unified interface for reading secrets from multiple backends: environment variables, HashiCorp Vault, AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault.
 
 ## Installation
