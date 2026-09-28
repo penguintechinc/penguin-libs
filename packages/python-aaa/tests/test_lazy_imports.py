@@ -11,9 +11,7 @@ def test_import_penguin_aaa_without_flask() -> None:
     # Block Flask import to simulate it not being installed
     with patch.dict(sys.modules, {"flask": None}):
         # Remove penguin_aaa from sys.modules to force a fresh import
-        modules_to_remove = [
-            key for key in sys.modules if key.startswith("penguin_aaa")
-        ]
+        modules_to_remove = [key for key in sys.modules if key.startswith("penguin_aaa")]
         for mod in modules_to_remove:
             del sys.modules[mod]
 
@@ -34,9 +32,7 @@ def test_create_oidc_blueprint_missing_flask() -> None:
     # Block Flask import to simulate it not being installed
     with patch.dict(sys.modules, {"flask": None}):
         # Remove penguin_aaa from sys.modules to force a fresh import
-        modules_to_remove = [
-            key for key in sys.modules if key.startswith("penguin_aaa")
-        ]
+        modules_to_remove = [key for key in sys.modules if key.startswith("penguin_aaa")]
         for mod in modules_to_remove:
             del sys.modules[mod]
 
