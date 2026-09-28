@@ -34,11 +34,18 @@ new (cloud) session. Read this before touching code.
 | 14 — consumer compat + CI job + coverage/mypy gates | ✅ complete (`e20de37`) |
 | — pre-existing lint + stale egg-info | ✅ chore (`917267a`) |
 
-**All 15 tasks complete.** Suite: **265 unit tests passing, 3 integration passing**,
-coverage **97.83%** (`logging.py`, `telemetry/*` all 100% except config.py 96%).
-`ruff check`, `ruff format --check`, `mypy --strict src/penguintechinc_utils/telemetry`
-and `bandit` all clean. Integration counts printed non-zero:
-`logRecords=1 metrics=2 histograms=2 spans=1` (http) and `logRecords=1 metrics=2 spans=1` (grpc).
+**All 15 tasks complete**, plus a whole-branch review round (`206e961`) that fixed four
+cross-task Criticals (rulings 29-33). Suite: **283 unit tests passing, 3 integration
+passing**, coverage **97.60%**. `ruff check`, `ruff format --check`,
+`mypy --strict src/penguintechinc_utils/telemetry`, `bandit` and `pip-audit` all exit 0.
+Integration counts printed non-zero: `logRecords=1 metrics=2 histograms=2 spans=1` (http)
+and `logRecords=1 metrics=2 spans=1` (grpc). The built wheel passes 10/10 real consumer
+call sites in a clean venv.
+
+**Remaining known-but-unfixed** (from the same review, non-blocking): the new CI job's
+`if:` condition uses the older `github.ref` pattern rather than the `github.base_ref`
+form that landed on `main` — it fires when needed but also redundantly on unrelated PRs;
+worth pulling forward when this branch rebases on a newer `main`.
 
 **Not done, deliberately:** no PR opened and nothing merged — release→main is user-gated
 and the feature→release merge decision is left to the human.
@@ -199,6 +206,49 @@ Then: add a shared vector for the colon-space base64 case, run `pytest tests/ -v
     order alone.
 28. **`telemetry/config.py`'s `mypy --strict` gaps fixed in Task 12**, not deferred to 14,
     so the whole `telemetry/` package passes the gate from that commit onward.
+
+### Rulings 29-33 (whole-branch review fixes, `206e961`)
+
+A final cross-task review found four Criticals that every per-task suite passed over.
+All are fixed and each has a regression test in `tests/test_sanitization_gaps.py`.
+
+29. **The log record is interpolated BEFORE redaction, then `args` is cleared.** *Why:*
+    redacting `msg` and `args` as independent pieces is arity-sensitive —
+    `log.warning("token=%s", val)` had its only `%s` matched as the value of `token=`
+    and deleted while `args` kept its element, so `record.getMessage()` raised
+    TypeError **out of the original caller's log call**. It only reproduced with a real
+    OTel config (the SDK skips translation for a NoOp logger), which is why a
+    disabled-mode smoke test looked clean. *Cost:* a record reaching later handlers is
+    already rendered; `args` is `None` rather than `()` on the fail-closed path, so one
+    Task 5 test now asserts the guarantee (no raw value on the record) instead of the
+    old sentinel.
+30. **`exc_info` is rendered to a redacted `exc_text` and cleared; the sanitizer also
+    renders exception objects.** *Why:* two independent paths leaked. OTel's
+    LoggingHandler reads `record.exc_info` straight into exception.message/stacktrace,
+    and structlog injects the raw tuple into the event dict for foreign records where
+    `sanitize_log_data` only redacted `str` leaves. `logger.exception()` is everyday
+    usage and an exception message is an everyday place for a secret. *Cost:* the
+    exception reaches consumers as redacted text rather than a live tuple; type and
+    traceback are preserved.
+31. **`configure_logging()` replaces only handlers it installed** (flagged with
+    `_penguin_utils_owned`). *Why:* owning the whole root handler set meant a later
+    `configure_logging()` call silently removed the OTel handler `init()` had installed
+    — telemetry simply stopped, with no warning and no failing call. Also stops it
+    discarding pytest's caplog and a consuming app's own handlers. *Supersedes the
+    "configure_logging owns the root handler set" wording from Task 7.*
+32. **The integration pytest invocation passes `--no-cov`.** *Why:* it exits 1 even when
+    all three tests pass — the library runs in subprocesses, so coverage measures the
+    parent at 0% and pyproject's global `--cov-fail-under` fires. The CI step and
+    `make test-integration` were therefore permanently red. Missed locally because
+    every manual run already passed `--no-cov`.
+33. **`AsyncSink.close()` is bounded (5s, matching KillKrill); `KillKrillSink` is no
+    longer double-wrapped; `_LegacySinkHandler.close()` flushes and closes its sinks.**
+    *Why:* `Queue.join()` is unbounded so one unreachable endpoint hung process exit;
+    KillKrill already flushes on its own thread, and wrapping it meant a consumer's own
+    `close()` bypassed the outer queue; and nothing ever closed the legacy sinks, so a
+    buffered batch was lost at exit — stdlib's `logging.shutdown()` atexit hook calls
+    handler `close()`, so wiring it there covers shutdown for free. Sink failure
+    counting now spans emit, flush and close.
 
 ## Deferred minors (triage at final whole-branch review)
 
