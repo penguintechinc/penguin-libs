@@ -92,7 +92,12 @@ python_files = ["test_*.py"]
 # Without this (and the pytest-asyncio dev dependency) pytest reports
 # "Unknown pytest.mark.asyncio" and the async test fails rather than running.
 asyncio_mode = "auto"
-addopts = "--cov=penguintechinc_utils --cov-report=term-missing --cov-fail-under=90"
+markers = [
+    "integration: needs a running OTLP collector (docker); excluded from the default run",
+]
+# Integration tests need docker and are excluded by default, so the coverage gate is
+# measured against the unit suite alone and cannot be quietly satisfied by them.
+addopts = "-m 'not integration' --cov=penguintechinc_utils --cov-report=term-missing --cov-fail-under=90"
 
 [tool.coverage.run]
 branch = true
