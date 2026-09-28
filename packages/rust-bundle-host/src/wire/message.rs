@@ -137,6 +137,19 @@ pub struct LoadLimits {
 
 /// Stage instructs the executor to load a bundle (`kind: "load"`). Reply:
 /// `loaded` or `error`.
+///
+/// `tenant_id`/`community_id` (added alongside the multi-tenant executor
+/// registry fix, waddles PR #406/#407): the exact `(tenant_id, community_id,
+/// app_id)` scope this `load` is on behalf of. Required, not optional --
+/// every producer of this frame in this system (the stage's own
+/// `bundle_active_set::diff::plan_scoped`-driven loop) always resolves a
+/// concrete scope before issuing `load`, and the executor's registry needs
+/// this identity to track which scopes reference a given digest (a digest
+/// shared across scopes is refcounted by the SET of referencing scopes, not
+/// a bare integer -- see `bundle_executor`'s own doc for why a raw counter
+/// is unsafe: a duplicate/retried `unload` for a scope that already left
+/// would otherwise double-decrement and evict a digest another scope still
+/// needs).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LoadBody {
     pub app_id: String,
@@ -147,14 +160,23 @@ pub struct LoadBody {
     pub sidecar_key: String,
     pub capabilities: Vec<CapabilityKind>,
     pub limits: LoadLimits,
+    pub tenant_id: i32,
+    pub community_id: i32,
 }
 
 /// Stage instructs the executor to unload a bundle (`kind: "unload"`).
-/// Reply: `unloaded` or `error`.
+/// Reply: `unloaded` or `error`. `tenant_id`/`community_id`: see
+/// [`LoadBody`]'s doc -- identifies exactly which scope is releasing its
+/// reference to `digest`, so the executor can remove precisely that scope
+/// from the digest's referencing set (idempotent: unloading a scope not
+/// currently in the set is a documented no-op, never a double-decrement of
+/// a shared counter).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UnloadBody {
     pub app_id: String,
     pub digest: String,
+    pub tenant_id: i32,
+    pub community_id: i32,
 }
 
 /// The two script exports a bundle may implement (spec §6.5's
