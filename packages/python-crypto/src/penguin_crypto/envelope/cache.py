@@ -7,8 +7,16 @@ rotation activity; an epoch-check callback hook so a caller-supplied
 monotonic counter (e.g. a Valkey `INCR tenant-dek-epoch:{tenant_id}`) bounds
 staleness to one resolve call even if a pub/sub invalidation is missed; and
 an immediate-eviction API for compromise response / KMS access-denied
-fail-closed handling. Zeroization on eviction is best-effort — CPython gives
-no hard guarantee that no other reference or copy of the key bytes exists.
+fail-closed handling. Key material is held internally as a mutable
+`bytearray` and zeroed in place on eviction/expiry (`use()`/`get()` still
+each return a `bytes` copy for the caller — CPython's `bytes` is immutable,
+so once handed out it cannot be zeroed by this cache). **Zeroization is
+best-effort, not a security guarantee** — CPython gives no hard guarantee
+that no other reference or copy of the key bytes exists (return-value
+copies, GC, or memory compaction can all leave copies this cache cannot
+reach). Prefer `use()` over `get()` where practical: it passes the key to a
+caller-supplied callback for the duration of one call instead of handing
+back a `bytes` object the caller might retain longer than necessary.
 """
 
 from __future__ import annotations
@@ -17,9 +25,12 @@ import time
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TypeVar
 
 _DEFAULT_MAX_SIZE = 1024
 _DEFAULT_TTL_SECONDS = 600.0  # 10 minutes, per the design
+
+_T = TypeVar("_T")
 
 
 @dataclass(slots=True)
@@ -112,6 +123,11 @@ class DekCache:
     def get(self, tenant_id: str, dek_version: int) -> bytes | None:
         """Look up a cached DEK, honoring TTL and (if configured) the epoch check.
 
+        Prefer `use()` where practical — it avoids handing the caller a
+        `bytes` copy that outlives the immediate operation. `get()` remains
+        available for callers that must hold the key across multiple calls
+        (e.g. passing it into another library's API).
+
         Args:
             tenant_id: Owning tenant.
             dek_version: Version of the DEK to look up.
@@ -121,6 +137,32 @@ class DekCache:
             expired, or epoch-mismatched — all three are indistinguishable
             to the caller, which should re-resolve via KMS on any None).
         """
+        entry = self._lookup(tenant_id, dek_version)
+        return None if entry is None else bytes(entry.dek)
+
+    def use(self, tenant_id: str, dek_version: int, fn: Callable[[bytes], _T]) -> _T | None:
+        """Look up a cached DEK and pass it to `fn`, without the caller holding a copy.
+
+        Reduces (but per the module docstring, cannot eliminate in CPython)
+        the lifetime of the plaintext DEK bytes outside this cache — `fn`
+        receives the key for the duration of one call and the caller never
+        stores a long-lived reference to it directly.
+
+        Args:
+            tenant_id: Owning tenant.
+            dek_version: Version of the DEK to look up.
+            fn: Callback invoked with the plaintext DEK bytes on a hit.
+
+        Returns:
+            `fn`'s return value on a cache hit, or None on a miss (same
+            miss semantics as `get()` — the caller should re-resolve via
+            KMS and `put()` the result).
+        """
+        entry = self._lookup(tenant_id, dek_version)
+        return None if entry is None else fn(bytes(entry.dek))
+
+    def _lookup(self, tenant_id: str, dek_version: int) -> DekCacheEntry | None:
+        """Shared hit/miss + TTL/epoch validation logic for `get()` and `use()`."""
         key = _CacheKey(tenant_id, dek_version)
         entry = self._entries.get(key)
         if entry is None:
@@ -137,7 +179,7 @@ class DekCache:
                 return None
 
         self._entries.move_to_end(key)
-        return bytes(entry.dek)
+        return entry
 
     def evict(self, tenant_id: str, dek_version: int | None = None) -> None:
         """Immediately evict cached DEK(s) — rotation, revocation, or KMS access-denied.

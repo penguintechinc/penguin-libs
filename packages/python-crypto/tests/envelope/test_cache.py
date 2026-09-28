@@ -151,3 +151,36 @@ def test_rejects_invalid_ttl() -> None:
     """A non-positive TTL would mean every entry is immediately expired."""
     with pytest.raises(ValueError, match="ttl_seconds"):
         DekCache(ttl_seconds=0)
+
+
+def test_use_passes_dek_to_callback_on_hit() -> None:
+    """use() invokes the callback with the cached DEK and returns its result."""
+    cache = DekCache()
+    cache.put("tenant-a", 1, b"\x0d" * 32)
+
+    result = cache.use("tenant-a", 1, lambda dek: dek[:4])
+
+    assert result == b"\x0d" * 4
+
+
+def test_use_returns_none_on_miss_without_invoking_callback() -> None:
+    """use() never calls the callback when there is no cached entry."""
+    cache = DekCache()
+    calls: list[bytes] = []
+
+    result = cache.use("tenant-a", 1, calls.append)
+
+    assert result is None
+    assert calls == []
+
+
+def test_use_honors_ttl_and_epoch_like_get() -> None:
+    """use() shares the same miss semantics (TTL/epoch) as get(), not a separate code path."""
+    current_epoch = {"tenant-a": 1}
+    cache = DekCache(epoch_source=lambda tenant_id: current_epoch[tenant_id])
+    cache.put("tenant-a", 1, b"\x0e" * 32, epoch=1)
+
+    assert cache.use("tenant-a", 1, len) == 32
+
+    current_epoch["tenant-a"] = 2
+    assert cache.use("tenant-a", 1, len) is None

@@ -34,11 +34,15 @@ from penguin_crypto.envelope import (
 )
 
 # 1. Wrap/unwrap a tenant DEK under a KEK (dev/alpha: LocalSecretKek;
-#    production: AwsKmsKek or your own KekProvider).
+#    production: AwsKmsKek or your own KekProvider). `context` must
+#    include tenant_id — it's cryptographically bound to the wrapped DEK
+#    (AES-GCM AAD locally, KMS EncryptionContext for AwsKmsKek), so a
+#    wrapped_dek row copied to another tenant's context fails to unwrap.
 kek = LocalSecretKek(key_path="/var/run/secrets/kek")
+context = {"tenant_id": tenant_id, "purpose": "field-dek"}
 dek = os.urandom(32)
-wrapped_dek = kek.wrap(dek)          # store this in tenant_encryption_keys
-unwrapped = kek.unwrap(wrapped_dek)  # after a cache miss
+wrapped_dek = kek.wrap(dek, context=context)          # store in tenant_encryption_keys
+unwrapped = kek.unwrap(wrapped_dek, context=context)  # after a cache miss
 
 # 2. Cache unwrapped DEKs, bounded + TTL + epoch-checked.
 cache = DekCache(epoch_source=lambda tenant_id: get_rotation_epoch(tenant_id))

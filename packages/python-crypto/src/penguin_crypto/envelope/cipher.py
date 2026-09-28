@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import struct
+import threading
 from typing import Protocol
 
 from cryptography.exceptions import InvalidTag
@@ -29,15 +30,16 @@ class CiphertextFormatError(ValueError):
 
 
 class RotationRequiredError(RuntimeError):
-    """Raised when a DEK has reached its configured encryption-operation cap.
+    """Raised when a DEK has already reached its configured encryption-operation cap.
 
-    Signals the caller to rotate to a new dek_version before continuing to
-    encrypt under the current one; it does not block decryption of
-    already-written ciphertext.
+    Raised *before* any nonce is generated or encryption performed — the
+    call that raises this never encrypts, so there is never an operation
+    beyond the configured cap. Signals the caller to rotate to a new
+    dek_version; it does not block decryption of already-written ciphertext.
     """
 
-    def __init__(self, dek_version: int, cap: int, envelope: bytes) -> None:
-        """Record the dek_version/cap that tripped, plus the already-computed envelope."""
+    def __init__(self, dek_version: int, cap: int, envelope: bytes | None = None) -> None:
+        """Record the dek_version/cap that tripped; `envelope` is always None on this path."""
         self.dek_version = dek_version
         self.cap = cap
         self.envelope = envelope
@@ -45,36 +47,71 @@ class RotationRequiredError(RuntimeError):
 
 
 class EncryptionCounter(Protocol):
-    """Pluggable per-DEK encryption-count tracker.
+    """Pluggable per-DEK encryption-count tracker, checked before every encryption.
 
-    Production callers back this with a durable/atomic counter (e.g. a
-    Valkey `INCR` per dek_version) so the cap holds across process restarts
-    and replicas; `InMemoryEncryptionCounter` below is a single-process
-    default suitable for tests and simple deployments.
+    **Atomicity contract (mandatory for any implementation):** two
+    concurrent callers must never both observe the same pre-increment count
+    — `check_and_increment` must be a single atomic check-and-increment, not
+    a read followed by a separate write. `InMemoryEncryptionCounter` below
+    satisfies this with a `threading.Lock` for single-process use.
+
+    **Multi-process/multi-replica deployments MUST NOT use
+    `InMemoryEncryptionCounter`** — each process would maintain its own
+    independent count, silently multiplying the effective cap by the
+    replica count. Back this protocol with a shared, atomically-incrementing
+    store instead, for example:
+
+    - **Valkey/Redis:** a Lua script (or `INCR` on a per-dek_version key
+      combined with `cap` compared client-side under a distributed lock) —
+      plain `INCR` followed by a separate compare is *not* atomic enough on
+      its own without a script, since two replicas could both read the
+      pre-increment value between the `INCR` and the comparison in a naive
+      implementation; use `EVAL "local n = redis.call('INCR', KEYS[1]); if
+      n > tonumber(ARGV[1]) then return redis.call('DECR', KEYS[1]) end;
+      return n" 1 <key> <cap>`-style atomicity, or simply treat `INCR`
+      itself as authoritative (it already is atomic) and compare afterward,
+      accepting that at most one caller across the fleet ever observes the
+      cap-exceeding count and raises — client-side rollback (`DECR`) that
+      exact count so accounting stays correct is recommended.
+    - **Postgres/a DB-backed counter:** `UPDATE dek_encryption_counters
+      SET count = count + 1 WHERE dek_version = %s AND count < %s
+      RETURNING count` — an unmatched `WHERE` (i.e. zero rows returned)
+      means the cap was already reached; the row is never incremented past it.
     """
 
-    def increment(self, dek_version: int) -> int:
-        """Record one more encryption under dek_version and return the new count."""
+    def check_and_increment(self, dek_version: int, cap: int) -> None:
+        """Atomically increment dek_version's count, or raise if already at `cap`.
+
+        Raises:
+            RotationRequiredError: If the count for `dek_version` is already
+                `>= cap` — the caller must not proceed to encrypt.
+        """
         ...
 
 
 class InMemoryEncryptionCounter:
-    """Single-process, non-durable `EncryptionCounter` (default cap 2**30).
+    """Single-process, lock-protected, non-durable `EncryptionCounter` (default cap 2**30).
 
-    Not safe to share across independent processes/replicas without an
-    external durable counter behind the same `EncryptionCounter` protocol.
+    Thread-safe within one process via a single `threading.Lock` guarding
+    the check-and-increment as one atomic step. **Not safe across
+    independent processes/replicas** — see `EncryptionCounter`'s docstring
+    for the durable-store contract a production, multi-replica deployment
+    must implement instead.
     """
 
     def __init__(self, cap: int = _DEFAULT_ENCRYPTION_CAP) -> None:
         """Initialize with the encryption-operation cap per dek_version."""
         self.cap = cap
         self._counts: dict[int, int] = {}
+        self._lock = threading.Lock()
 
-    def increment(self, dek_version: int) -> int:
-        """Increment and return the running count for dek_version."""
-        count = self._counts.get(dek_version, 0) + 1
-        self._counts[dek_version] = count
-        return count
+    def check_and_increment(self, dek_version: int, cap: int) -> None:
+        """Atomically increment dek_version's count under `self._lock`, or raise at `cap`."""
+        with self._lock:
+            count = self._counts.get(dek_version, 0)
+            if count >= cap:
+                raise RotationRequiredError(dek_version, cap)
+            self._counts[dek_version] = count + 1
 
 
 def envelope_encrypt(
@@ -104,28 +141,24 @@ def envelope_encrypt(
 
     Raises:
         ValueError: If `dek` is not 32 bytes.
-        RotationRequiredError: If `counter` reports the cap has been reached.
-            Raised *after* the encryption succeeds, so the write is not
-            lost — catch this, persist/log the already-computed envelope
-            returned as the exception's `envelope` attribute, and trigger
-            rotation before the *next* write to this dek_version.
+        RotationRequiredError: If `counter` reports `dek_version` has already
+            reached `cap`. Raised *before* any nonce is generated or
+            encryption performed, so this dek_version is never used for
+            more than `cap` encryptions — catch this, rotate to a new
+            dek_version, and retry the write under the new version.
     """
     if len(dek) != 32:
         raise ValueError(f"DEK must be 32 bytes, got {len(dek)}")
+
+    if counter is not None:
+        counter.check_and_increment(dek_version, cap)
 
     if isinstance(plaintext, str):
         plaintext = plaintext.encode("utf-8")
 
     nonce = os.urandom(_NONCE_LEN)
     ct = AESGCM(dek).encrypt(nonce, plaintext, aad)
-    envelope = _HEADER_STRUCT.pack(_FORMAT_VERSION, dek_version) + nonce + ct
-
-    if counter is not None:
-        count = counter.increment(dek_version)
-        if count >= cap:
-            raise RotationRequiredError(dek_version, cap, envelope)
-
-    return envelope
+    return _HEADER_STRUCT.pack(_FORMAT_VERSION, dek_version) + nonce + ct
 
 
 def envelope_decrypt(envelope: bytes, dek: bytes, *, aad: bytes) -> bytes:

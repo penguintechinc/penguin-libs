@@ -1,6 +1,7 @@
 """Tests for versioned envelope AES-256-GCM encrypt/decrypt and the nonce cap."""
 
 import os
+import threading
 
 import pytest
 from cryptography.exceptions import InvalidTag
@@ -105,6 +106,19 @@ def test_envelope_too_short_raises_format_error() -> None:
         envelope_decrypt(b"\x01\x00\x00\x00\x01", os.urandom(32), aad=_aad())
 
 
+def test_envelope_one_byte_short_of_valid_raises_format_error() -> None:
+    """The minimum-length boundary check is exact, not off-by-one in either direction.
+
+    An empty-plaintext envelope is exactly `min_len` bytes (header + nonce +
+    bare GCM tag); trimming one more byte must fail the length check itself
+    rather than falling through to an AESGCM InvalidTag.
+    """
+    dek = _dek()
+    envelope = envelope_encrypt("", dek, dek_version=1, aad=_aad())
+    with pytest.raises(CiphertextFormatError, match="too short"):
+        envelope_decrypt(envelope[:-1], dek, aad=_aad())
+
+
 def test_unsupported_format_version_raises_format_error() -> None:
     """An envelope claiming an unknown format version is rejected before touching AESGCM."""
     dek = _dek()
@@ -128,11 +142,16 @@ def test_envelope_dek_version_rejects_truncated_header() -> None:
 
 
 def test_nonce_cap_signals_rotation_required() -> None:
-    """Hitting the configured per-DEK encryption cap raises RotationRequiredError."""
+    """Reaching the configured per-DEK encryption cap raises RotationRequiredError.
+
+    Exactly `cap` encryptions succeed; the (cap+1)-th attempt is blocked
+    *before* any nonce is generated or encryption performed — no over-cap
+    encryption ever happens.
+    """
     dek = _dek()
     counter = InMemoryEncryptionCounter(cap=3)
 
-    for _ in range(2):
+    for _ in range(3):
         envelope_encrypt("x", dek, dek_version=1, aad=_aad(), counter=counter, cap=3)
 
     with pytest.raises(RotationRequiredError) as exc_info:
@@ -140,8 +159,8 @@ def test_nonce_cap_signals_rotation_required() -> None:
 
     assert exc_info.value.dek_version == 1
     assert exc_info.value.cap == 3
-    # The write that tripped the cap still succeeded — its envelope is preserved.
-    assert envelope_decrypt(exc_info.value.envelope, dek, aad=_aad()) == b"x"
+    # No encryption was attempted for the call that tripped the cap.
+    assert exc_info.value.envelope is None
 
 
 def test_nonce_cap_is_tracked_independently_per_dek_version() -> None:
@@ -149,6 +168,7 @@ def test_nonce_cap_is_tracked_independently_per_dek_version() -> None:
     dek = _dek()
     counter = InMemoryEncryptionCounter(cap=2)
 
+    envelope_encrypt("x", dek, dek_version=1, aad=_aad(dek_version=1), counter=counter, cap=2)
     envelope_encrypt("x", dek, dek_version=1, aad=_aad(dek_version=1), counter=counter, cap=2)
     with pytest.raises(RotationRequiredError):
         envelope_encrypt("x", dek, dek_version=1, aad=_aad(dek_version=1), counter=counter, cap=2)
@@ -161,3 +181,38 @@ def test_default_cap_is_two_to_the_thirty() -> None:
     """The documented default cap matches the design's NIST SP 800-38D margin."""
     counter = InMemoryEncryptionCounter()
     assert counter.cap == 2**30
+
+
+def test_counter_check_and_increment_is_thread_safe() -> None:
+    """Concurrent callers never over-run the cap and never lose an increment (no lost update).
+
+    Hammers one counter from many threads right at the cap boundary; the
+    single `threading.Lock` in `InMemoryEncryptionCounter.check_and_increment`
+    must make each check-and-increment atomic, so exactly `cap` calls
+    succeed regardless of scheduling.
+    """
+    cap = 200
+    counter = InMemoryEncryptionCounter(cap=cap)
+    successes = 0
+    failures = 0
+    lock = threading.Lock()
+
+    def _attempt() -> None:
+        nonlocal successes, failures
+        try:
+            counter.check_and_increment(1, cap)
+        except RotationRequiredError:
+            with lock:
+                failures += 1
+        else:
+            with lock:
+                successes += 1
+
+    threads = [threading.Thread(target=_attempt) for _ in range(cap * 3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert successes == cap
+    assert failures == cap * 3 - cap
