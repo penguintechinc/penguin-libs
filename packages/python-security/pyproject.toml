@@ -19,6 +19,11 @@ classifiers = [
 ]
 dependencies = [
     "pydantic>=2.0",
+    # Argon2id password hashing (hash_password/verify_password/needs_rehash).
+    # Lightweight, single-purpose -- unlike penguin_security.crypto's `crypto`
+    # extra (cryptography + KMS clients), password hashing is base-package
+    # functionality and must not require an optional extra.
+    "argon2-cffi>=23.1.0",
 ]
 
 [tool.setuptools.packages.find]

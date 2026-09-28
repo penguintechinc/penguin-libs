@@ -479,6 +479,165 @@ class TestVerifyPassword:
             verify_password("password", None)  # type: ignore
 
 
+class TestPasswordArgon2idMigration:
+    """Tests proving the PBKDF2 -> Argon2id migration is backward compatible.
+
+    penguin_security.password used to hash new passwords with PBKDF2-SHA256.
+    It now hashes new passwords with Argon2id, but must still verify hashes
+    created by the old code path, since existing stored hashes cannot be
+    rehashed without the original plaintext.
+    """
+
+    def test_new_hash_uses_argon2id(self) -> None:
+        """Newly created hashes are Argon2id, not PBKDF2."""
+        from penguin_security import hash_password
+
+        hashed = hash_password("test_password")
+        algorithm = hashed.split("$")[0]
+        assert algorithm == "argon2id"
+
+    def test_new_hash_encodes_kdf_parameters(self) -> None:
+        """Argon2id hashes encode memory/time/parallelism cost params."""
+        from penguin_security import hash_password
+
+        hashed = hash_password("test_password")
+        _, params, _salt, _digest = hashed.split("$")
+        assert "m=" in params
+        assert "t=" in params
+        assert "p=" in params
+
+    def test_legacy_pbkdf2_hash_still_verifies(self) -> None:
+        """A hash produced by the old PBKDF2-SHA256 code path still verifies.
+
+        This hash was generated before the Argon2id migration and represents
+        what is already sitting in production databases. It must continue to
+        verify correctly with no rehash required to succeed.
+        """
+        import hashlib
+
+        from penguin_security import verify_password
+
+        password = "legacy_password"  # noqa: S105 -- test fixture placeholder, not a real credential
+        iterations = 100000
+        salt = "0123456789abcdef0123456789abcdef"
+        hash_obj = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt.encode("utf-8"),
+            iterations,
+        )
+        legacy_hash = f"pbkdf2_sha256${iterations}${salt}${hash_obj.hex()}"
+
+        assert verify_password(password, legacy_hash) is True
+        assert verify_password("wrong_password", legacy_hash) is False
+
+    def test_needs_rehash_true_for_legacy_pbkdf2(self) -> None:
+        """A legacy PBKDF2 hash always needs a rehash."""
+        from penguin_security import needs_rehash
+
+        legacy_hash = "pbkdf2_sha256$100000$deadbeef$" + "0" * 64
+        assert needs_rehash(legacy_hash) is True
+
+    def test_needs_rehash_false_for_current_argon2id(self) -> None:
+        """A freshly created Argon2id hash does not need a rehash."""
+        from penguin_security import hash_password, needs_rehash
+
+        hashed = hash_password("test_password")
+        assert needs_rehash(hashed) is False
+
+    def test_needs_rehash_true_for_outdated_argon2id_params(self) -> None:
+        """An Argon2id hash with weaker-than-current params needs a rehash."""
+        from penguin_security import needs_rehash
+
+        outdated_hash = "argon2id$m=8,t=1,p=1$deadbeef$" + "0" * 64
+        assert needs_rehash(outdated_hash) is True
+
+    def test_needs_rehash_invalid_hash_raises(self) -> None:
+        """An unparseable hash raises rather than silently returning a verdict."""
+        from penguin_security import needs_rehash
+
+        with pytest.raises(ValueError):
+            needs_rehash("not-a-valid-hash")
+
+    def test_migration_flow_rehash_and_reverify(self) -> None:
+        """End-to-end: detect a legacy hash, rehash it, and re-verify."""
+        import hashlib
+
+        from penguin_security import hash_password, needs_rehash, verify_password
+        from penguin_security.password import _verify_pbkdf2_sha256
+
+        password = "migrate_me"  # noqa: S105 -- test fixture placeholder, not a real credential
+        salt = "fedcba9876543210fedcba9876543210"
+        computed = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000
+        ).hex()
+        legacy_hash = f"pbkdf2_sha256$100000${salt}${computed}"
+        assert _verify_pbkdf2_sha256(password, legacy_hash) is True
+
+        assert verify_password(password, legacy_hash) is True
+        assert needs_rehash(legacy_hash) is True
+
+        new_hash = hash_password(password)
+        assert needs_rehash(new_hash) is False
+        assert verify_password(password, new_hash) is True
+
+    def test_verify_password_invalid_format_raises(self) -> None:
+        """An unparseable hash raises ValueError, not an unhandled exception."""
+        from penguin_security import verify_password
+
+        with pytest.raises(ValueError):
+            verify_password("password", "not-a-valid-hash")
+
+    def test_verify_password_unsupported_algorithm_raises(self) -> None:
+        """A well-formed hash with an unknown algorithm raises ValueError."""
+        from penguin_security import verify_password
+
+        with pytest.raises(ValueError):
+            verify_password("password", "bcrypt$12$salt$hash")
+
+    def test_needs_rehash_type_error_for_non_string(self) -> None:
+        """needs_rehash rejects non-string input with TypeError."""
+        from penguin_security import needs_rehash
+
+        with pytest.raises(TypeError):
+            needs_rehash(None)  # type: ignore[arg-type]
+
+    def test_needs_rehash_unsupported_algorithm_raises(self) -> None:
+        """needs_rehash raises for a well-formed hash with an unknown algorithm."""
+        from penguin_security import needs_rehash
+
+        with pytest.raises(ValueError):
+            needs_rehash("bcrypt$12$salt$hash")
+
+    def test_argon2id_malformed_params_raises(self) -> None:
+        """A malformed argon2id params segment raises ValueError, not KeyError/IndexError."""
+        from penguin_security import verify_password
+
+        with pytest.raises(ValueError):
+            verify_password("password", "argon2id$not-valid-params$deadbeef$" + "0" * 64)
+
+    def test_argon2id_missing_params_raises(self) -> None:
+        """An argon2id hash missing a required cost parameter raises ValueError."""
+        from penguin_security import verify_password
+
+        with pytest.raises(ValueError):
+            verify_password("password", "argon2id$m=8,t=1$deadbeef$" + "0" * 64)
+
+    def test_argon2id_invalid_hex_encoding_raises(self) -> None:
+        """Non-hex salt/hash segments in an argon2id hash raise ValueError."""
+        from penguin_security import verify_password
+
+        with pytest.raises(ValueError):
+            verify_password("password", "argon2id$m=8,t=1,p=1$not-hex-zzz$" + "0" * 64)
+
+    def test_pbkdf2_invalid_iterations_raises(self) -> None:
+        """A legacy pbkdf2 hash with a non-integer iterations field raises ValueError."""
+        from penguin_security import verify_password
+
+        with pytest.raises(ValueError):
+            verify_password("password", "pbkdf2_sha256$not-a-number$deadbeef$" + "0" * 64)
+
+
 class TestCheckRateLimit:
     """Tests for rate limiting."""
 

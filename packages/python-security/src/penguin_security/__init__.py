@@ -4,14 +4,15 @@ Security module - Security utilities for Flask/Quart applications.
 Provides:
 - sanitize: XSS/HTML sanitization, SQL parameter escaping
 - csrf: CSRF token generation and validation
-- password: Password hashing and verification
+- password: Password hashing and verification (Argon2id, with legacy PBKDF2
+  verification support -- see penguin_security.password module docstring)
 - ratelimit: Rate limiting (in-memory)
 - validation: PyDAL-style input validators
 - pydantic: Pydantic 2 integration with validation
 """
 
 from .csrf import generate_csrf_token, validate_csrf_token
-from .password import hash_password, verify_password
+from .password import hash_password, needs_rehash, verify_password
 from .pydantic import (
     ConfigurableModel,
     Description1000,
@@ -81,6 +82,7 @@ __all__ = [
     # Password
     "hash_password",
     "verify_password",
+    "needs_rehash",
     # Rate limiting
     "check_rate_limit",
     # Validation
