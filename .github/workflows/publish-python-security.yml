@@ -8,13 +8,15 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   publish:
     name: Publish penguin-security to PyPI
     runs-on: ubuntu-latest
     environment: pypi
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -30,7 +32,7 @@ jobs:
       - name: Install build tools
         run: |
           python3 -m pip install --upgrade pip
-          pip3 install build twine
+          pip3 install --require-hashes -r .github/workflows/requirements/publish-python-security.txt
 
       - name: Build package
         run: python3 -m build
@@ -41,7 +43,7 @@ jobs:
         working-directory: packages/python-security
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@e53eb8b103ffcb59469888563dc324e3c8ba6f06 # v1.8.12
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: packages/python-security/dist/
 
@@ -51,6 +53,6 @@ jobs:
           echo "## Published Package" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package**: penguin-security" >> $GITHUB_STEP_SUMMARY
-          echo "**Version**: \$VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
           echo "**Registry**: PyPI (trusted publishing)" >> $GITHUB_STEP_SUMMARY
         working-directory: packages/python-security
