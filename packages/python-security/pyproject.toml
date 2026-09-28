@@ -23,7 +23,8 @@ dependencies = [
     # Lightweight, single-purpose -- unlike penguin_security.crypto's `crypto`
     # extra (cryptography + KMS clients), password hashing is base-package
     # functionality and must not require an optional extra.
-    "argon2-cffi>=23.1.0",
+    # Exact-pinned per the dependency pinning rule (security-sensitive dep).
+    "argon2-cffi==25.1.0",
 ]
 
 [project.optional-dependencies]
