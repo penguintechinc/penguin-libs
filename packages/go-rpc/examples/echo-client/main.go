@@ -84,7 +84,7 @@ func run() error {
 	req := connect.NewRequest(&conformancev1.EchoRequest{Message: *message})
 	resp, err := conformanceClient.Unary(ctx, req)
 	if err != nil {
-		return fmt.Errorf("Unary: %w", err)
+		return fmt.Errorf("unary: %w", err)
 	}
 
 	fmt.Printf("echo: %s\n", resp.Msg.GetMessage())
@@ -97,7 +97,7 @@ func run() error {
 // path (not a skipped check) for a self-signed server whose cert isn't in
 // any system trust store.
 func loadCertPool(path string) (*x509.CertPool, error) {
-	pemBytes, err := os.ReadFile(path) //nolint:gosec // operator-controlled demo path, not user input from a request
+	pemBytes, err := os.ReadFile(path) //#nosec G304 -- operator-controlled demo CLI flag, not user input from a request
 	if err != nil {
 		return nil, err
 	}
