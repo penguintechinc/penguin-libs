@@ -3,8 +3,8 @@
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from penguin_crypto.hybrid import hybrid_encrypt, hybrid_decrypt
 from penguin_crypto.ecc import generate_x25519_keypair
+from penguin_crypto.hybrid import hybrid_decrypt, hybrid_encrypt
 
 
 class TestHybridEncryption:
@@ -17,6 +17,7 @@ class TestHybridEncryption:
 
         ciphertext = hybrid_encrypt(plaintext, recipient_public)
         # Should not succeed - need the private key
+        assert ciphertext != plaintext
 
     def test_hybrid_encrypt_decrypt_complete(self) -> None:
         """Test complete hybrid encryption roundtrip."""

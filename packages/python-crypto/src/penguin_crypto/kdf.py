@@ -2,9 +2,9 @@
 
 import os
 
-from argon2.low_level import Type, hash_secret_raw  # type: ignore[import-untyped]
-from cryptography.hazmat.primitives import hashes  # type: ignore[import-untyped]
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF  # type: ignore[import-untyped]
+from argon2.low_level import Type, hash_secret_raw
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 
 def generate_salt(length: int = 32) -> bytes:

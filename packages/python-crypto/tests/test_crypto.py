@@ -8,6 +8,7 @@ Tests for:
 """
 
 import pytest
+from cryptography.exceptions import InvalidTag
 
 from penguin_crypto import (
     decrypt,
@@ -105,7 +106,7 @@ class TestEncryption:
         plaintext = b"secret data"
         ciphertext = encrypt(plaintext, key1)
 
-        with pytest.raises(Exception):  # cryptography.hazmat.primitives.ciphers.aead.InvalidTag
+        with pytest.raises(InvalidTag):
             decrypt(ciphertext, key2)
 
     def test_decrypt_tampered_ciphertext(self) -> None:
@@ -119,7 +120,7 @@ class TestEncryption:
         tampered[15] ^= 0xFF  # Flip bits in the middle
         tampered = bytes(tampered)
 
-        with pytest.raises(Exception):  # cryptography.hazmat.primitives.ciphers.aead.InvalidTag
+        with pytest.raises(InvalidTag):
             decrypt(tampered, key)
 
 
@@ -202,12 +203,14 @@ class TestHashing:
 
     def test_sha512_known_vector(self) -> None:
         """Test SHA-512 against known test vector."""
-        # SHA512("") = cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e
-        result = sha512(b"")
-        assert (
-            result
-            == "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+        # SHA512("")
+        expected = (
+            "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715d"
+            "c83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec"
+            "2f63b931bd47417a81a538327af927da3e"
         )
+        result = sha512(b"")
+        assert result == expected
 
     def test_sha512_deterministic(self) -> None:
         """Test SHA-512 is deterministic."""
@@ -307,7 +310,7 @@ class TestAuthenticatedEncryption:
         tampered[-1] ^= 0xFF
         tampered = bytes(tampered)
 
-        with pytest.raises(Exception):  # InvalidTag
+        with pytest.raises(InvalidTag):
             decrypt(tampered, key)
 
     def test_tag_verification(self) -> None:
@@ -321,7 +324,7 @@ class TestAuthenticatedEncryption:
         tampered[20] ^= 0x01
         tampered = bytes(tampered)
 
-        with pytest.raises(Exception):  # InvalidTag
+        with pytest.raises(InvalidTag):
             decrypt(tampered, key)
 
     def test_aead_different_keys_fail(self) -> None:
@@ -331,5 +334,5 @@ class TestAuthenticatedEncryption:
         plaintext = b"authenticated data"
         ciphertext = encrypt(plaintext, key1)
 
-        with pytest.raises(Exception):  # InvalidTag
+        with pytest.raises(InvalidTag):
             decrypt(ciphertext, key2)
