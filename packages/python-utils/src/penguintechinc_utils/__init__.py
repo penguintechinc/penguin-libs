@@ -28,6 +28,7 @@ from .logging import (
     sanitize_log_data,
 )
 from .sinks import (
+    AsyncSink,
     CallbackSink,
     CloudWatchSink,
     FileSink,
@@ -37,6 +38,11 @@ from .sinks import (
     StdoutSink,
     SyslogSink,
 )
+
+# Imported last: telemetry reaches back into .logging, so .logging must be fully
+# initialised before this runs.
+from .telemetry import Telemetry, init
+from .telemetry.helpers import get_meter, get_tracer, timed
 
 __all__ = [
     "__version__",
@@ -62,7 +68,14 @@ __all__ = [
     "CloudWatchSink",
     "GCPCloudLoggingSink",
     "KafkaSink",
+    "AsyncSink",
     # killkrill
     "KillKrillConfig",
     "KillKrillSink",
+    # telemetry
+    "init",
+    "Telemetry",
+    "get_tracer",
+    "get_meter",
+    "timed",
 ]

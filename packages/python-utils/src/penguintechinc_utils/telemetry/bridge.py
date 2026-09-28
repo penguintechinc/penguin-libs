@@ -16,6 +16,11 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, Spa
 
 from ..logging import SANITIZE_ERROR_PLACEHOLDER, redact_text, sanitize_log_data
 
+# structlog's own bookkeeping, attached to the record by ProcessorFormatter's
+# wrap_for_formatter. Useful to the console formatter, meaningless (and in `_logger`'s
+# case not even a valid attribute type) to an OTLP consumer.
+_STRUCTLOG_META_ATTRS = ("_logger", "_name", "_record", "_from_structlog")
+
 
 class SanitizingLogHandler(LoggingHandler):
     """OTel LoggingHandler that scrubs PII/secrets from a record before export.
@@ -29,9 +34,20 @@ class SanitizingLogHandler(LoggingHandler):
     """
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Sanitize the record in place, then delegate to LoggingHandler.emit."""
+        """Sanitize the record, hide structlog's internals, then delegate upstream."""
         self._sanitize_record(record)
-        super().emit(record)
+        # LoggingHandler copies every non-reserved record attribute into the OTLP
+        # attributes, which would include structlog's private plumbing: `_logger` is
+        # a logger OBJECT, so OTel rejects it and warns on every single log line.
+        # Removed only for the duration of this handler's translation -- the console
+        # handler's ProcessorFormatter still needs them.
+        hidden = {
+            key: record.__dict__.pop(key) for key in _STRUCTLOG_META_ATTRS if key in record.__dict__
+        }
+        try:
+            super().emit(record)
+        finally:
+            record.__dict__.update(hidden)
 
     @staticmethod
     def _sanitize_record(record: logging.LogRecord) -> None:
@@ -59,6 +75,22 @@ class SanitizingLogHandler(LoggingHandler):
                 setattr(record, key, sanitize_log_data(value))
             except Exception:
                 setattr(record, key, {"error": SANITIZE_ERROR_PLACEHOLDER})
+
+
+class SanitizingFilter(logging.Filter):
+    """Redact a record in place on its way into a handler we do not own.
+
+    Under the `opentelemetry-instrument` auto-launcher an OTel handler is already on
+    the root logger. Replacing it would double-configure the SDK and dropping it
+    would lose the launcher's wiring, so instead this filter is attached to it:
+    filters run inside `Handler.handle()` before `emit()`, which redacts the record
+    without subclassing anything.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Sanitize the record, then always admit it."""
+        SanitizingLogHandler._sanitize_record(record)
+        return True
 
 
 def _normalize_attribute_value(value: object) -> object:

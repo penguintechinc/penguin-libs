@@ -10,7 +10,12 @@ from dataclasses import dataclass
 _LOG = logging.getLogger(__name__)
 
 
-def _resolve_level(level, env_val) -> int:
+def _resolve_level(level: int | str | None, env_val: str | None) -> int:
+    """Resolve a log level from an explicit value then an env value, else INFO.
+
+    A bad argument raises (it came from code and should be fixed); a bad env value
+    warns and falls back (it came from ops and must never crash the service).
+    """
     if level is not None:
         if isinstance(level, int):
             return level
@@ -39,10 +44,10 @@ class TelemetryConfig:
     def resolve(
         cls,
         *,
-        service_name=None,
-        service_version=None,
-        level=None,
-        log_format=None,
+        service_name: str | None = None,
+        service_version: str | None = None,
+        level: int | str | None = None,
+        log_format: str | None = None,
     ) -> TelemetryConfig:
         name = service_name or os.getenv("OTEL_SERVICE_NAME")
         if not name:
