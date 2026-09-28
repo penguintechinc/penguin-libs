@@ -356,7 +356,7 @@ class TestRunInThreadpool:
         def add(a, b):
             return a + b
 
-        result = asyncio.get_event_loop().run_until_complete(run_in_threadpool(add, 2, 3))
+        result = asyncio.run(run_in_threadpool(add, 2, 3))
         assert result == 5
 
 
@@ -374,7 +374,7 @@ class TestAsyncValidator:
             name: str
 
         model = TestModel(email="taken@example.com", name="Test")
-        errors = asyncio.get_event_loop().run_until_complete(
+        errors = asyncio.run(
             validator_registry.validate_model(model, db=None)
         )
         assert len(errors) == 1
@@ -392,7 +392,7 @@ class TestAsyncValidator:
             name: str
 
         model = TestModel(name="Good")
-        errors = asyncio.get_event_loop().run_until_complete(
+        errors = asyncio.run(
             validator_registry.validate_model(model, db=None)
         )
         assert len(errors) == 0
@@ -408,7 +408,7 @@ class TestAsyncValidator:
             name: str
 
         model = TestModel(name="Test")
-        errors = asyncio.get_event_loop().run_until_complete(
+        errors = asyncio.run(
             validator_registry.validate_model(model, db=None)
         )
         assert len(errors) == 0
@@ -418,13 +418,13 @@ class TestValidateForeignKey:
     def test_exists(self):
         table = MagicMock()
         table.__getitem__ = MagicMock(return_value={"id": 1})
-        asyncio.get_event_loop().run_until_complete(validate_foreign_key(table, 1, "User"))
+        asyncio.run(validate_foreign_key(table, 1, "User"))
 
     def test_not_exists(self):
         table = MagicMock()
         table.__getitem__ = MagicMock(return_value=None)
         with pytest.raises(ValueError, match="User with id 1"):
-            asyncio.get_event_loop().run_until_complete(validate_foreign_key(table, 1, "User"))
+            asyncio.run(validate_foreign_key(table, 1, "User"))
 
 
 class TestValidateUniqueField:
@@ -439,20 +439,20 @@ class TestValidateUniqueField:
 
     def test_unique(self):
         table = self._make_table(existing=None)
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             validate_unique_field(table, "email", "new@example.com")
         )
 
     def test_duplicate(self):
         table = self._make_table(existing={"id": 1})
         with pytest.raises(ValueError, match="already exists"):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 validate_unique_field(table, "email", "taken@example.com")
             )
 
     def test_exclude_id(self):
         table = self._make_table(existing=None)
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             validate_unique_field(table, "email", "test@example.com", exclude_id=5)
         )
 
@@ -579,7 +579,7 @@ class TestValidatedRequest:
             return {"name": body.name}
 
         with app.test_request_context("/test", method="POST", json={"name": "Async"}):
-            result = asyncio.get_event_loop().run_until_complete(handler())
+            result = asyncio.run(handler())
             assert result == {"name": "Async"}
 
     def test_async_decorator_validation_error(self):
@@ -594,7 +594,7 @@ class TestValidatedRequest:
             return {"name": body.name}
 
         with app.test_request_context("/test", method="POST", json={"name": "X", "age": "bad"}):
-            result = asyncio.get_event_loop().run_until_complete(handler())
+            result = asyncio.run(handler())
             assert isinstance(result, tuple)
             assert result[1] == 400
 
@@ -609,7 +609,7 @@ class TestValidatedRequest:
             return {"page": query.page}
 
         with app.test_request_context("/test?page=5"):
-            result = asyncio.get_event_loop().run_until_complete(handler())
+            result = asyncio.run(handler())
             assert result == {"page": 5}
 
 
