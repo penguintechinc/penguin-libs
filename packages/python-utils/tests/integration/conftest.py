@@ -9,6 +9,7 @@ attached no handler and silently exported zero records for months).
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -34,9 +35,17 @@ _CONFIG = pathlib.Path(__file__).parent / "collector-config.yaml"
 
 
 def _docker() -> str:
-    """Return the docker executable path, skipping the suite if there is none."""
+    """Return the docker executable path.
+
+    Missing docker is a SKIP locally (a developer may not have it) but a hard FAILURE
+    under CI, where docker is always present: a gate that silently skips itself in CI
+    is the same defect as masking it with `|| true`, and this is the only test that
+    proves anything actually leaves the process.
+    """
     found = shutil.which("docker")
     if found is None:
+        if os.environ.get("CI"):
+            pytest.fail("docker is missing in CI; the OTLP integration gate cannot be skipped")
         pytest.skip("docker is required for the OTLP integration tests")
     return found
 
