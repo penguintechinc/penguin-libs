@@ -8,6 +8,11 @@ Provides:
 - ratelimit: Rate limiting (in-memory)
 - validation: PyDAL-style input validators
 - pydantic: Pydantic 2 integration with validation
+- crypto: Symmetric/hybrid encryption, key derivation, ECC, hashing, and
+  per-tenant envelope encryption (formerly the standalone penguin-crypto
+  package). Not imported here -- it pulls in `cryptography`/`argon2-cffi`,
+  which are not base dependencies. Import explicitly from
+  `penguin_security.crypto` after installing `penguin-security[crypto]`.
 """
 
 from .csrf import generate_csrf_token, validate_csrf_token
