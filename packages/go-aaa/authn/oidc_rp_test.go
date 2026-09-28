@@ -83,25 +83,31 @@ func mockOAuth2Provider(t *testing.T, tokenResp map[string]interface{}) *httptes
 	// Discovery endpoint
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		discovery := map[string]interface{}{
-			"issuer":        server.URL,
+			"issuer":         server.URL,
 			"token_endpoint": server.URL + "/token",
-			"jwks_uri":      server.URL + "/.well-known/jwks.json",
+			"jwks_uri":       server.URL + "/.well-known/jwks.json",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(discovery)
+		if err := json.NewEncoder(w).Encode(discovery); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	})
 
 	// Token endpoint
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(tokenResp)
+		if err := json.NewEncoder(w).Encode(tokenResp); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	})
 
 	// Minimal JWKS endpoint
 	mux.HandleFunc("/.well-known/jwks.json", func(w http.ResponseWriter, r *http.Request) {
 		set := jwk.NewSet()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(set)
+		if err := json.NewEncoder(w).Encode(set); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	})
 
 	return server
@@ -128,7 +134,7 @@ func TestOIDCRelyingParty_Exchange_MissingIDToken(t *testing.T) {
 		RedirectURL:  server.URL + "/callback",
 	}
 
-	tlsCfg := &tls.Config{InsecureSkipVerify: true}
+	tlsCfg := &tls.Config{InsecureSkipVerify: true} //#nosec G402 -- test-only: trusts the self-signed cert from httptest.NewTLSServer, never used outside tests
 	ctx := insecureContext(context.Background(), tlsCfg)
 	rp, err := authn.NewOIDCRelyingParty(ctx, cfg)
 	if err != nil {
@@ -168,7 +174,7 @@ func TestOIDCRelyingParty_Exchange_InvalidIDTokenType(t *testing.T) {
 		RedirectURL:  server.URL + "/callback",
 	}
 
-	tlsCfg := &tls.Config{InsecureSkipVerify: true}
+	tlsCfg := &tls.Config{InsecureSkipVerify: true} //#nosec G402 -- test-only: trusts the self-signed cert from httptest.NewTLSServer, never used outside tests
 	ctx := insecureContext(context.Background(), tlsCfg)
 	rp, err := authn.NewOIDCRelyingParty(ctx, cfg)
 	if err != nil {
@@ -226,24 +232,29 @@ func buildTestToken(t *testing.T, privKey *rsa.PrivateKey, issuerURL string, opt
 }) string {
 	t.Helper()
 	tok := jwt.New()
-	tok.Set(jwt.SubjectKey, "user-123")
-	tok.Set(jwt.IssuerKey, issuerURL)
-	tok.Set(jwt.AudienceKey, []string{"client-id"})
-	tok.Set("scope", []string{"openid", "profile"})
-	tok.Set("tenant", "tenant-123")
+	setClaim := func(key string, value interface{}) {
+		if err := tok.Set(key, value); err != nil {
+			t.Fatalf("tok.Set(%s): %v", key, err)
+		}
+	}
+	setClaim(jwt.SubjectKey, "user-123")
+	setClaim(jwt.IssuerKey, issuerURL)
+	setClaim(jwt.AudienceKey, []string{"client-id"})
+	setClaim("scope", []string{"openid", "profile"})
+	setClaim("tenant", "tenant-123")
 
 	if opts.wrongAud {
-		tok.Set(jwt.AudienceKey, []string{"wrong-aud"})
+		setClaim(jwt.AudienceKey, []string{"wrong-aud"})
 	}
 	if opts.wrongIss {
-		tok.Set(jwt.IssuerKey, "https://wrong-issuer.example.com")
+		setClaim(jwt.IssuerKey, "https://wrong-issuer.example.com")
 	}
 
 	now := time.Now()
-	tok.Set(jwt.IssuedAtKey, now)
-	tok.Set(jwt.ExpirationKey, now.Add(time.Hour))
+	setClaim(jwt.IssuedAtKey, now)
+	setClaim(jwt.ExpirationKey, now.Add(time.Hour))
 	if opts.expired {
-		tok.Set(jwt.ExpirationKey, now.Add(-1*time.Hour)) // already expired
+		setClaim(jwt.ExpirationKey, now.Add(-1*time.Hour)) // already expired
 	}
 
 	var alg jwa.SignatureAlgorithm
@@ -295,15 +306,22 @@ func mockOIDCProvider(t *testing.T, privKey *rsa.PrivateKey, pubKey jwk.Key) *ht
 			"jwks_uri":               server.URL + "/.well-known/jwks.json",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(discovery)
+		if err := json.NewEncoder(w).Encode(discovery); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	})
 
 	// JWKS endpoint
 	mux.HandleFunc("/.well-known/jwks.json", func(w http.ResponseWriter, r *http.Request) {
 		set := jwk.NewSet()
-		set.AddKey(pubKey)
+		if err := set.AddKey(pubKey); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(set)
+		if err := json.NewEncoder(w).Encode(set); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	})
 
 	return server
@@ -324,7 +342,7 @@ func TestOIDCRelyingParty_ValidateToken_ValidToken(t *testing.T) {
 		t.Fatalf("config validation failed: %v", err)
 	}
 
-	tlsCfg := &tls.Config{InsecureSkipVerify: true}
+	tlsCfg := &tls.Config{InsecureSkipVerify: true} //#nosec G402 -- test-only: trusts the self-signed cert from httptest.NewTLSServer, never used outside tests
 	ctx := insecureContext(context.Background(), tlsCfg)
 	rp, err := authn.NewOIDCRelyingParty(ctx, cfg)
 	if err != nil {
@@ -369,7 +387,7 @@ func TestOIDCRelyingParty_ValidateToken_ExpiredToken(t *testing.T) {
 	}
 
 	// TEST ONLY: skip TLS verification for httptest server with self-signed cert
-	tlsCfg := &tls.Config{InsecureSkipVerify: true}
+	tlsCfg := &tls.Config{InsecureSkipVerify: true} //#nosec G402 -- test-only: trusts the self-signed cert from httptest.NewTLSServer, never used outside tests
 	ctx := insecureContext(context.Background(), tlsCfg)
 	rp, err := authn.NewOIDCRelyingParty(ctx, cfg)
 	if err != nil {
@@ -403,7 +421,7 @@ func TestOIDCRelyingParty_ValidateToken_WrongAudience(t *testing.T) {
 	}
 
 	// TEST ONLY: skip TLS verification for httptest server with self-signed cert
-	tlsCfg := &tls.Config{InsecureSkipVerify: true}
+	tlsCfg := &tls.Config{InsecureSkipVerify: true} //#nosec G402 -- test-only: trusts the self-signed cert from httptest.NewTLSServer, never used outside tests
 	ctx := insecureContext(context.Background(), tlsCfg)
 	rp, err := authn.NewOIDCRelyingParty(ctx, cfg)
 	if err != nil {
@@ -437,7 +455,7 @@ func TestOIDCRelyingParty_ValidateToken_WrongIssuer(t *testing.T) {
 	}
 
 	// TEST ONLY: skip TLS verification for httptest server with self-signed cert
-	tlsCfg := &tls.Config{InsecureSkipVerify: true}
+	tlsCfg := &tls.Config{InsecureSkipVerify: true} //#nosec G402 -- test-only: trusts the self-signed cert from httptest.NewTLSServer, never used outside tests
 	ctx := insecureContext(context.Background(), tlsCfg)
 	rp, err := authn.NewOIDCRelyingParty(ctx, cfg)
 	if err != nil {
@@ -471,7 +489,7 @@ func TestOIDCRelyingParty_ValidateToken_BadSignature(t *testing.T) {
 	}
 
 	// TEST ONLY: skip TLS verification for httptest server with self-signed cert
-	tlsCfg := &tls.Config{InsecureSkipVerify: true}
+	tlsCfg := &tls.Config{InsecureSkipVerify: true} //#nosec G402 -- test-only: trusts the self-signed cert from httptest.NewTLSServer, never used outside tests
 	ctx := insecureContext(context.Background(), tlsCfg)
 	rp, err := authn.NewOIDCRelyingParty(ctx, cfg)
 	if err != nil {
@@ -514,7 +532,7 @@ func TestOIDCRelyingParty_ValidateToken_AlgConfusion_HS256WithRSAPublicKey(t *te
 	}
 
 	// TEST ONLY: skip TLS verification for httptest server with self-signed cert
-	tlsCfg := &tls.Config{InsecureSkipVerify: true}
+	tlsCfg := &tls.Config{InsecureSkipVerify: true} //#nosec G402 -- test-only: trusts the self-signed cert from httptest.NewTLSServer, never used outside tests
 	ctx := insecureContext(context.Background(), tlsCfg)
 	rp, err := authn.NewOIDCRelyingParty(ctx, cfg)
 	if err != nil {
