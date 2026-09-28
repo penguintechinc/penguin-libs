@@ -36,7 +36,6 @@ split_packages = [
     "python-email",
     "python-licensing",
     "python-limiter",
-    "python-secrets",
     "python-utils",
 ]
 

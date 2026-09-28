@@ -11,7 +11,7 @@ Shared libraries for Penguin Tech applications across all languages.
 
 | Package | Version | Coverage | Description |
 |---------|---------|----------|-------------|
-| [penguin-aaa](./packages/python-aaa) | 0.2.0 | 99% | Authentication, authorization, and audit (OIDC, RBAC, SPIFFE, tenant isolation) |
+| [penguin-aaa](./packages/python-aaa) | 0.3.0 | 91% | Authentication, authorization, and audit (OIDC, RBAC, SPIFFE, tenant isolation); includes secrets backend adapters (`[secrets]` extra, formerly `penguin-sal`) |
 | [penguin-crypto](./packages/python-crypto) | 0.1.0 | — | Cryptographic primitives and key handling |
 | [penguin-dal](./packages/python-dal) | 0.3.0 | 98% | Database access layer — PyDAL-style API over SQLAlchemy, plus storage/cache/stream/document backends |
 | [penguin-email](./packages/python-email) | 0.1.0 | — | SMTP delivery helpers |
@@ -20,7 +20,6 @@ Shared libraries for Penguin Tech applications across all languages.
 | [penguin-licensing](./packages/python-licensing) | 0.1.0 | 100% | PenguinTech License Server integration |
 | [penguin-limiter](./packages/python-limiter) | 0.1.0 | — | Rate limiting middleware (HTTP + gRPC) |
 | [penguin-pytest](./packages/python-pytest) | 0.1.0 | — | Shared pytest fixtures and helpers |
-| [penguin-sal](./packages/python-secrets) | 0.2.1 | 100% | Secrets and authentication library |
 | [penguin-security](./packages/python-security) | 0.1.0 | — | Security primitives and hardening helpers |
 | [penguin-utils](./packages/python-utils) | 0.2.0 | 99% | Sanitized logging and Flask utilities |
 | [penguin-rpc](./packages/python-rpc) | 0.1.0 | 100% | pRPC — Connect RPC over HTTP/3/QUIC, Python implementation (Apache-2.0) |
@@ -96,14 +95,14 @@ All Python packages are published to PyPI:
 
 ```bash
 # Install all Python libraries
-pip install penguin-aaa penguin-dal penguin-libs penguin-licensing penguin-sal penguin-utils
+pip install penguin-aaa penguin-dal penguin-libs penguin-licensing penguin-utils
 
 # Or install specific packages
 pip install penguin-aaa               # Authentication, authorization, audit
+pip install "penguin-aaa[secrets]"    # + secrets backend adapters (formerly penguin-sal)
 pip install penguin-dal               # Database access layer (SQLAlchemy wrapper)
 pip install penguin-libs              # H3 client, validation, Pydantic models
 pip install penguin-licensing         # License server integration
-pip install penguin-sal               # Secrets management
 pip install penguin-utils             # Logging and Flask utilities
 ```
 
@@ -183,7 +182,6 @@ pip install -e packages/python-aaa[dev] \
             -e packages/python-dal[dev] \
             -e packages/python-libs[dev] \
             -e packages/python-licensing[dev] \
-            -e packages/python-secrets[dev] \
             -e packages/python-utils[dev]
 ```
 
@@ -222,7 +220,6 @@ git tag penguin-aaa-v0.1.0
 git tag penguin-dal-v0.1.0
 git tag penguin-libs-v0.1.0
 git tag penguin-licensing-v0.1.0
-git tag penguin-secrets-v0.1.0
 git tag penguin-utils-v0.1.0
 git tag flutter-libs-v0.1.0
 
@@ -238,11 +235,10 @@ Publishing uses OIDC trusted publishing on PyPI — no API tokens needed. Each P
 penguin-libs/
 ├── packages/
 │   ├── react-libs/          # @penguintechinc/react-libs (GitHub Packages)
-│   ├── python-aaa/          # penguin-aaa (PyPI) — authn, authz, audit
+│   ├── python-aaa/          # penguin-aaa (PyPI) — authn, authz, audit, secrets ([secrets] extra)
 │   ├── python-dal/          # penguin-dal (PyPI) — database access layer
 │   ├── python-libs/         # penguin-libs (PyPI) — H3, validation, Pydantic
 │   ├── python-licensing/    # penguin-licensing (PyPI)
-│   ├── python-secrets/      # penguin-sal (PyPI)
 │   ├── python-utils/        # penguin-utils (PyPI)
 │   ├── go-common/           # Go module (via go get)
 │   ├── go-h3/               # Go module (via go get)

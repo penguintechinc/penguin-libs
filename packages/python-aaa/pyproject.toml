@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "penguin-aaa"
-version = "0.2.1"
+version = "0.3.0"
 description = "PenguinTech Authentication, Authorization, and Accounting library"
 readme = "README.md"
 license = {text = "MIT"}
@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 authors = [
     {name = "Penguin Tech Inc", email = "dev@penguintech.io"}
 ]
-keywords = ["penguintech", "authentication", "authorization", "oidc", "jwt", "spiffe"]
+keywords = ["penguintech", "authentication", "authorization", "oidc", "jwt", "spiffe", "secrets", "vault"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -47,6 +47,54 @@ spiffe = [
 grpc = [
     "grpcio>=1.60",
 ]
+secrets-vault = [
+    "hvac==2.4.0",
+]
+secrets-infisical = [
+    "infisicalsdk==1.0.17",
+]
+secrets-cyberark = [
+    "conjur==7.1.0",
+]
+secrets-aws = [
+    "boto3==1.43.103",
+]
+secrets-gcp = [
+    "google-cloud-secret-manager==2.30.0",
+]
+secrets-azure = [
+    "azure-keyvault-secrets==4.11.2",
+    "azure-identity==1.25.3",
+]
+secrets-oci = [
+    "oci==2.187.0",
+]
+secrets-k8s = [
+    "kubernetes==36.0.3",
+]
+secrets-onepassword = [
+    "onepasswordconnectsdk==2.1.0",
+]
+secrets-passbolt = [
+    "passbolt-python-api==0.3.9",
+]
+secrets-doppler = [
+    "dopplersdk==7.0.0",
+]
+secrets = [
+    "hvac==2.4.0",
+    "infisicalsdk==1.0.17",
+    "conjur==7.1.0",
+    "boto3==1.43.103",
+    "google-cloud-secret-manager==2.30.0",
+    "azure-keyvault-secrets==4.11.2",
+    "azure-identity==1.25.3",
+    "oci==2.187.0",
+    "kubernetes==36.0.3",
+    "onepasswordconnectsdk==2.1.0",
+    "passbolt-python-api==0.3.9",
+    "dopplersdk==7.0.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -59,6 +107,7 @@ dev = [
     "hypothesis>=6.0",
     "redis>=5.0",
     "flask>=3.0",
+    "hvac==2.4.0",
 ]
 
 [project.urls]
@@ -85,6 +134,28 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+# Optional secrets-backend SDKs are gated behind the `secrets-*` extras and
+# ship no inline types / third-party stubs; base `mypy src/` runs without
+# them installed, so import resolution must be relaxed per-module rather
+# than disabling strict mode for the whole package.
+[[tool.mypy.overrides]]
+module = [
+    "hvac.*",
+    "boto3.*",
+    "botocore.*",
+    "azure.*",
+    "google.cloud.*",
+    "google.api_core.*",
+    "oci.*",
+    "kubernetes.*",
+    "onepasswordconnectsdk.*",
+    "passbolt_python_api.*",
+    "dopplersdk.*",
+    "conjur.*",
+    "infisicalsdk.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

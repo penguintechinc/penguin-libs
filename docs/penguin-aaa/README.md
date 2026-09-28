@@ -55,6 +55,44 @@ ks = MemoryKeyStore()
 ks = FileKeyStore("/etc/auth/keys")
 ```
 
+### Secrets Management (optional, `[secrets]` extra)
+
+Unified secrets-backend adapters (Vault, AWS/GCP/Azure/OCI, Kubernetes, 1Password,
+Passbolt, Doppler, Infisical, CyberArk Conjur) — formerly the standalone
+`penguin-sal` package, now shipped as `penguin_aaa.secrets`.
+
+```bash
+# All backends
+pip install "penguin-aaa[secrets]"
+
+# Or just the one you need, e.g. Vault only
+pip install "penguin-aaa[secrets-vault]"
+```
+
+```python
+from penguin_aaa.secrets.adapters import get_adapter_class
+from penguin_aaa.secrets.core.types import ConnectionConfig
+
+VaultAdapter = get_adapter_class("vault")
+adapter = VaultAdapter(
+    ConnectionConfig(scheme="https", host="vault.example.com", port=8200, password="s.xxxx")
+)
+secret = adapter.get("myapp/db_pass")
+print(secret.value)
+```
+
+The base `penguin-aaa` install pulls in zero secrets-backend dependencies. Calling
+`get_adapter_class(...)` for a backend whose SDK isn't installed raises
+`AdapterNotInstalledError`, naming the exact extra to install (e.g.
+`penguin-aaa[secrets-vault]`).
+
+> **Migrating from `penguin-sal` / `penguin_secrets`?** Replace `penguin_sal.X`
+> imports with `penguin_aaa.secrets.X` (e.g. `penguin_sal.adapters.vault` →
+> `penguin_aaa.secrets.adapters.vault`, `penguin_sal.core.types` →
+> `penguin_aaa.secrets.core.types`). The public API is unchanged, only the
+> import path and install extras moved. `penguin-secrets` is superseded and no
+> longer published — see `packages/python-secrets/README.md`.
+
 ## Modules
 
 | Module | Description |
@@ -65,5 +103,6 @@ ks = FileKeyStore("/etc/auth/keys")
 | `penguin_aaa.crypto` | Key store and JWT signing |
 | `penguin_aaa.middleware` | Flask/ASGI middleware for token validation |
 | `penguin_aaa.hardening` | Security hardening utilities |
+| `penguin_aaa.secrets` | Secrets backend adapters (optional, `[secrets]` extra) |
 
 📚 Full documentation: [docs/penguin-aaa/](../../docs/penguin-aaa/)

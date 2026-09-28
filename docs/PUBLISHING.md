@@ -13,7 +13,7 @@ All packages are published automatically via GitHub Actions when version tags ar
 | react-libs | GitHub Packages (npm) | @penguintechinc/react-libs | `react-libs-v*` | ✅ Active |
 | python-libs | PyPI | penguin-libs | `python-libs-v*` | ✅ Active |
 | python-licensing | PyPI | penguin-licensing | `python-licensing-v*` | ✅ Active |
-| python-secrets | PyPI | penguin-sal | `python-secrets-v*` | ✅ Active |
+| python-secrets | PyPI | penguin-sal | `python-secrets-v*` | ⛔ Superseded — folded into `penguin-aaa[secrets]`, no longer published |
 | python-utils | PyPI | penguin-utils | `python-utils-v*` | ✅ Active |
 | go-common | GitHub (go get) | github.com/penguintechinc/penguin-libs/packages/go-common | `v*` (validation only) | ✅ Active |
 | go-h3 | GitHub (go get) | github.com/penguintechinc/penguin-libs/packages/go-h3 | `v*` (validation only) | ✅ Active |
@@ -98,7 +98,7 @@ git push origin react-libs-v1.1.1
 All Python packages follow the same process:
 
 ```bash
-cd packages/python-libs  # or python-licensing, python-secrets, python-utils
+cd packages/python-libs  # or python-licensing, python-aaa, python-utils
 
 # Update version in pyproject.toml
 vim pyproject.toml  # Change version = "X.Y.Z"
@@ -120,7 +120,7 @@ git push origin python-libs-vX.Y.Z
 **PyPI Package Names:**
 - `packages/python-libs` → `penguin-libs`
 - `packages/python-licensing` → `penguin-licensing`
-- `packages/python-secrets` → `penguin-sal`
+- `packages/python-aaa` → `penguin-aaa` (includes secrets backend adapters via the `[secrets]` extra, formerly the standalone `packages/python-secrets` → `penguin-sal`, now superseded)
 - `packages/python-utils` → `penguin-utils`
 
 ### Go Packages

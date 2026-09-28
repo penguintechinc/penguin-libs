@@ -6,7 +6,7 @@ This file contains project-specific context and patterns for the penguin-libs mo
 
 This is a multi-language monorepo containing shared libraries for:
 - JavaScript/TypeScript (react-libs)
-- Python (python-libs, python-licensing, python-secrets, python-utils)
+- Python (python-libs, python-licensing, python-aaa incl. secrets, python-utils)
 - Go (go-common, go-h3)
 - Flutter/Dart (flutter_libs)
 
@@ -64,7 +64,7 @@ packages/go-common: → new version     ❌ (no changes, don't bump)
 | react-libs | GitHub Packages (npm) | @penguintechinc/react-libs | Active |
 | python-libs | PyPI | penguin-libs | Planned |
 | python-licensing | PyPI | penguin-licensing | Planned |
-| python-secrets | PyPI | penguin-sal | Planned |
+| python-secrets | PyPI | penguin-sal | Superseded — folded into `penguin-aaa[secrets]` |
 | python-utils | PyPI | penguin-utils | Planned |
 | go-common | GitHub (go get) | N/A - direct import | Active |
 | go-h3 | GitHub (go get) | N/A - direct import | Active |

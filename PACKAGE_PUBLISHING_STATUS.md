@@ -21,7 +21,7 @@ All 32 published artifacts in the penguin-libs monorepo are configured for autom
 | 8 | react-hooks | npm (public) | @penguintechinc/react-hooks | `react-hooks-v*` | `publish-react-hooks` | 🔜 Pending first publish |
 | 9 | python-libs | PyPI | penguin-libs | `penguin-libs-v*` | `publish-python-libs` | ✅ Configured |
 | 10 | python-licensing | PyPI | penguin-licensing | `penguin-licensing-v*` | `publish-python-licensing` | ✅ Configured |
-| 11 | python-secrets | PyPI | penguin-sal | `penguin-secrets-v*` | `publish-python-secrets` | ✅ Configured |
+| 11 | python-secrets | PyPI | penguin-sal | `penguin-secrets-v*` | `publish-python-secrets` | ⛔ Superseded — folded into `penguin-aaa[secrets]`, no longer published |
 | 12 | python-utils | PyPI | penguin-utils | `penguin-utils-v*` | `publish-python-utils` | ✅ Configured |
 | 13 | python-aaa | PyPI | penguin-aaa | `penguin-aaa-v*` | `publish-python-aaa` | ✅ Configured |
 | 14 | python-dal | PyPI | penguin-dal | `penguin-dal-v*` | `publish-python-dal` | ✅ Configured |

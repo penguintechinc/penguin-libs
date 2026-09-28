@@ -59,7 +59,7 @@ jobs:
   build-python:
     name: Build & Test Python Packages
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/python-crypto/') || startsWith(github.ref, 'refs/heads/release/python-security/') || startsWith(github.ref, 'refs/heads/release/python-http/') || startsWith(github.ref, 'refs/heads/release/python-libs/') || startsWith(github.ref, 'refs/heads/release/python-licensing/') || startsWith(github.ref, 'refs/heads/release/python-secrets/') || startsWith(github.ref, 'refs/heads/release/python-utils/') }}
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/python-crypto/') || startsWith(github.ref, 'refs/heads/release/python-security/') || startsWith(github.ref, 'refs/heads/release/python-http/') || startsWith(github.ref, 'refs/heads/release/python-libs/') || startsWith(github.ref, 'refs/heads/release/python-licensing/') || startsWith(github.ref, 'refs/heads/release/python-utils/') }}
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
@@ -76,7 +76,6 @@ jobs:
       - run: pytest packages/python-libs/tests -v
       - run: pip install -e "packages/python-licensing[dev]"
       - run: pytest packages/python-licensing/tests -v
-      - run: cd packages/python-secrets && pip install -e ".[dev]" && pytest tests -v
       - name: Lint - python-utils
         run: cd packages/python-utils && ruff check src/ tests/
       - name: Security - bandit
