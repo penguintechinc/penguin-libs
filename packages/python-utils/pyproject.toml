@@ -49,6 +49,10 @@ dev = [
     "mypy>=1.0",
     "bandit>=1.7",
     "pip-audit>=2.6",
+    # PYSEC-2026-3447: the 3.11/3.12 runners ship setuptools 79.0.1 (vulnerable);
+    # the 3.13 runner ships a patched build. Pin the fixed version so the audited
+    # env is patched on every Python version rather than ignoring the finding.
+    "setuptools>=83.0.0",
 ]
 flask = [
     "flask>=3.0",
