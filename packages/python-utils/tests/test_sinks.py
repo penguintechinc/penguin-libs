@@ -41,10 +41,10 @@ class TestSanitizeLogData:
         result = sanitize_log_data(data)
         assert result["user_password_hash"] == "[REDACTED]"
 
-    def test_redacts_email_to_domain(self) -> None:
+    def test_redacts_email_fully(self) -> None:
         data = {"contact": "alice@example.com"}
         result = sanitize_log_data(data)
-        assert result["contact"] == "[email]@example.com"
+        assert result["contact"] == "[email]"
 
     def test_preserves_non_sensitive_strings(self) -> None:
         data = {"action": "login", "status": "ok"}
@@ -141,7 +141,7 @@ class TestSanitizedLogger:
         assert len(received) >= 1
         event = received[-1]
         assert event.get("password") == "[REDACTED]"
-        assert event.get("email") == "[email]@example.com"
+        assert event.get("email") == "[email]"
 
     def test_logs_without_data(self) -> None:
         log = SanitizedLogger("TestNoData")

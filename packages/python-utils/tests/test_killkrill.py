@@ -140,7 +140,11 @@ class TestKillKrillSinkEmitAndFlush:
         try:
             for i in range(3):
                 sink.emit({"event": f"item-{i}"})
-            # Batch was full — post should have been called automatically
+            # Batch was full — emit() only signals the background thread (never
+            # flushes inline), so poll briefly for the async flush to land.
+            deadline = time.monotonic() + 1.0
+            while mock_client.post.call_count < 1 and time.monotonic() < deadline:
+                time.sleep(0.01)
             assert mock_client.post.call_count >= 1
         finally:
             sink.close()

@@ -17,6 +17,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+# Total seconds close() may spend draining. Matches the design spec's hard 5s
+# atexit flush budget: process exit must never hang on an unreachable collector.
+SHUTDOWN_BUDGET = 5.0
+
 
 @dataclass(slots=True)
 class KillKrillConfig:
@@ -73,6 +77,7 @@ class KillKrillSink:
             timeout=config.timeout,
         )
         self._stop_event = threading.Event()
+        self._flush_now = threading.Event()
         self._flush_thread = threading.Thread(
             target=self._flush_loop,
             name="killkrill-flush",
@@ -85,23 +90,62 @@ class KillKrillSink:
     # ------------------------------------------------------------------
 
     def emit(self, event: dict[str, Any]) -> None:
-        """Buffer an event, flushing immediately if the batch is full."""
+        """Buffer an event, signalling the background thread if the batch is full.
+
+        Never performs network I/O on the caller's thread — a full batch only
+        sets an Event that the background flush loop wakes up on.
+        """
         with self._buffer.lock:
             self._buffer.events.append(event)
             should_flush = len(self._buffer.events) >= self._config.batch_size
 
         if should_flush:
-            self._flush()
+            self._flush_now.set()
 
     def flush(self) -> None:
         """Flush all buffered events to the remote service."""
         self._flush()
 
-    def close(self) -> None:
-        """Stop the background thread and flush remaining events."""
+    def close(self, budget: float = SHUTDOWN_BUDGET) -> None:
+        """Stop the background thread and flush remaining events within `budget`.
+
+        Bounded by one deadline for the whole call, because this runs on the
+        process's exit path: with default config an unreachable endpoint costs
+        10+1+10+2+10s per delivery attempt, so an unbounded join plus a final flush
+        could hang exit for ~44s. Past the deadline the remaining batch is dropped
+        with a WARN rather than retried.
+
+        The client is only closed once the worker has actually exited. Closing it
+        while the worker is mid-request would fail that request with an error
+        `_deliver_with_retry` does not catch, killing the thread silently.
+
+        Args:
+            budget: Total seconds allowed for draining and stopping.
+        """
+        deadline = time.monotonic() + budget
         self._stop_event.set()
-        self._flush_thread.join(timeout=self._config.timeout + 1)
-        self._flush()
+        self._flush_now.set()
+        self._flush_thread.join(timeout=max(0.0, deadline - time.monotonic()))
+
+        if self._flush_thread.is_alive():
+            logger.warning(
+                "KillKrillSink: flush thread still running after %.1fs; "
+                "leaving the client open and dropping any buffered events",
+                budget,
+            )
+            return
+
+        remaining = max(0.0, deadline - time.monotonic())
+        if remaining > 0:
+            self._flush()
+        else:
+            with self._buffer.lock:
+                dropped = len(self._buffer.events)
+                self._buffer.events = []
+            if dropped:
+                logger.warning(
+                    "KillKrillSink: shutdown budget exhausted; dropping %d events", dropped
+                )
         self._client.close()
 
     # ------------------------------------------------------------------
@@ -109,8 +153,12 @@ class KillKrillSink:
     # ------------------------------------------------------------------
 
     def _flush_loop(self) -> None:
-        """Background thread: flush on interval until stop is signalled."""
-        while not self._stop_event.wait(timeout=self._config.flush_interval):
+        """Background thread: flush when signalled full or on interval, until stop."""
+        while not self._stop_event.is_set():
+            self._flush_now.wait(timeout=self._config.flush_interval)
+            self._flush_now.clear()
+            if self._stop_event.is_set():
+                break
             self._flush()
 
     def _flush(self) -> None:

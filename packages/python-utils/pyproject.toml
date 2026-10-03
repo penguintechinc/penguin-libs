@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "penguin-utils"
-version = "0.3.0"
+version = "0.4.0"
 description = "Shared Python utilities for Penguin Tech applications"
 readme = "README.md"
 license = {text = "MIT"}
@@ -29,6 +29,15 @@ dependencies = [
     "pydal>=20230521.1",
     "structlog>=23.0",
     "httpx>=0.27",
+    "opentelemetry-api>=1.44.0,<2",
+    "opentelemetry-sdk>=1.44.0,<2",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.44.0,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.44.0,<2",
+    "opentelemetry-instrumentation-logging>=0.65b0,<1",
+    "opentelemetry-instrumentation-asgi>=0.65b0,<1",
+    "opentelemetry-instrumentation-httpx>=0.65b0,<1",
+    "opentelemetry-instrumentation-sqlalchemy>=0.65b0,<1",
+    "opentelemetry-instrumentation-redis>=0.65b0,<1",
 ]
 
 [project.optional-dependencies]
@@ -40,6 +49,10 @@ dev = [
     "mypy>=1.0",
     "bandit>=1.7",
     "pip-audit>=2.6",
+    # PYSEC-2026-3447: the 3.11/3.12 runners ship setuptools 79.0.1 (vulnerable);
+    # the 3.13 runner ships a patched build. Pin the fixed version so the audited
+    # env is patched on every Python version rather than ignoring the finding.
+    "setuptools>=83.0.0",
 ]
 flask = [
     "flask>=3.0",
@@ -83,3 +96,13 @@ python_files = ["test_*.py"]
 # Without this (and the pytest-asyncio dev dependency) pytest reports
 # "Unknown pytest.mark.asyncio" and the async test fails rather than running.
 asyncio_mode = "auto"
+markers = [
+    "integration: needs a running OTLP collector (docker); excluded from the default run",
+]
+# Integration tests need docker and are excluded by default, so the coverage gate is
+# measured against the unit suite alone and cannot be quietly satisfied by them.
+addopts = "-m 'not integration' --cov=penguintechinc_utils --cov-report=term-missing --cov-fail-under=90"
+
+[tool.coverage.run]
+branch = true
+source = ["penguintechinc_utils"]
