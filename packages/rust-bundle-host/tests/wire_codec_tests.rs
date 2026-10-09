@@ -351,7 +351,110 @@ fn capability_from_str_maps_every_known_name_and_rejects_unknown() {
         capability_from_str("context"),
         Some(CapabilityKind::Context)
     );
+    assert_eq!(
+        capability_from_str("reputation"),
+        Some(CapabilityKind::Reputation)
+    );
+    assert_eq!(
+        capability_from_str("economy"),
+        Some(CapabilityKind::Economy)
+    );
     assert_eq!(capability_from_str("bogus"), None);
+}
+
+/// Every variant's exact wire string. Pins the existing eight so appending
+/// `Reputation`/`Economy` is provably backward compatible, and fails loudly
+/// if a variant is ever renamed or a new one is added without a wire test.
+#[test]
+fn capability_kind_wire_strings_are_stable_for_every_variant() {
+    let expected = [
+        (CapabilityKind::Http, "http"),
+        (CapabilityKind::Kv, "kv"),
+        (CapabilityKind::Db, "db"),
+        (CapabilityKind::Relay, "relay"),
+        (CapabilityKind::Flags, "flags"),
+        (CapabilityKind::Log, "log"),
+        (CapabilityKind::Clock, "clock"),
+        (CapabilityKind::Context, "context"),
+        (CapabilityKind::Reputation, "reputation"),
+        (CapabilityKind::Economy, "economy"),
+    ];
+    for (kind, wire) in expected {
+        let value = serde_json::to_value(kind).expect("serialize");
+        assert_eq!(value, serde_json::json!(wire), "serialize {kind:?}");
+        let back: CapabilityKind = serde_json::from_value(value).expect("deserialize");
+        assert_eq!(back, kind, "round trip {kind:?}");
+        assert_eq!(
+            penguin_bundle_host::wire::message::capability_from_str(wire),
+            Some(kind),
+            "capability_from_str({wire})"
+        );
+    }
+}
+
+#[test]
+fn capability_kind_rejects_unknown_and_wrongly_cased_strings() {
+    for bad in ["bogus", "Reputation", "ECONOMY", "reputation.read", ""] {
+        let result = serde_json::from_value::<CapabilityKind>(serde_json::json!(bad));
+        assert!(result.is_err(), "{bad:?} must not deserialize");
+    }
+}
+
+#[test]
+fn host_call_frames_round_trip_for_reputation_and_economy() {
+    for (capability, op) in [
+        (CapabilityKind::Reputation, "get"),
+        (CapabilityKind::Economy, "balance"),
+    ] {
+        let host_call = Frame::new(
+            21,
+            Message::HostCall(HostCallBody {
+                app_id: "waddles.economy.default".to_string(),
+                capability,
+                op: op.to_string(),
+                args: serde_json::json!({"user_id": "00000000-0000-0000-0000-000000000000"}),
+                call_id: 9,
+            }),
+        );
+        let value = serde_json::to_value(&host_call).expect("serialize");
+        assert_eq!(value["kind"], "host-call");
+        assert_eq!(
+            value["capability"],
+            serde_json::to_value(capability).expect("serialize capability")
+        );
+        let round_tripped: Frame = serde_json::from_value(value).expect("deserialize");
+        assert_eq!(round_tripped, host_call);
+    }
+}
+
+#[test]
+fn load_frame_capabilities_carry_reputation_and_economy() {
+    let load = Frame::new(
+        31,
+        Message::Load(LoadBody {
+            app_id: "waddles.economy.default".to_string(),
+            version: "3.0.0".to_string(),
+            digest: format!("sha256:{}", "b".repeat(64)),
+            component_key: "bundles/waddles.economy.default/3.0.0/cafe.wasm".to_string(),
+            sidecar_key: "bundles/waddles.economy.default/3.0.0/cafe.json".to_string(),
+            capabilities: vec![
+                CapabilityKind::Kv,
+                CapabilityKind::Reputation,
+                CapabilityKind::Economy,
+            ],
+            limits: LoadLimits {
+                timeout_ms: 2000,
+                memory_mb: 64,
+            },
+        }),
+    );
+    let value = serde_json::to_value(&load).expect("serialize");
+    assert_eq!(
+        value["capabilities"],
+        serde_json::json!(["kv", "reputation", "economy"])
+    );
+    let round_tripped: Frame = serde_json::from_value(value).expect("deserialize");
+    assert_eq!(round_tripped, load);
 }
 
 #[test]

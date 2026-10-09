@@ -13,3 +13,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `reason` code matching `app_manifest.py`.
 - `manifest`: V17's `language` field now accepts `csharp` alongside
   `python`/`rust`/`javascript`/`typescript`/`other`.
+- `wire`: `CapabilityKind::Reputation` and `CapabilityKind::Economy`
+  (wire strings `"reputation"` / `"economy"`, also accepted by
+  `capability_from_str`). Appended after `Context`, so the eight existing
+  variants and their wire strings are unchanged. Replaces the interim
+  `capability: "db"` with `op: "reputation.*"` / `"economy.*"` convention.
