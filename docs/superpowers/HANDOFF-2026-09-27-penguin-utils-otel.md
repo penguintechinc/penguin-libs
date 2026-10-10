@@ -250,6 +250,39 @@ All are fixed and each has a regression test in `tests/test_sanitization_gaps.py
     handler `close()`, so wiring it there covers shutdown for free. Sink failure
     counting now spans emit, flush and close.
 
+### Ruling 34 (PR #131 CI matrix: KillKrill close() on 3.11/3.12)
+
+34. **`KillKrillSink.close()` now ALWAYS closes the client (option b), reconciling the
+    118-121 rationale rather than deferring to it.** The PR matrix exposed
+    `test_close_drops_buffered_events_when_budget_is_exhausted` failing on 3.11/3.12
+    (passing on 3.13): with `budget=0.0`, `join(timeout=0)` returns with the worker's
+    liveness scheduler-dependent, and the old code's is-alive branch returned WITHOUT
+    closing the client — so `assert is_closed` held only when 3.13 happened to let the
+    worker exit inside the zero window. The two existing tests encoded contradictory
+    contracts for that one branch (`test_close_leaves_client_open_if_worker_is_still_running`
+    asserted the client stays open; the other asserted it is closed). Resolved by
+    picking the correct behavior, not greening the assert: the old branch genuinely
+    **leaked** the `httpx.Client` and its socket pool whenever the budget was exhausted
+    with a live worker, and `close()` is a public teardown a consumer may call mid-process.
+    - `close()` reclaims the client on every path, in a `finally`.
+    - Safe against the 118-121 silent-thread-death concern because closing under a live
+      worker happens ONLY on the drop path (batch forfeit anyway), and
+      `_deliver_with_retry` now has a broadened `except Exception` that drops + WARNs on a
+      "client closed" error instead of letting it escape and kill the worker uncaught.
+    - The caller-thread final flush is now deadline-bounded too (`_flush(deadline=…)`),
+      closing a separate latent hole: on the joined path a dead endpoint could otherwise
+      run the full ~33s retry and overrun the budget the docstring promised.
+    - `test_close_leaves_client_open_if_worker_is_still_running` is replaced by
+      `test_close_closes_client_even_when_worker_is_still_running` (asserts the client is
+      reclaimed), plus `test_worker_survives_client_closed_mid_flight` proving a real
+      worker mid-delivery exits cleanly when the client is closed under it.
+    - *Cost:* on the exhausted path the in-flight request is aborted — intended, since
+      the batch is being dropped; the broadened catch keeps it from being noisy.
+    - *Verified on 3.11, 3.12 AND 3.13* (the point being it reproduced only off-3.13):
+      full suite 284 passed on each; the three close() tests ran 5× on 3.11 with no flake.
+    - **Supersedes ruling 22's "will not close the client while the worker is alive"**
+      and the old killkrill.py:118-121 comment — the client is now always reclaimed.
+
 ## Deferred minors (triage at final whole-branch review)
 
 - Sanitized span copy reports `dropped_attributes`/`dropped_events` as 0.
