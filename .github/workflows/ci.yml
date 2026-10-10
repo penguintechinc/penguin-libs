@@ -83,6 +83,49 @@ jobs:
       - name: Security - pip-audit
         run: cd packages/python-utils && pip-audit --ignore-vuln CVE-2026-3219
 
+  build-python-utils:
+    name: Build & Test Python Utils
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/release/python-utils/') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The library floor is 3.11 (requires-python), so all three must pass --
+        # services run 3.13 but a consumer on 3.11 must still be able to install.
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: cd packages/python-utils && pip install -e ".[dev]"
+      - name: Lint
+        run: cd packages/python-utils && ruff check src/ tests/
+      - name: Format check
+        run: cd packages/python-utils && ruff format --check src/ tests/
+      - name: Type check (telemetry, strict)
+        run: cd packages/python-utils && mypy --strict src/penguintechinc_utils/telemetry
+      - name: Security - bandit
+        run: cd packages/python-utils && bandit -r src/ -c pyproject.toml
+      - name: Security - pip-audit
+        run: cd packages/python-utils && pip-audit --ignore-vuln CVE-2026-3219
+      # Coverage threshold (--cov-fail-under=90) comes from pyproject addopts, so
+      # this step fails the job on a coverage regression as well as a test failure.
+      - name: Test (unit, with coverage gate)
+        run: cd packages/python-utils && pytest tests/ -v --tb=short
+      # Integration needs docker to run a real OTLP collector. Only on 3.13 so the
+      # matrix does not start three collectors, and never silently skipped: docker is
+      # always present on ubuntu-latest, so a skip here means the runner changed.
+      # --no-cov because the library runs in subprocesses here (OTel's global providers
+      # are one-shot per process), so coverage measures the parent at 0% and the global
+      # --cov-fail-under from pyproject would fail the step even with all tests passing.
+      - name: Test (OTLP integration + redaction proof)
+        if: matrix.python-version == '3.13'
+        run: cd packages/python-utils && pytest tests/integration -m integration -v -s --no-cov
+
   build-python-aaa:
     name: Build & Test Python AAA
     runs-on: ubuntu-latest

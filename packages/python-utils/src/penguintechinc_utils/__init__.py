@@ -4,7 +4,12 @@ Penguin Tech Python Utilities
 Shared utilities for Penguin Tech Python applications.
 """
 
-__version__ = "0.3.0"
+from importlib import metadata as _metadata
+
+try:
+    __version__ = _metadata.version("penguin-utils")
+except _metadata.PackageNotFoundError:  # running from source tree without install
+    __version__ = "0.4.0"
 
 from .decorators import (
     DecoratorContext,
@@ -23,6 +28,7 @@ from .logging import (
     sanitize_log_data,
 )
 from .sinks import (
+    AsyncSink,
     CallbackSink,
     CloudWatchSink,
     FileSink,
@@ -32,6 +38,11 @@ from .sinks import (
     StdoutSink,
     SyslogSink,
 )
+
+# Imported last: telemetry reaches back into .logging, so .logging must be fully
+# initialised before this runs.
+from .telemetry import Telemetry, init
+from .telemetry.helpers import get_meter, get_tracer, timed
 
 __all__ = [
     "__version__",
@@ -57,7 +68,14 @@ __all__ = [
     "CloudWatchSink",
     "GCPCloudLoggingSink",
     "KafkaSink",
+    "AsyncSink",
     # killkrill
     "KillKrillConfig",
     "KillKrillSink",
+    # telemetry
+    "init",
+    "Telemetry",
+    "get_tracer",
+    "get_meter",
+    "timed",
 ]

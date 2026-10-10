@@ -1,0 +1,31 @@
+# Minimal OTLP collector for the integration suite: accept all three signals and
+# write them to one JSON-lines file the test can count and grep.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  file:
+    path: /output/telemetry.json
+    # The default flush interval is longer than the test is willing to wait.
+    flush_interval: 1s
+
+service:
+  telemetry:
+    logs:
+      # The collector's own chatter would otherwise drown the test output.
+      level: warn
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [file]
+    metrics:
+      receivers: [otlp]
+      exporters: [file]
+    logs:
+      receivers: [otlp]
+      exporters: [file]

@@ -9,9 +9,12 @@ All sinks implement the Sink Protocol so they can be composed freely.
 import json
 import logging
 import logging.handlers
+import queue
 import socket
 import sys
-from collections.abc import Callable
+import threading
+import time
+from collections.abc import Callable, Sequence
 from typing import Any, Protocol, runtime_checkable
 
 
@@ -297,3 +300,149 @@ class KafkaSink:
     def close(self) -> None:
         """Close the Kafka sink."""
         self._producer.close()
+
+
+# Sinks that talk to the network on the caller's thread and therefore need a queue in
+# front of them. Named explicitly rather than guessed at. KillKrillSink is deliberately
+# NOT here: it buffers and flushes on its own background thread, so wrapping it would
+# add a redundant thread and queue, and a consumer holding its own reference to call
+# close() would bypass the outer queue entirely. StdoutSink, FileSink, SyslogSink (a UDP
+# sendto does not block) and CallbackSink stay synchronous, because consumers' tests
+# assert on a CallbackSink immediately after logging.
+BLOCKING_SINK_NAMES = frozenset({"CloudWatchSink", "GCPCloudLoggingSink", "KafkaSink"})
+
+# Total seconds AsyncSink.close() may spend draining, matching KillKrillSink's budget:
+# shutdown must stay bounded even when the inner sink's network call never returns.
+SHUTDOWN_BUDGET = 5.0
+
+
+class AsyncSink:
+    """
+    Wrap a blocking sink with a bounded queue drained by a background thread.
+
+    Keeps a slow or unreachable network sink off the caller's thread entirely. When
+    the queue is full the OLDEST event is dropped, so the newest -- usually the most
+    relevant -- still gets through, and the drop is counted rather than hidden.
+
+    Args:
+        inner: The sink to deliver to.
+        maxsize: Queue capacity; beyond it, the oldest queued event is dropped.
+    """
+
+    _SENTINEL = object()
+
+    def __init__(self, inner: "Sink", maxsize: int = 10000) -> None:
+        self._inner = inner
+        self._queue: queue.Queue[Any] = queue.Queue(maxsize=maxsize)
+        self._dropped = 0
+        self._errors = 0
+        self._closed = False
+        self._lock = threading.Lock()
+        self._thread = threading.Thread(
+            target=self._run,
+            name=f"penguin-asyncsink-{type(inner).__name__}",
+            daemon=True,
+        )
+        self._thread.start()
+
+    @property
+    def inner(self) -> "Sink":
+        """The wrapped sink."""
+        return self._inner
+
+    @property
+    def dropped(self) -> int:
+        """Events discarded because the queue was full."""
+        return self._dropped
+
+    @property
+    def errors(self) -> int:
+        """Deliveries the inner sink raised on."""
+        return self._errors
+
+    def emit(self, event: dict[str, Any]) -> None:
+        """Queue an event for background delivery; never blocks and never raises."""
+        try:
+            self._queue.put_nowait(event)
+            return
+        except queue.Full:
+            pass
+        # Full: discard the head to make room, then retry. A log call must never wait
+        # on queue space, so dropping the oldest is the only acceptable answer.
+        try:
+            self._queue.get_nowait()
+            self._queue.task_done()
+        except queue.Empty:  # pragma: no cover - needs an exact producer/consumer race
+            pass
+        self._dropped += 1
+        try:
+            self._queue.put_nowait(event)
+        except queue.Full:  # pragma: no cover - needs an exact producer/consumer race
+            self._dropped += 1
+
+    def _run(self) -> None:
+        """Background worker: deliver queued events until the sentinel arrives."""
+        while True:
+            item = self._queue.get()
+            if item is self._SENTINEL:
+                self._queue.task_done()
+                return
+            try:
+                self._inner.emit(item)
+            except Exception:
+                # A failing sink must never kill the worker: the next event, and
+                # every event after it, still has to be delivered.
+                self._errors += 1
+            finally:
+                self._queue.task_done()
+
+    def flush(self, timeout: float = SHUTDOWN_BUDGET) -> None:
+        """Wait up to `timeout` for queued events to be delivered, then flush inner."""
+        self._drain(timeout)
+        try:
+            self._inner.flush()
+        except Exception:
+            self._errors += 1
+
+    def close(self, timeout: float = SHUTDOWN_BUDGET) -> None:
+        """Drain, stop the worker and close the inner sink within `timeout`. Idempotent.
+
+        Bounded, because this runs on the exit path: `Queue.join()` alone waits forever,
+        so one unreachable CloudWatch/GCP/Kafka endpoint would hang process shutdown
+        indefinitely. Past the deadline the undelivered remainder is counted as dropped.
+        """
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+        deadline = time.monotonic() + timeout
+        self._drain(timeout)
+        self._queue.put(self._SENTINEL)
+        self._thread.join(timeout=max(0.0, deadline - time.monotonic()))
+        try:
+            self._inner.close()
+        except Exception:
+            self._errors += 1
+
+    def _drain(self, timeout: float) -> None:
+        """Wait for the queue to empty, giving up after `timeout` seconds."""
+        deadline = time.monotonic() + timeout
+        while not self._queue.empty() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        remaining = self._queue.qsize()
+        if remaining:
+            self._dropped += remaining
+
+
+def wrap_blocking_sinks(
+    sinks: Sequence["Sink"],
+    blocking_names: frozenset[str] = BLOCKING_SINK_NAMES,
+) -> list["Sink"]:
+    """
+    Put each network-bound sink behind an AsyncSink, passing local sinks through.
+
+    Selection is by class name so an already-wrapped sink, or a caller's own custom
+    sink, is left exactly as given -- this must never silently make a synchronous
+    sink asynchronous for a consumer who was relying on it being synchronous.
+    """
+    return [AsyncSink(s) if type(s).__name__ in blocking_names else s for s in sinks]
