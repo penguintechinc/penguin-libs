@@ -204,6 +204,13 @@ pub struct ResultBody {
 /// frame because the executor answers those locally... except `context`
 /// and `clock` are still routed through the host per §7.4, so both are
 /// included here to match the full `capability` value space).
+///
+/// `Reputation` and `Economy` are the first-class capabilities for the
+/// community reputation and economy host services. They were appended
+/// after `Context` so existing variants keep their position and wire
+/// strings; a peer built before they existed rejects `"reputation"` /
+/// `"economy"` as an unknown variant, so roll the executor and stage
+/// forward together before a bundle relies on either.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CapabilityKind {
@@ -215,6 +222,8 @@ pub enum CapabilityKind {
     Log,
     Clock,
     Context,
+    Reputation,
+    Economy,
 }
 
 /// Executor asks the stage to service a host capability call on behalf of
@@ -301,6 +310,8 @@ pub fn capability_from_str(value: &str) -> Option<CapabilityKind> {
         ("log", CapabilityKind::Log),
         ("clock", CapabilityKind::Clock),
         ("context", CapabilityKind::Context),
+        ("reputation", CapabilityKind::Reputation),
+        ("economy", CapabilityKind::Economy),
     ]);
     table.get(value).copied()
 }
