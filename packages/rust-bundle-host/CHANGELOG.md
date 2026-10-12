@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+- `manifest`: replace `serde_yaml_ng` with `serde-saphyr` (pure safe-Rust YAML) so
+  the unmaintained `unsafe-libyaml` (RUSTSEC-2024-0449) is no longer in the
+  dependency tree. `ParseError::Syntax` now wraps `serde_saphyr::Error`.
+
 ### Added
 - `wire`: length-prefixed frame codec (`u32` BE length + UTF-8 JSON) and a
   correlation-id multiplexed transport over any `AsyncRead + AsyncWrite`.

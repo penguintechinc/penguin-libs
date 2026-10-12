@@ -15,11 +15,11 @@ pub use schema::{Manifest, RawManifest};
 /// YAML syntax error is reported the same way a JSON syntax error would be
 /// (both feed the same [`RawManifest`] shape) — via
 /// [`ManifestError::reason`] [`Reason::MissingField`] is never used for
-/// this; a syntax error surfaces as [`serde_yaml_ng::Error`] before
+/// this; a syntax error surfaces as [`serde_saphyr::Error`] before
 /// validation ever runs, which is why this function returns a distinct
 /// top-level error rather than folding it into [`ManifestError`].
 pub fn parse_yaml(source: &str, ctx: &ValidationContext<'_>) -> Result<Manifest, ParseError> {
-    let raw: RawManifest = serde_yaml_ng::from_str(source)?;
+    let raw: RawManifest = serde_saphyr::from_str(source)?;
     Ok(validate(&raw, ctx)?)
 }
 
@@ -29,7 +29,7 @@ pub fn parse_yaml(source: &str, ctx: &ValidationContext<'_>) -> Result<Manifest,
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
     #[error("bundle.yaml is not valid YAML: {0}")]
-    Syntax(#[from] serde_yaml_ng::Error),
+    Syntax(#[from] serde_saphyr::Error),
 
     #[error(transparent)]
     Validation(#[from] ManifestError),
