@@ -19,8 +19,28 @@ pub use schema::{Manifest, RawManifest};
 /// validation ever runs, which is why this function returns a distinct
 /// top-level error rather than folding it into [`ManifestError`].
 pub fn parse_yaml(source: &str, ctx: &ValidationContext<'_>) -> Result<Manifest, ParseError> {
-    let raw: RawManifest = serde_saphyr::from_str(source)?;
+    let raw = parse_raw_yaml(source)?;
     Ok(validate(&raw, ctx)?)
+}
+
+/// Deserializes `bundle.yaml` source text into a [`RawManifest`] with no
+/// validation. The parser options pin YAML 1.2 core semantics so the swap
+/// from `serde_yaml_ng` to `serde-saphyr` stays behavior-preserving:
+/// `strict_booleans` keeps `yes`/`no`/`on`/`off` plain strings (never
+/// booleans, so a `consumes` filter of `[yes]` stays a string list), and
+/// `merge_keys: AsOrdinary` keeps `<<` an ordinary key as `serde_yaml_ng`
+/// did (no silent merge-key expansion); `reject_unsupported_tags` rejects
+/// unknown `!tags` as `serde_yaml_ng` did; and
+/// `reject_non_finite_typeless_float: false` keeps an unquoted `.inf`/`.nan`
+/// in an untyped position a string rather than a hard error.
+pub fn parse_raw_yaml(source: &str) -> Result<RawManifest, serde_saphyr::Error> {
+    let options = serde_saphyr::options! {
+        strict_booleans: true,
+        merge_keys: serde_saphyr::MergeKeyPolicy::AsOrdinary,
+        reject_unsupported_tags: true,
+        reject_non_finite_typeless_float: false,
+    };
+    serde_saphyr::from_str_with_options(source, options)
 }
 
 /// Either half of loading a manifest can fail: the YAML can be malformed

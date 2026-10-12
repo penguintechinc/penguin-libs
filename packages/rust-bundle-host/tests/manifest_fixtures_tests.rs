@@ -18,7 +18,8 @@ const INVALID_DIR: &str = "tests/fixtures/manifests/invalid";
 fn read_fixture(dir: &str, name: &str) -> RawManifest {
     let path = Path::new(dir).join(name);
     let source = fs::read_to_string(&path).unwrap_or_else(|err| panic!("read {path:?}: {err}"));
-    serde_saphyr::from_str(&source).unwrap_or_else(|err| panic!("parse {path:?}: {err}"))
+    penguin_bundle_host::manifest::parse_raw_yaml(&source)
+        .unwrap_or_else(|err| panic!("parse {path:?}: {err}"))
 }
 
 #[test]
