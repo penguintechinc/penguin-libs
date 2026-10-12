@@ -1,0 +1,29 @@
+schema_version: 2
+app_id: waddles.socials.music.default
+name: Music
+version: 3.0.0
+feature: waddles.socials.music
+module: socials
+provider: builtin
+language: python
+artifact: source
+execution_model: native
+stages:
+  process:
+    entry: "m:f"
+    consumes:
+      - platform: twitch
+        source_id: chan1
+        event_types: ["chat.message", 'chat.*']
+        filters:
+          command_prefix: ["!sr", "!song"]
+          actor_roles: [moderator, "vip"]
+      - platform: discord
+        event_types: [message.create]
+    produces: [waddles.music.request]
+    spec:
+      required_config: [api_key, region]
+  presentation:
+    html_entrypoint: index.html
+    assets: [a.js, b.css]
+    browser_source_path: /overlay

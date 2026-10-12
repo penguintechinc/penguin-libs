@@ -1,0 +1,13 @@
+schema_version: 2
+app_id: waddles.socials.music.default
+name: &n Music
+version: 3.0.0
+feature: waddles.socials.music
+module: socials
+provider: *n
+language: python
+artifact: source
+execution_model: native
+stages:
+  action:
+    entry: "m:f"
