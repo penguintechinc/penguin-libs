@@ -88,6 +88,8 @@ fn load_and_loaded_frames_round_trip() {
                 timeout_ms: 2000,
                 memory_mb: 64,
             },
+            tenant_id: 1,
+            community_id: 0,
         }),
     );
     let value = serde_json::to_value(&load).expect("serialize");
@@ -122,6 +124,8 @@ fn unload_and_unloaded_frames_round_trip() {
         Message::Unload(UnloadBody {
             app_id: "waddles.socials.music.default".to_string(),
             digest: format!("sha256:{}", "b".repeat(64)),
+            tenant_id: 1,
+            community_id: 0,
         }),
     );
     let unloaded = Frame::new(
