@@ -17,7 +17,9 @@ use rstest::rstest;
     NetRuleKind::Fqdn,
     "xn--bcher-kva.example.com"
 )]
-#[case::exact_internal_tld("api.svc.cluster.local", NetRuleKind::Fqdn, "api.svc.cluster.local")]
+#[case::exact_dev_tld_label("dev.example.com", NetRuleKind::Fqdn, "dev.example.com")]
+#[case::v4_mapped_canonicalised("::ffff:10.0.0.0/120", NetRuleKind::Ipv4Cidr, "10.0.0.0/24")]
+#[case::v4_mapped_host("::ffff:203.0.113.7/128", NetRuleKind::Ipv4Cidr, "203.0.113.7/32")]
 #[case::wildcard_leftmost("*.discord.com", NetRuleKind::Wildcard, "*.discord.com")]
 #[case::wildcard_prefix_glob("cdn-*.discord.com", NetRuleKind::Wildcard, "cdn-*.discord.com")]
 #[case::wildcard_suffix_glob("*-cdn.discord.com", NetRuleKind::Wildcard, "*-cdn.discord.com")]
@@ -134,9 +136,52 @@ fn accepts_valid_rules(#[case] input: &str, #[case] kind: NetRuleKind, #[case] c
 #[case::v6_0("::/0", NetRuleError::PrefixTooBroad { prefix: 0, min: 120 })]
 #[case::v6_129("2001:db8::1/129", NetRuleError::Malformed("IPv6 prefix above /128"))]
 #[case::v6_host_bits("2001:db8::1/120", NetRuleError::HostBitsSet)]
+// regression: PR136 review finding 3 (numeric / hex last label read as an IP)
+#[case::hex_ip_dotted("0x7f.0.0.1", NetRuleError::Malformed(NUMERIC_LAST))]
+#[case::hex_ip_short("0x7f.1", NetRuleError::Malformed(NUMERIC_LAST))]
+#[case::hex_last_label("a.0x1", NetRuleError::Malformed(NUMERIC_LAST))]
+#[case::hex_last_label_bare_prefix("a.0x", NetRuleError::Malformed(NUMERIC_LAST))]
+#[case::decimal_last_label("a.123", NetRuleError::Malformed(NUMERIC_LAST))]
+#[case::wildcard_numeric_last("*.example.0x1", NetRuleError::Malformed(NUMERIC_LAST))]
+// regression: PR136 review finding 4 (internal-only names)
+#[case::localhost_sub("a.localhost", NetRuleError::InternalHost)]
+#[case::localhost_wildcard("*.localhost", NetRuleError::InternalHost)]
+#[case::internal_tld("db.internal", NetRuleError::InternalHost)]
+#[case::gcp_metadata("metadata.google.internal", NetRuleError::InternalHost)]
+#[case::mdns_local("printer.local", NetRuleError::InternalHost)]
+#[case::cluster_local("api.svc.cluster.local", NetRuleError::InternalHost)]
+#[case::cluster_local_wildcard("*.svc.cluster.local", NetRuleError::InternalHost)]
+#[case::home_arpa("x.home.arpa", NetRuleError::InternalHost)]
+#[case::lan_tld("nas.lan", NetRuleError::InternalHost)]
+// regression: PR136 review finding 4 (special-use CIDRs)
+#[case::loopback_v4("127.0.0.0/24", NetRuleError::SpecialUseAddress)]
+#[case::loopback_host_v4("127.0.0.1/32", NetRuleError::SpecialUseAddress)]
+#[case::link_local_v4("169.254.169.0/24", NetRuleError::SpecialUseAddress)]
+#[case::imds_v4("169.254.169.254/32", NetRuleError::SpecialUseAddress)]
+#[case::this_network_v4("0.0.0.0/32", NetRuleError::SpecialUseAddress)]
+#[case::this_network_24("0.0.1.0/24", NetRuleError::SpecialUseAddress)]
+#[case::multicast_v4("224.0.0.0/24", NetRuleError::SpecialUseAddress)]
+#[case::reserved_v4("240.0.0.0/24", NetRuleError::SpecialUseAddress)]
+#[case::broadcast_v4("255.255.255.255/32", NetRuleError::SpecialUseAddress)]
+#[case::loopback_v6("::1/128", NetRuleError::SpecialUseAddress)]
+#[case::unspecified_v6("::/128", NetRuleError::SpecialUseAddress)]
+#[case::link_local_v6("fe80::/120", NetRuleError::SpecialUseAddress)]
+#[case::link_local_v6_high("febf::100/120", NetRuleError::SpecialUseAddress)]
+#[case::multicast_v6("ff02::1:0/120", NetRuleError::SpecialUseAddress)]
+#[case::unique_local_v6("fd00::100/120", NetRuleError::SpecialUseAddress)]
+#[case::unique_local_v6_fc("fc00::/120", NetRuleError::SpecialUseAddress)]
+#[case::nat64("64:ff9b::a00:0/120", NetRuleError::SpecialUseAddress)]
+#[case::nat64_local_use("64:ff9b:1::/120", NetRuleError::SpecialUseAddress)]
+#[case::mapped_loopback("::ffff:127.0.0.0/120", NetRuleError::SpecialUseAddress)]
+#[case::mapped_link_local("::ffff:169.254.169.254/128", NetRuleError::SpecialUseAddress)]
+#[case::ipv4_compatible("::7f00:0/120", NetRuleError::SpecialUseAddress)]
+// regression: PR136 review finding 1 (wildcard at a nested public suffix is
+// not matchable; see `wildcard_never_spans_a_nested_public_suffix`)
 fn rejects_invalid_rules(#[case] input: &str, #[case] expected: NetRuleError) {
     assert_eq!(NetRule::parse(input), Err(expected), "input {input:?}");
 }
+
+const NUMERIC_LAST: &str = "last label is numeric (resolvers read it as an IP address)";
 
 fn rule(s: &str) -> NetRule {
     NetRule::parse(s).unwrap_or_else(|e| panic!("{s:?} must parse: {e}"))
@@ -194,6 +239,10 @@ fn rule(s: &str) -> NetRule {
 #[case("*.discord.com", "localhost", false)]
 #[case("discord.com", "discord.com:443", false)]
 #[case("discord.com", "127.0.0.1", false)]
+// ordinary subdomains that happen to be TLD-named still match
+#[case("*.example.com", "dev.example.com", true)]
+#[case("*.example.com", "a.app.example.com", true)]
+#[case("*.mybucket.s3.amazonaws.com", "x.mybucket.s3.amazonaws.com", true)]
 fn host_matching(#[case] pattern: &str, #[case] host: &str, #[case] expected: bool) {
     assert_eq!(
         rule(pattern).host_matches(host),
@@ -257,4 +306,33 @@ fn from_str_matches_parse() {
         rule("discord.com")
     );
     assert!("*.com".parse::<NetRule>().is_err());
+}
+
+// regression: PR136 review finding 1 - a parent wildcard must not span a
+// public suffix nested below it (private-section PSL entries).
+#[rstest]
+#[case("*.amazonaws.com", "attacker.s3.amazonaws.com")]
+#[case("*.amazonaws.com", "s3.amazonaws.com")]
+#[case("*.amazonaws.com", "a.b.s3.amazonaws.com")]
+#[case("*.example.com", "a.github.io.example.com")]
+#[case("*.example.com", "x.co.uk.example.com")]
+fn wildcard_never_spans_a_nested_public_suffix(#[case] pattern: &str, #[case] host: &str) {
+    let allowed = NetRule::parse(pattern).is_ok_and(|r| r.host_matches(host));
+    assert!(!allowed, "{pattern:?} must not match {host:?}");
+}
+
+#[test]
+fn shared_infra_must_be_listed_as_an_exact_fqdn() {
+    assert!(rule("mybucket.s3.amazonaws.com").host_matches("mybucket.s3.amazonaws.com"));
+    assert!(!rule("mybucket.s3.amazonaws.com").host_matches("attacker.s3.amazonaws.com"));
+}
+
+// regression: PR136 review finding 5 - a mapped rule must not be silently dead.
+#[test]
+fn ipv4_mapped_rule_is_canonicalised_and_live() {
+    let r = rule("::ffff:10.0.0.0/120");
+    assert_eq!(r, rule("10.0.0.0/24"));
+    assert!(r.cidr_contains("10.0.0.5".parse().unwrap()));
+    assert!(r.cidr_contains("::ffff:10.0.0.5".parse().unwrap()));
+    assert!(!r.cidr_contains("10.0.1.5".parse().unwrap()));
 }

@@ -12,6 +12,14 @@
 //!
 //! The Public Suffix List is compiled into the binary by the `psl` crate:
 //! there is no runtime fetch and no data file to go stale between releases.
+//!
+//! Hardening (fail-closed): special-use address ranges (loopback,
+//! link-local, multicast, NAT64, unique-local, ...) and internal-only
+//! hostnames (`*.localhost`, `*.internal`, `*.local`, ...) are rejected at
+//! parse so a manifest can never allowlist an SSRF target; FQDNs whose last
+//! label a resolver would read as a number (`0x7f.1`) are rejected; and a
+//! wildcard never matches a host that reaches below a nested public suffix
+//! (`*.amazonaws.com` vs `attacker.s3.amazonaws.com`).
 
 use std::fmt;
 use std::net::IpAddr;
@@ -61,6 +69,15 @@ pub enum NetRuleError {
     /// ambiguous and almost always a typo.
     #[error("CIDR address has host bits set below the prefix")]
     HostBitsSet,
+    /// The CIDR lies in a special-use range (loopback, link-local,
+    /// unspecified, multicast/reserved, NAT64, unique-local, IPv4-compatible
+    /// IPv6) that a bundle must never be able to allowlist (SSRF target).
+    #[error("CIDR is in a special-use address range that cannot be allowlisted")]
+    SpecialUseAddress,
+    /// The hostname is internal-only (`localhost`, `*.internal`, `*.local`,
+    /// `*.svc.cluster.local`, ...) and cannot be allowlisted (SSRF target).
+    #[error("internal-only hostname cannot be allowlisted")]
+    InternalHost,
 }
 
 /// Which family a parsed [`NetRule`] belongs to.
@@ -131,8 +148,13 @@ impl NetRule {
     /// `*` label matches one or more subdomain labels; a label with
     /// literal characters (`cdn-*`) matches exactly one label. Input is
     /// lowercased and one trailing dot is ignored; anything that is not a
-    /// plain hostname (ports, paths, `@`, IP literals) never matches. Always
-    /// `false` for CIDR rules.
+    /// plain hostname (ports, paths, `@`, IP literals) never matches. A
+    /// wildcard also never matches a host that reaches below a public suffix
+    /// nested under the rule's suffix (`*.amazonaws.com` does not match
+    /// `attacker.s3.amazonaws.com`, since `s3.amazonaws.com` is itself a
+    /// public suffix) or that embeds a multi-label public suffix in the
+    /// wildcard-matched part (`a.github.io.example.com`). Always `false`
+    /// for CIDR rules.
     pub fn host_matches(&self, fqdn: &str) -> bool {
         let Some(host) = normalize_query_host(fqdn) else {
             return false;
@@ -147,6 +169,9 @@ impl NetRule {
                     return false;
                 };
                 if prefix.is_empty() {
+                    return false;
+                }
+                if wildcard_spans_public_suffix(&host, suffix, prefix) {
                     return false;
                 }
                 if label == "*" {
@@ -238,7 +263,7 @@ fn parse_cidr(input: &str) -> Result<NetRule, NetRuleError> {
         .map_err(|_| NetRuleError::Malformed("CIDR prefix out of range"))?;
     let addr = IpAddr::from_str(addr_str)
         .map_err(|_| NetRuleError::Malformed("CIDR address is not an IP literal"))?;
-    match addr {
+    let (addr, prefix) = match addr {
         IpAddr::V4(v4) => {
             if prefix > 32 {
                 return Err(NetRuleError::Malformed("IPv4 prefix above /32"));
@@ -252,6 +277,7 @@ fn parse_cidr(input: &str) -> Result<NetRule, NetRuleError> {
             if mask_v4(u32::from(v4), prefix) != u32::from(v4) {
                 return Err(NetRuleError::HostBitsSet);
             }
+            (IpAddr::V4(v4), prefix)
         }
         IpAddr::V6(v6) => {
             if prefix > 128 {
@@ -266,11 +292,47 @@ fn parse_cidr(input: &str) -> Result<NetRule, NetRuleError> {
             if mask_v6(u128::from(v6), prefix) != u128::from(v6) {
                 return Err(NetRuleError::HostBitsSet);
             }
+            // Canonicalise an IPv4-mapped rule (`::ffff:a.b.c.d/N`) to the
+            // IPv4 form (`a.b.c.d/N-96`) exactly as candidates are in
+            // `cidr_contains`, so it can never be a silently-dead rule.
+            // `prefix >= 120` here, so the IPv4 prefix is always >= 24.
+            match v6.to_ipv4_mapped() {
+                Some(v4) => (IpAddr::V4(v4), prefix - 96),
+                None => (IpAddr::V6(v6), prefix),
+            }
         }
+    };
+    if is_special_use(addr) {
+        return Err(NetRuleError::SpecialUseAddress);
     }
     Ok(NetRule {
         repr: Repr::Cidr { addr, prefix },
     })
+}
+
+/// True when `addr` (an already-canonical rule address, prefix >= /24 or
+/// /120 so the whole rule sits inside any block that contains its network
+/// address) is in a special-use range no bundle may allowlist: "this
+/// network"/unspecified, loopback, link-local, multicast and reserved
+/// (224.0.0.0/4 + 240.0.0.0/4), IPv4-compatible `::/96`, unique-local
+/// `fc00::/7`, NAT64 `64:ff9b::/96` and `64:ff9b:1::/48`, `ff00::/8`.
+fn is_special_use(addr: IpAddr) -> bool {
+    match addr {
+        IpAddr::V4(v4) => {
+            let [a, b, ..] = v4.octets();
+            a == 0 || a == 127 || (a == 169 && b == 254) || a >= 224
+        }
+        IpAddr::V6(v6) => {
+            let s = v6.segments();
+            let ipv4_compatible = s[..6].iter().all(|&x| x == 0);
+            let link_local = s[0] & 0xffc0 == 0xfe80;
+            let unique_local = s[0] & 0xfe00 == 0xfc00;
+            let multicast = s[0] >> 8 == 0xff;
+            let nat64 =
+                s[0] == 0x0064 && s[1] == 0xff9b && (s[2] == 1 || s[2..6].iter().all(|&x| x == 0));
+            ipv4_compatible || link_local || unique_local || multicast || nat64
+        }
+    }
 }
 
 fn is_ldh_label(label: &str, allow_star: bool) -> bool {
@@ -313,6 +375,14 @@ fn parse_host(host: &str) -> Result<NetRule, NetRuleError> {
     if !is_ldh_label(first, true) || !labels[1..].iter().all(|l| is_ldh_label(l, false)) {
         return Err(NetRuleError::Malformed("invalid hostname label"));
     }
+    if ends_in_number(labels[labels.len() - 1]) {
+        return Err(NetRuleError::Malformed(
+            "last label is numeric (resolvers read it as an IP address)",
+        ));
+    }
+    if is_internal_host(host) {
+        return Err(NetRuleError::InternalHost);
+    }
     if !first.contains('*') {
         return Ok(NetRule {
             repr: Repr::Fqdn(host.to_string()),
@@ -327,6 +397,67 @@ fn parse_host(host: &str) -> Result<NetRule, NetRuleError> {
             label: first.to_string(),
             suffix,
         },
+    })
+}
+
+/// Internal-only name suffixes (matched on label boundaries) that must never
+/// be allowlisted: loopback names, cloud metadata (`metadata.google.internal`
+/// falls under `internal`), cluster-local DNS (`*.svc.cluster.local` falls
+/// under `local`) and other non-public special-use TLDs.
+const INTERNAL_SUFFIXES: [&str; 9] = [
+    "localhost",
+    "internal",
+    "local",
+    "localdomain",
+    "home.arpa",
+    "lan",
+    "intranet",
+    "corp",
+    "home",
+];
+
+/// True when `host` is, or is a subdomain of, an internal-only name.
+fn is_internal_host(host: &str) -> bool {
+    INTERNAL_SUFFIXES.iter().any(|suffix| {
+        host == *suffix
+            || host
+                .strip_suffix(suffix)
+                .is_some_and(|rest| rest.ends_with('.'))
+    })
+}
+
+/// WHATWG "ends in a number": the last label is all ASCII digits or a `0x`
+/// hex literal, so inet_aton-style resolvers would read the whole name as an
+/// IPv4 address (`0x7f.1` is 127.0.0.1).
+fn ends_in_number(label: &str) -> bool {
+    if !label.is_empty() && label.bytes().all(|b| b.is_ascii_digit()) {
+        return true;
+    }
+    label
+        .strip_prefix("0x")
+        .is_some_and(|hex| hex.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+/// True when a wildcard match of `host` (rule suffix `suffix`, wildcard-
+/// matched part `prefix`) would reach below a public suffix nested under the
+/// rule's suffix, or embed a multi-label public suffix in the matched part.
+/// Fail-closed: shared-infrastructure domains (`s3.amazonaws.com`,
+/// `github.io`) must be allowlisted as exact FQDNs, never via a parent wildcard.
+fn wildcard_spans_public_suffix(host: &str, suffix: &str, prefix: &str) -> bool {
+    // The candidate's registrable domain extends past the rule's suffix (or
+    // the candidate is itself a public suffix): a nested suffix lies between.
+    match psl::domain_str(host) {
+        Some(domain) if domain.len() <= suffix.len() => {}
+        _ => return true,
+    }
+    // A multi-label tail of the wildcard-matched part is itself a public
+    // suffix (`github.io` in `a.github.io.example.com`). Single labels are
+    // exempt: many ordinary subdomains (`dev`, `app`, `cloud`) are TLDs.
+    let labels: Vec<&str> = prefix.split('.').collect();
+    (0..labels.len().saturating_sub(1)).any(|i| {
+        let tail = labels[i..].join(".");
+        psl::suffix(tail.as_bytes())
+            .is_some_and(|s| s.is_known() && s.as_bytes() == tail.as_bytes())
     })
 }
 

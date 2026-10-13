@@ -14,7 +14,7 @@ use regex::Regex;
 use super::error::{ManifestError, Reason};
 use super::schema::{Manifest, RawConsumeRule, RawManifest};
 use super::vnext::{BundleKind, NetworkPolicy, RequiredService};
-use crate::net::NetRule;
+use crate::net::{NetRule, NetRuleKind};
 
 const SEGMENT_PATTERN: &str = "[a-z0-9][a-z0-9_-]*";
 
@@ -576,7 +576,7 @@ pub fn validate(raw: &RawManifest, ctx: &ValidationContext<'_>) -> Result<Manife
     }
 
     // V32-V34 (v3): kind, network allowlist, required services.
-    let (kind, network, requires) = validate_vnext(raw)?;
+    let (kind, network, requires) = validate_vnext(raw, ctx)?;
 
     let permissions = raw
         .requires_scopes
@@ -627,9 +627,11 @@ pub fn validate(raw: &RawManifest, ctx: &ValidationContext<'_>) -> Result<Manife
 
 /// Validates the v3-only `kind`, `network` and `requires` fields (V32-V34).
 /// Absent fields yield the fail-closed defaults: an `app` with no network
-/// and no required services.
+/// and no required services. Every parsed `network.egress` FQDN/wildcard is
+/// also checked against the tenant egress denylist (V21 for v-next).
 fn validate_vnext(
     raw: &RawManifest,
+    ctx: &ValidationContext<'_>,
 ) -> Result<(BundleKind, NetworkPolicy, Vec<RequiredService>), ManifestError> {
     let kind = match raw.kind.as_deref() {
         None => BundleKind::App,
@@ -661,6 +663,14 @@ fn validate_vnext(
             egress: parse_rules(&net.egress, "egress")?,
         },
     };
+    for rule in &network.egress {
+        if net_rule_denylisted(rule, ctx.egress_denylist) {
+            return Err(ManifestError::new(
+                Reason::EgressHostDenylisted,
+                format!("network.egress entry {rule} matches or covers the tenant egress denylist"),
+            ));
+        }
+    }
 
     let mut requires = Vec::new();
     for entry in raw.requires.as_deref().unwrap_or_default() {
@@ -765,6 +775,38 @@ fn is_valid_dns_label(label: &str) -> bool {
         && label
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// True when a parsed `network.egress` rule is denied by the tenant
+/// denylist: an exact FQDN rule is denied if it matches an entry (exact or
+/// under a `*.` entry); a wildcard rule is denied if it is itself under a
+/// denylisted wildcard OR if it COVERS any denylisted host/wildcard (so
+/// `*.example.com` cannot launder a denylisted `blocked.example.com`).
+/// CIDR rules are not hostnames and are unaffected. Case-insensitive.
+fn net_rule_denylisted(rule: &NetRule, denylist: &[String]) -> bool {
+    let text = rule.to_string();
+    let wildcard = match rule.kind() {
+        NetRuleKind::Fqdn => None,
+        NetRuleKind::Wildcard => text.split_once('.'),
+        NetRuleKind::Ipv4Cidr | NetRuleKind::Ipv6Cidr => return false,
+    };
+    denylist.iter().any(|raw_entry| {
+        let entry = raw_entry.to_ascii_lowercase();
+        if is_denylisted(&text, std::slice::from_ref(&entry)) {
+            return true;
+        }
+        let Some((label, suffix)) = wildcard else {
+            return false;
+        };
+        // The denylisted host (or wildcard base) the rule would cover.
+        let covered = entry.strip_prefix("*.").unwrap_or(&entry);
+        if label == "*" {
+            covered == suffix || covered.ends_with(&format!(".{suffix}"))
+        } else {
+            // Intra-label glob: covers exactly one label directly under suffix.
+            rule.host_matches(covered) || covered == suffix
+        }
+    })
 }
 
 fn is_denylisted(host: &str, denylist: &[String]) -> bool {

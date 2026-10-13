@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security (PR #136 adversarial-review remediation, fail-closed)
+- `NetRule::host_matches`: a wildcard no longer matches a host that reaches
+  below a public suffix nested under the rule's suffix (`*.amazonaws.com` vs
+  `attacker.s3.amazonaws.com`) or embeds a multi-label public suffix in the
+  wildcard-matched part (`*.example.com` vs `a.github.io.example.com`). List
+  shared-infra hosts as exact FQDNs.
+- `network.egress` now honours the tenant egress denylist (FQDN, wildcard, and a
+  wildcard that covers a denylisted host) -> `Reason::EgressHostDenylisted`.
+- Parse rejects FQDNs whose last label is numeric/`0x` hex, internal-only names
+  (`localhost`, `.internal`, `.local`, `.localdomain`, `.home.arpa`, `.lan`,
+  `.intranet`, `.corp`, `.home`) and special-use CIDRs (loopback, link-local,
+  unspecified, multicast/reserved, NAT64, unique-local, IPv4-compatible `::/96`).
+  New `NetRuleError::{SpecialUseAddress, InternalHost}` (callers with exhaustive
+  matches must add arms).
+- IPv4-mapped IPv6 rule addresses are canonicalised to IPv4 at parse.
+
 ## [0.4.0]
 
 ### Added (bundle manifest v-next, F1 primitives)

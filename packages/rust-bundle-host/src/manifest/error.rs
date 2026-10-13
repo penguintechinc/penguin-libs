@@ -60,7 +60,9 @@ pub enum Reason {
     /// V20: an `egress[].methods` entry is outside the six allowed
     /// uppercase HTTP methods.
     InvalidEgressMethod,
-    /// V21: an `egress[].host` matches the tenant-level denylist.
+    /// V21: an `egress[].host` (v2) or a `network.egress` FQDN/wildcard
+    /// (v3, including a wildcard that covers a denylisted host) matches the
+    /// tenant-level denylist.
     EgressHostDenylisted,
     /// V22: `egress` is empty while the component imports
     /// `waddle:bundle/http`.

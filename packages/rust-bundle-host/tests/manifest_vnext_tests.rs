@@ -90,6 +90,16 @@ requires:
 #[case::wildcard_tld("network:\n  egress: [\"*.com\"]\n", Reason::InvalidNetworkRule)]
 #[case::broad_cidr("network:\n  ingress: [\"10.0.0.0/8\"]\n", Reason::InvalidNetworkRule)]
 #[case::bare_token("network:\n  egress: [\"discord\"]\n", Reason::InvalidNetworkRule)]
+#[case::hex_ip("network:\n  egress: [\"0x7f.0.0.1\"]\n", Reason::InvalidNetworkRule)]
+#[case::metadata_host(
+    "network:\n  egress: [\"metadata.google.internal\"]\n",
+    Reason::InvalidNetworkRule
+)]
+#[case::loopback_cidr("network:\n  egress: [\"127.0.0.0/24\"]\n", Reason::InvalidNetworkRule)]
+#[case::imds_ingress(
+    "network:\n  ingress: [\"169.254.169.254/32\"]\n",
+    Reason::InvalidNetworkRule
+)]
 #[case::bad_requires_bundle("requires:\n  - bundle: Not A Bundle\n", Reason::InvalidRequires)]
 #[case::missing_requires_bundle("requires:\n  - min_version: 1.0.0\n", Reason::InvalidRequires)]
 #[case::bad_requires_semver(
@@ -158,4 +168,55 @@ fn transport_capability_has_a_stable_wire_label() {
     );
     // Existing variants are untouched.
     assert_eq!(capability_from_str("http"), Some(CapabilityKind::Http));
+}
+
+fn reason_with_denylist(source: &str, denylist: &[String]) -> Result<(), Reason> {
+    let ctx = ValidationContext {
+        egress_denylist: denylist,
+        ..Default::default()
+    };
+    match parse_yaml(source, &ctx) {
+        Ok(_) => Ok(()),
+        Err(penguin_bundle_host::manifest::ParseError::Validation(e)) => Err(e.reason),
+        Err(other) => panic!("unexpected syntax error: {other}"),
+    }
+}
+
+// regression: PR136 review finding 2 - `network.egress` must honour the
+// tenant egress denylist (FQDN and wildcard that covers a denylisted host).
+#[rstest]
+#[case::exact_fqdn("blocked.example.com", "blocked.example.com")]
+#[case::exact_under_wildcard_entry("x.blocked.example.com", "*.blocked.example.com")]
+#[case::wildcard_covers_denied_host("*.example.com", "blocked.example.com")]
+#[case::wildcard_covers_denied_wildcard("*.example.com", "*.blocked.example.com")]
+#[case::wildcard_under_denied_wildcard("*.sub.blocked.example.com", "*.blocked.example.com")]
+#[case::same_wildcard("*.blocked.example.com", "*.blocked.example.com")]
+#[case::glob_label_under_denied_wildcard("cdn-*.blocked.example.com", "*.blocked.example.com")]
+#[case::case_insensitive_entry("blocked.example.com", "Blocked.Example.COM")]
+fn v3_network_egress_honours_the_denylist(#[case] rule: &str, #[case] denied: &str) {
+    let extra = format!("network:\n  egress: [\"{rule}\"]\n");
+    let denylist = vec![denied.to_string()];
+    assert_eq!(
+        reason_with_denylist(&doc(3, &extra), &denylist),
+        Err(Reason::EgressHostDenylisted)
+    );
+}
+
+#[rstest]
+#[case::unrelated("ok.example.com", "blocked.example.com")]
+#[case::sibling_wildcard("*.other.example.com", "*.blocked.example.com")]
+#[case::suffix_lookalike("notblocked.example.com", "blocked.example.com")]
+#[case::wildcard_does_not_cover_parent("*.blocked.example.com", "example.com")]
+#[case::glob_does_not_cover_deeper("cdn-*.example.com", "x.blocked.example.com")]
+fn v3_network_egress_allows_non_denylisted(#[case] rule: &str, #[case] denied: &str) {
+    let extra = format!("network:\n  egress: [\"{rule}\"]\n");
+    let denylist = vec![denied.to_string()];
+    assert_eq!(reason_with_denylist(&doc(3, &extra), &denylist), Ok(()));
+}
+
+#[test]
+fn v3_network_egress_cidr_and_ingress_ignore_the_hostname_denylist() {
+    let extra = "network:\n  ingress: [\"blocked.example.com\"]\n  egress: [\"10.0.0.0/24\"]\n";
+    let denylist = vec!["blocked.example.com".to_string()];
+    assert_eq!(reason_with_denylist(&doc(3, extra), &denylist), Ok(()));
 }
