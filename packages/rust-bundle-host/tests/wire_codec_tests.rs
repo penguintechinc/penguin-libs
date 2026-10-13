@@ -9,8 +9,8 @@ use std::io::Cursor;
 use penguin_bundle_host::wire::{
     read_frame, write_frame, CapabilityKind, CorrelationTable, ErrorBody, ErrorCode, ExportKind,
     Frame, HelloBody, HelloLimits, HelloOkBody, HostCallBody, HostResultBody, HostResultError,
-    IdAllocator, InvokeBody, LoadBody, LoadLimits, LoadedBody, Message, SandboxInfo, ShutdownBody,
-    TraceContext, UnloadBody, UnloadedBody,
+    IdAllocator, InvokeBody, LoadBody, LoadLimits, LoadedBody, Message, ResultBody, SandboxInfo,
+    ShutdownBody, TraceContext, UnloadBody, UnloadedBody,
 };
 
 fn hello_frame() -> Frame {
@@ -406,5 +406,130 @@ fn correlation_table_cancel_is_idempotent() {
     let _rx = table.register(5).expect("register");
     table.cancel(5);
     table.cancel(5); // idempotent, must not panic
+    assert_eq!(table.pending_count(), 0);
+}
+
+// -- ExportKind: connector exports (waddle:connector@1.0.0 receiver) --
+
+#[test]
+fn export_kind_serializes_every_variant_to_its_stable_snake_case_label() {
+    let expected = [
+        (ExportKind::Transform, "transform"),
+        (ExportKind::Dispatch, "dispatch"),
+        (ExportKind::ConnectorOnConnect, "connector_on_connect"),
+        (ExportKind::ConnectorOnFrame, "connector_on_frame"),
+        (
+            ExportKind::ConnectorOnHeartbeatDue,
+            "connector_on_heartbeat_due",
+        ),
+        (ExportKind::ConnectorOnDisconnect, "connector_on_disconnect"),
+    ];
+    assert_eq!(expected.len(), ExportKind::ALL.len());
+    for (kind, label) in expected {
+        assert_eq!(serde_json::to_value(kind).unwrap(), label);
+        assert_eq!(kind.as_str(), label, "metric label must equal wire label");
+        let back: ExportKind = serde_json::from_value(serde_json::json!(label)).unwrap();
+        assert_eq!(back, kind);
+    }
+}
+
+#[test]
+fn export_kind_all_has_no_duplicates_and_partitions_by_is_connector() {
+    let mut seen = std::collections::HashSet::new();
+    for kind in ExportKind::ALL {
+        assert!(seen.insert(kind), "duplicate in ALL: {kind:?}");
+    }
+    let connectors = ExportKind::ALL.iter().filter(|k| k.is_connector()).count();
+    assert_eq!(connectors, 4, "the four receiver entrypoints");
+    assert!(!ExportKind::Transform.is_connector());
+    assert!(!ExportKind::Dispatch.is_connector());
+}
+
+#[test]
+fn export_kind_rejects_unknown_and_legacy_unprefixed_labels() {
+    for bad in ["connector", "on_frame", "Connector", "receiver", ""] {
+        assert!(
+            serde_json::from_value::<ExportKind>(serde_json::json!(bad)).is_err(),
+            "{bad:?} must not deserialize"
+        );
+    }
+}
+
+#[test]
+fn connector_invoke_frame_round_trips_for_every_connector_export() {
+    for kind in ExportKind::ALL.into_iter().filter(|k| k.is_connector()) {
+        let frame = Frame::new(
+            21,
+            Message::Invoke(InvokeBody {
+                app_id: "waddles.core.connector.twitch".to_string(),
+                digest: format!("sha256:{}", "d".repeat(64)),
+                export: kind,
+                payload: serde_json::json!({"ctx": {"platform": "twitch"}}),
+                deadline_ms: 1500,
+                trace: None,
+            }),
+        );
+        let value = serde_json::to_value(&frame).expect("serialize");
+        assert_eq!(value["kind"], "invoke");
+        assert_eq!(value["export"], kind.as_str());
+        let round_tripped: Frame = serde_json::from_value(value).expect("deserialize");
+        assert_eq!(round_tripped, frame);
+    }
+}
+
+#[tokio::test]
+async fn connector_export_round_trips_over_the_framed_wire_and_correlation_table() {
+    // Stage side: allocate an id, register for the reply, send an invoke
+    // naming a connector export over a real length-prefixed duplex stream.
+    // Executor side: read it, route on the export, answer with a result
+    // carrying the same id. Mirrors the Transform/Dispatch path end to end.
+    let (mut stage_io, mut exec_io) = tokio::io::duplex(64 * 1024);
+    let table = CorrelationTable::new();
+    let ids = IdAllocator::new();
+
+    for kind in ExportKind::ALL.into_iter().filter(|k| k.is_connector()) {
+        let id = ids.next_id();
+        let rx = table.register(id).expect("register");
+        let invoke = Frame::new(
+            id,
+            Message::Invoke(InvokeBody {
+                app_id: "waddles.core.connector.twitch".to_string(),
+                digest: format!("sha256:{}", "e".repeat(64)),
+                export: kind,
+                payload: serde_json::json!({"bytes": [1, 2, 3]}),
+                deadline_ms: 1000,
+                trace: None,
+            }),
+        );
+        write_frame(&mut stage_io, &invoke).await.expect("write");
+
+        let received = read_frame(&mut exec_io).await.expect("read");
+        let Message::Invoke(body) = &received.message else {
+            panic!("expected invoke, got {:?}", received.message);
+        };
+        assert_eq!(body.export, kind, "export must survive the wire intact");
+        assert!(body.export.is_connector());
+
+        let reply = Frame::new(
+            received.id,
+            Message::Result(ResultBody {
+                payload: serde_json::json!({"echo": kind.as_str()}),
+                duration_ms: 1,
+                fuel_used: 0,
+            }),
+        );
+        write_frame(&mut exec_io, &reply)
+            .await
+            .expect("write reply");
+        let reply_in = read_frame(&mut stage_io).await.expect("read reply");
+        table.complete(reply_in).expect("complete");
+
+        let delivered = rx.await.expect("reply delivered");
+        assert_eq!(delivered.id, id);
+        let Message::Result(result) = delivered.message else {
+            panic!("expected result");
+        };
+        assert_eq!(result.payload["echo"], kind.as_str());
+    }
     assert_eq!(table.pending_count(), 0);
 }
