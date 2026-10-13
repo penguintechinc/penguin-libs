@@ -775,6 +775,9 @@ fn basic_fixture_parses_and_validates_to_the_expected_manifest() {
             routes_to: vec![],
             compatible_with: vec![],
             incompatible_with: vec![],
+            kind: penguin_bundle_host::manifest::BundleKind::App,
+            network: penguin_bundle_host::manifest::NetworkPolicy::default(),
+            requires: vec![],
         }
     );
 }

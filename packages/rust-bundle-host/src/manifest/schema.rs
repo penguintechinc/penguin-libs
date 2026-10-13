@@ -8,6 +8,10 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
+use super::vnext::{
+    BundleKind, NetworkPolicy, RawNetworkPolicy, RawRequiredService, RequiredService,
+};
+
 /// The default `limits.timeout_ms` (spec §6.4.2).
 pub const DEFAULT_TIMEOUT_MS: i64 = 2000;
 /// The default `limits.memory_mb` (spec §6.4.2).
@@ -44,6 +48,12 @@ pub struct RawManifest {
     pub compatible_with: Vec<String>,
     pub incompatible_with: Vec<String>,
     pub platform_compatibility: Option<RawPlatformCompat>,
+    /// v3 only: `app` (default) or `service`.
+    pub kind: Option<String>,
+    /// v3 only: declared network allowlist (absent = no network).
+    pub network: Option<RawNetworkPolicy>,
+    /// v3 only: service bundles this bundle depends on.
+    pub requires: Option<Vec<RawRequiredService>>,
 }
 
 /// One `stages.<name>` entry. Script stages (`process`/`action`) use
@@ -154,4 +164,10 @@ pub struct Manifest {
     pub routes_to: Vec<String>,
     pub compatible_with: Vec<String>,
     pub incompatible_with: Vec<String>,
+    /// `app` unless the v3 manifest declares `kind: service`.
+    pub kind: BundleKind,
+    /// Declared network allowlist; empty for v2 manifests (no network).
+    pub network: NetworkPolicy,
+    /// Required service bundles; empty for v2 manifests.
+    pub requires: Vec<RequiredService>,
 }

@@ -6,10 +6,12 @@
 pub mod error;
 pub mod rules;
 pub mod schema;
+pub mod vnext;
 
 pub use error::{ManifestError, Reason};
 pub use rules::{validate, ValidationContext};
 pub use schema::{Manifest, RawManifest};
+pub use vnext::{satisfies_min_version, BundleKind, NetworkPolicy, RequiredService};
 
 /// Parses `bundle.yaml` v2 source text and validates it in one step. A
 /// YAML syntax error is reported the same way a JSON syntax error would be

@@ -304,6 +304,9 @@ pub enum CapabilityKind {
     Log,
     Clock,
     Context,
+    /// Declarative transport capability for service bundles (manifest
+    /// v-next); the host brokers network transport on their behalf.
+    Transport,
 }
 
 /// Executor asks the stage to service a host capability call on behalf of
@@ -390,6 +393,7 @@ pub fn capability_from_str(value: &str) -> Option<CapabilityKind> {
         ("log", CapabilityKind::Log),
         ("clock", CapabilityKind::Clock),
         ("context", CapabilityKind::Context),
+        ("transport", CapabilityKind::Transport),
     ]);
     table.get(value).copied()
 }

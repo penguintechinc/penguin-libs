@@ -41,7 +41,8 @@ pub enum Reason {
     PresentationHasScriptEntrypoint,
     /// V13: a script stage (`process`/`action`) declares `html_entrypoint`.
     ScriptStageHasHtmlEntrypoint,
-    /// V14: `schema_version` is not exactly `2`.
+    /// V14: `schema_version` is not `2` or `3`, or a v2 manifest declares
+    /// v3-only fields (`kind`/`network`/`requires`).
     UnsupportedSchemaVersion,
     /// V15: `stages` declares an `ingest` key.
     IngestNotPluggable,
@@ -59,7 +60,9 @@ pub enum Reason {
     /// V20: an `egress[].methods` entry is outside the six allowed
     /// uppercase HTTP methods.
     InvalidEgressMethod,
-    /// V21: an `egress[].host` matches the tenant-level denylist.
+    /// V21: an `egress[].host` (v2) or a `network.egress` FQDN/wildcard
+    /// (v3, including a wildcard that covers a denylisted host) matches the
+    /// tenant-level denylist.
     EgressHostDenylisted,
     /// V22: `egress` is empty while the component imports
     /// `waddle:bundle/http`.
@@ -98,6 +101,14 @@ pub enum Reason {
     /// V31: the compiled component imports something outside the WIT
     /// world's import list plus the denying `wasi:sockets` stub set.
     ForbiddenHostImport,
+    /// V32 (v3): `kind` is outside `{app, service}`.
+    InvalidBundleKind,
+    /// V33 (v3): a `network.ingress`/`network.egress` entry is not a valid
+    /// FQDN, leftmost-label wildcard or in-range CIDR.
+    InvalidNetworkRule,
+    /// V34 (v3): a `requires[]` entry has a bad `bundle` id, a bad
+    /// `min_version`, or duplicates another entry.
+    InvalidRequires,
 }
 
 impl Reason {
@@ -141,6 +152,9 @@ impl Reason {
             Reason::InvalidRoutesToTarget => "invalid_routes_to_target",
             Reason::UnknownRoutesToTarget => "unknown_routes_to_target",
             Reason::ForbiddenHostImport => "forbidden_host_import",
+            Reason::InvalidBundleKind => "invalid_bundle_kind",
+            Reason::InvalidNetworkRule => "invalid_network_rule",
+            Reason::InvalidRequires => "invalid_requires",
         }
     }
 }

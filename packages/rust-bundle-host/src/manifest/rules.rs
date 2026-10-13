@@ -13,6 +13,8 @@ use regex::Regex;
 
 use super::error::{ManifestError, Reason};
 use super::schema::{Manifest, RawConsumeRule, RawManifest};
+use super::vnext::{BundleKind, NetworkPolicy, RequiredService};
+use crate::net::{NetRule, NetRuleKind};
 
 const SEGMENT_PATTERN: &str = "[a-z0-9][a-z0-9_-]*";
 
@@ -37,6 +39,13 @@ static SEMVER_RE: LazyLock<Regex> = LazyLock::new(|| {
         r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?$",
     )
     .unwrap()
+});
+
+/// A dotted bundle reference (`requires[].bundle`): lowercase segments of
+/// `[a-z0-9_-]` joined by `.`, at least two segments.
+static BUNDLE_REF_RE: LazyLock<Regex> = LazyLock::new(|| {
+    #[allow(clippy::unwrap_used)] // infallible: a literal regex built once at process startup.
+    Regex::new(&format!(r"^{SEGMENT_PATTERN}(\.{SEGMENT_PATTERN})+$")).unwrap()
 });
 
 static EVENT_TYPE_SEGMENT_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -323,11 +332,23 @@ pub fn validate(raw: &RawManifest, ctx: &ValidationContext<'_>) -> Result<Manife
         }
     }
 
-    // V14: schema_version is exactly 2.
-    if raw.schema_version != Some(2) {
+    // V14: schema_version is 2 (legacy) or 3 (v-next). v3-only fields on a
+    // v2 document are rejected rather than silently honoured or dropped.
+    let schema_version = match raw.schema_version {
+        Some(v @ (2 | 3)) => v,
+        other => {
+            return Err(ManifestError::new(
+                Reason::UnsupportedSchemaVersion,
+                format!("schema_version {other:?} must be 2 or 3"),
+            ))
+        }
+    };
+    if schema_version == 2
+        && (raw.kind.is_some() || raw.network.is_some() || raw.requires.is_some())
+    {
         return Err(ManifestError::new(
             Reason::UnsupportedSchemaVersion,
-            format!("schema_version {:?} must be exactly 2", raw.schema_version),
+            "kind/network/requires require schema_version 3".to_string(),
         ));
     }
 
@@ -554,13 +575,16 @@ pub fn validate(raw: &RawManifest, ctx: &ValidationContext<'_>) -> Result<Manife
         }
     }
 
+    // V32-V34 (v3): kind, network allowlist, required services.
+    let (kind, network, requires) = validate_vnext(raw, ctx)?;
+
     let permissions = raw
         .requires_scopes
         .clone()
         .unwrap_or_else(|| raw.permissions.clone());
 
     Ok(Manifest {
-        schema_version: raw.schema_version.unwrap_or(2),
+        schema_version,
         app_id: app_id.to_string(),
         name: name.to_string(),
         version: version.to_string(),
@@ -595,7 +619,92 @@ pub fn validate(raw: &RawManifest, ctx: &ValidationContext<'_>) -> Result<Manife
         routes_to: raw.routes_to.clone(),
         compatible_with: raw.compatible_with.clone(),
         incompatible_with: raw.incompatible_with.clone(),
+        kind,
+        network,
+        requires,
     })
+}
+
+/// Validates the v3-only `kind`, `network` and `requires` fields (V32-V34).
+/// Absent fields yield the fail-closed defaults: an `app` with no network
+/// and no required services. Every parsed `network.egress` FQDN/wildcard is
+/// also checked against the tenant egress denylist (V21 for v-next).
+fn validate_vnext(
+    raw: &RawManifest,
+    ctx: &ValidationContext<'_>,
+) -> Result<(BundleKind, NetworkPolicy, Vec<RequiredService>), ManifestError> {
+    let kind = match raw.kind.as_deref() {
+        None => BundleKind::App,
+        Some(value) => BundleKind::parse(value).ok_or_else(|| {
+            ManifestError::new(
+                Reason::InvalidBundleKind,
+                format!("kind {value:?} must be \"app\" or \"service\""),
+            )
+        })?,
+    };
+
+    let parse_rules = |rules: &[String], dir: &str| -> Result<Vec<NetRule>, ManifestError> {
+        rules
+            .iter()
+            .map(|rule| {
+                NetRule::parse(rule).map_err(|err| {
+                    ManifestError::new(
+                        Reason::InvalidNetworkRule,
+                        format!("network.{dir} entry {rule:?}: {err}"),
+                    )
+                })
+            })
+            .collect()
+    };
+    let network = match &raw.network {
+        None => NetworkPolicy::default(),
+        Some(net) => NetworkPolicy {
+            ingress: parse_rules(&net.ingress, "ingress")?,
+            egress: parse_rules(&net.egress, "egress")?,
+        },
+    };
+    for rule in &network.egress {
+        if net_rule_denylisted(rule, ctx.egress_denylist) {
+            return Err(ManifestError::new(
+                Reason::EgressHostDenylisted,
+                format!("network.egress entry {rule} matches or covers the tenant egress denylist"),
+            ));
+        }
+    }
+
+    let mut requires = Vec::new();
+    for entry in raw.requires.as_deref().unwrap_or_default() {
+        let bundle = entry.bundle.as_deref().unwrap_or_default();
+        if !BUNDLE_REF_RE.is_match(bundle) {
+            return Err(ManifestError::new(
+                Reason::InvalidRequires,
+                format!("requires bundle {bundle:?} is not a valid bundle id"),
+            ));
+        }
+        if requires
+            .iter()
+            .any(|r: &RequiredService| r.bundle == bundle)
+        {
+            return Err(ManifestError::new(
+                Reason::InvalidRequires,
+                format!("requires lists bundle {bundle:?} more than once"),
+            ));
+        }
+        let min_version = match entry.min_version.as_deref() {
+            None => None,
+            Some(text) => Some(semver::Version::parse(text).map_err(|err| {
+                ManifestError::new(
+                    Reason::InvalidRequires,
+                    format!("requires {bundle:?} min_version {text:?}: {err}"),
+                )
+            })?),
+        };
+        requires.push(RequiredService {
+            bundle: bundle.to_string(),
+            min_version,
+        });
+    }
+    Ok((kind, network, requires))
 }
 
 fn require_str<'a>(value: Option<&'a str>, field: &str) -> Result<&'a str, ManifestError> {
@@ -666,6 +775,38 @@ fn is_valid_dns_label(label: &str) -> bool {
         && label
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// True when a parsed `network.egress` rule is denied by the tenant
+/// denylist: an exact FQDN rule is denied if it matches an entry (exact or
+/// under a `*.` entry); a wildcard rule is denied if it is itself under a
+/// denylisted wildcard OR if it COVERS any denylisted host/wildcard (so
+/// `*.example.com` cannot launder a denylisted `blocked.example.com`).
+/// CIDR rules are not hostnames and are unaffected. Case-insensitive.
+fn net_rule_denylisted(rule: &NetRule, denylist: &[String]) -> bool {
+    let text = rule.to_string();
+    let wildcard = match rule.kind() {
+        NetRuleKind::Fqdn => None,
+        NetRuleKind::Wildcard => text.split_once('.'),
+        NetRuleKind::Ipv4Cidr | NetRuleKind::Ipv6Cidr => return false,
+    };
+    denylist.iter().any(|raw_entry| {
+        let entry = raw_entry.to_ascii_lowercase();
+        if is_denylisted(&text, std::slice::from_ref(&entry)) {
+            return true;
+        }
+        let Some((label, suffix)) = wildcard else {
+            return false;
+        };
+        // The denylisted host (or wildcard base) the rule would cover.
+        let covered = entry.strip_prefix("*.").unwrap_or(&entry);
+        if label == "*" {
+            covered == suffix || covered.ends_with(&format!(".{suffix}"))
+        } else {
+            // Intra-label glob: covers exactly one label directly under suffix.
+            rule.host_matches(covered) || covered == suffix
+        }
+    })
 }
 
 fn is_denylisted(host: &str, denylist: &[String]) -> bool {
