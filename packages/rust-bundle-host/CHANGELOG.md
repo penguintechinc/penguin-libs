@@ -5,6 +5,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0]
+
+### Added (bundle manifest v-next, F1 primitives)
+- `net::NetRule`: validated network allowlist entry -- exact FQDN, leftmost-label
+  wildcard (`*.x.com`, `cdn-*.x.com`; checked against the compiled-in Public
+  Suffix List so `*.com`/`*.co.uk`/`*.github.io` are rejected), IPv4 CIDR
+  (/24-/32 only) or IPv6 CIDR (/120-/128 only, TODO(confirm)). Pure matchers
+  `host_matches` / `cidr_contains` (label-boundary, never substring).
+- `manifest::{BundleKind, NetworkPolicy, RequiredService, satisfies_min_version}`
+  and `Manifest.{kind, network, requires}`; `schema_version: 3` accepted
+  alongside 2 (v3-only fields on a v2 document are rejected). New reasons
+  `invalid_bundle_kind`, `invalid_network_rule`, `invalid_requires`.
+- `wire::CapabilityKind::Transport` (`"transport"`).
+- Dependencies: `psl =2.1.241`, `semver =1.0.28`.
+
+### Changed (BREAKING for downstream struct literals / exhaustive matches)
+- `Manifest` gained three fields and `CapabilityKind` a variant (see above), so
+  `0.3.0` -> `0.4.0`.
+
 ## [0.3.0]
 
 ### Added

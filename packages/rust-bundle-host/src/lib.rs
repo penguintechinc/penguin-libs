@@ -7,4 +7,5 @@
 //! `waddles` repo). See `README.md` for what is and is not in scope yet.
 
 pub mod manifest;
+pub mod net;
 pub mod wire;
