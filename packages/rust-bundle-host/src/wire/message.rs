@@ -179,13 +179,80 @@ pub struct UnloadBody {
     pub community_id: i32,
 }
 
-/// The two script exports a bundle may implement (spec §6.5's
-/// `process-stage`/`action-stage` interfaces).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Every export a bundle may be invoked on over the wire: the two script
+/// exports (spec §6.5's `process-stage`/`action-stage` interfaces) and the
+/// four connector `receiver` exports of `waddle:connector@1.0.0`
+/// (`wit/waddle-connector/connector.wit` in waddles).
+///
+/// One variant per WIT export function rather than a single `Connector`
+/// kind plus a stringly-typed discriminator in the payload: the executor
+/// must pick a different guest function, fuel budget and result shape for
+/// each, so the compiler should force every `match` to handle them
+/// individually. Deliberately NOT `#[non_exhaustive]` -- downstream
+/// executors/stages must fail to compile (rather than silently drop a new
+/// export) when a variant is added; adding one is a breaking change, hence
+/// a minor bump while the crate is `0.x`.
+///
+/// Serialized as `snake_case` (e.g. `"connector_on_frame"`). A peer on an
+/// older crate version rejects an unknown kind as a malformed frame, which
+/// is the intended fail-loud behaviour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExportKind {
+    /// `waddle:bundle/process-stage.transform`.
     Transform,
+    /// `waddle:bundle/action-stage.dispatch`.
     Dispatch,
+    /// `waddle:connector/receiver.on-connect`.
+    ConnectorOnConnect,
+    /// `waddle:connector/receiver.on-frame` (the hot path).
+    ConnectorOnFrame,
+    /// `waddle:connector/receiver.on-heartbeat-due`.
+    ConnectorOnHeartbeatDue,
+    /// `waddle:connector/receiver.on-disconnect`.
+    ConnectorOnDisconnect,
+}
+
+impl ExportKind {
+    /// Every variant, so callers (and tests) can iterate the full export
+    /// space without hand-maintaining a list that could drift.
+    pub const ALL: [ExportKind; 6] = [
+        ExportKind::Transform,
+        ExportKind::Dispatch,
+        ExportKind::ConnectorOnConnect,
+        ExportKind::ConnectorOnFrame,
+        ExportKind::ConnectorOnHeartbeatDue,
+        ExportKind::ConnectorOnDisconnect,
+    ];
+
+    /// The stable, low-cardinality wire/metric label -- identical to the
+    /// serialized form, so a metric `export` label and a frame's `export`
+    /// field never disagree.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Transform => "transform",
+            Self::Dispatch => "dispatch",
+            Self::ConnectorOnConnect => "connector_on_connect",
+            Self::ConnectorOnFrame => "connector_on_frame",
+            Self::ConnectorOnHeartbeatDue => "connector_on_heartbeat_due",
+            Self::ConnectorOnDisconnect => "connector_on_disconnect",
+        }
+    }
+
+    /// True for the four `waddle:connector` receiver exports; false for the
+    /// two stage script exports. Executors use it to route to the connector
+    /// world (a different component world than `stage`).
+    #[must_use]
+    pub const fn is_connector(self) -> bool {
+        match self {
+            Self::Transform | Self::Dispatch => false,
+            Self::ConnectorOnConnect
+            | Self::ConnectorOnFrame
+            | Self::ConnectorOnHeartbeatDue
+            | Self::ConnectorOnDisconnect => true,
+        }
+    }
 }
 
 /// W3C trace context propagated from the envelope onto an `invoke` frame

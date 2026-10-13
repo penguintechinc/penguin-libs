@@ -5,6 +5,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.0]
+
+### Added
+- `wire::ExportKind`: four connector exports of `waddle:connector@1.0.0`
+  `receiver` -- `ConnectorOnConnect`, `ConnectorOnFrame`,
+  `ConnectorOnHeartbeatDue`, `ConnectorOnDisconnect` (wire labels
+  `connector_on_connect` / `connector_on_frame` / `connector_on_heartbeat_due`
+  / `connector_on_disconnect`), plus `ExportKind::ALL`, `as_str()` and
+  `is_connector()`.
+
+### Changed (BREAKING for downstream `match`es)
+- `ExportKind` is not `#[non_exhaustive]` by design, so adding variants breaks
+  every exhaustive `match` on it (waddles `bundle_executor` has three). That is
+  intended: the compiler must prove each export is routed. Hence `0.2.0` ->
+  `0.3.0`. `ExportKind` also now derives `Hash`.
+
+## [Security fixes (previously Unreleased)]
+
 ### Security
 - `manifest`: replace `serde_yaml_ng` with `serde-saphyr` (pure safe-Rust YAML) so
   the unmaintained `unsafe-libyaml` (RUSTSEC-2024-0449) is no longer in the
