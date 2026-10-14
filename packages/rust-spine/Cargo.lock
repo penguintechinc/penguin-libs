@@ -853,7 +853,7 @@ dependencies = [
 
 [[package]]
 name = "penguin-spine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "criterion",
