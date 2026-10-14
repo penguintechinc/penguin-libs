@@ -127,10 +127,24 @@ impl<'de> Deserialize<'de> for PlatformEvent {
 /// chat reply (spec Sec6.1.2, Sec5.9).
 pub const PROCESS_TARGET_APP_ID_KEY: &str = "_target_app_id";
 
-/// The only `StageEnvelope.schema_version` this crate accepts. No
-/// dual-read (D3, D30): a `1` or absent value is the pre-D30 shape and is
-/// rejected outright rather than interpreted (spec Sec6.1.2).
-pub const ENVELOPE_SCHEMA_VERSION: u32 = 2;
+/// The current `StageEnvelope.schema_version`: the D30 shape PLUS the
+/// authoritative numeric scope keys `tenant_id`/`community_id`, both bound
+/// into `binding.mac` (see `binding::compute_binding_mac_v3`). Producers
+/// that populate the numeric ids stamp this.
+pub const ENVELOPE_SCHEMA_VERSION: u32 = 3;
+
+/// The previous (D30, string-scope-only) `schema_version`. Still accepted
+/// on read -- and still minted by producers that have not yet been taught
+/// to resolve numeric ids -- so the numeric-id migration can roll out
+/// stage-by-stage without a flag day. A `2` envelope MUST NOT carry
+/// `tenant_id`/`community_id` (they would be outside its MAC); a `1` or
+/// absent value is the pre-D30 shape and is rejected outright (spec
+/// Sec6.1.2). Retire once every producer emits [`ENVELOPE_SCHEMA_VERSION`].
+pub const LEGACY_ENVELOPE_SCHEMA_VERSION: u32 = 2;
+
+/// The `community_id` value meaning "tenant-wide" (the `_tenant` stream
+/// segment's numeric twin). A real community id is always `>= 1`.
+pub const TENANT_WIDE_COMMUNITY_ID: i32 = 0;
 
 const BUNDLE_STAGES: [&str; 3] = ["ingest", "process", "action"];
 
@@ -304,6 +318,10 @@ struct RawStageEnvelope {
     schema_version: u32,
     tenant: String,
     community: Option<String>,
+    #[serde(default)]
+    tenant_id: Option<i64>,
+    #[serde(default)]
+    community_id: Option<i32>,
     app_id: String,
     stage: String,
     event: PlatformEvent,
@@ -335,12 +353,28 @@ struct RawStageEnvelope {
 /// exactly, so golden-fixture round-trips (Task 8) are byte-identical.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct StageEnvelope {
-    /// Must equal [`ENVELOPE_SCHEMA_VERSION`] (`2`) -- no dual-read (D3, D30).
+    /// [`ENVELOPE_SCHEMA_VERSION`] (`3`, numeric scope) or
+    /// [`LEGACY_ENVELOPE_SCHEMA_VERSION`] (`2`, string scope only) -- any
+    /// other value is rejected (no dual-read of the pre-D30 shape).
     pub schema_version: u32,
-    /// Non-empty tenant slug; equals the `t:` segment of the key it came from.
+    /// Tenant slug. **DISPLAY-ONLY metadata** on a v3 envelope -- never a
+    /// lookup/stream/cache/routing/authz key (use `tenant_id`). Still the
+    /// `t:` stream-key segment until the stream-key migration lands.
     pub tenant: String,
-    /// `None` iff the key's `c:` segment is the literal `_tenant`.
+    /// Community name; `None` for a tenant-wide activation. **DISPLAY-ONLY**
+    /// on a v3 envelope (use `community_id`).
     pub community: Option<String>,
+    /// AUTHORITATIVE numeric tenant key. `Some(>= 1)` iff
+    /// `schema_version == 3`; must be `None` on a v2 envelope (a v2 MAC does
+    /// not cover it). Bound into `binding.mac`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<i64>,
+    /// AUTHORITATIVE numeric community key; [`TENANT_WIDE_COMMUNITY_ID`]
+    /// (`0`) for a tenant-wide activation. `Some(>= 0)` iff
+    /// `schema_version == 3`; must be `None` on a v2 envelope. Bound into
+    /// `binding.mac`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub community_id: Option<i32>,
     /// Matches `^waddles\.[a-z0-9][a-z0-9_-]*\.[a-z0-9][a-z0-9_-]*\.[a-z0-9][a-z0-9_-]*$`.
     pub app_id: String,
     /// One of `"ingest"`, `"process"`, `"action"`.
@@ -372,11 +406,37 @@ impl TryFrom<RawStageEnvelope> for StageEnvelope {
     type Error = EnvelopeError;
 
     fn try_from(raw: RawStageEnvelope) -> Result<Self, EnvelopeError> {
-        if raw.schema_version != ENVELOPE_SCHEMA_VERSION {
-            return Err(env_err(format!(
-                "'schema_version' must equal {ENVELOPE_SCHEMA_VERSION}, got {} -- no dual-read of the pre-D30 shape",
-                raw.schema_version
-            )));
+        match raw.schema_version {
+            LEGACY_ENVELOPE_SCHEMA_VERSION => {
+                if raw.tenant_id.is_some() || raw.community_id.is_some() {
+                    return Err(env_err(format!(
+                        "'tenant_id'/'community_id' are not permitted on a schema_version {LEGACY_ENVELOPE_SCHEMA_VERSION} envelope (outside its binding.mac)"
+                    )));
+                }
+            }
+            ENVELOPE_SCHEMA_VERSION => {
+                match raw.tenant_id {
+                    Some(id) if id >= 1 => {}
+                    other => {
+                        return Err(env_err(format!(
+                            "'tenant_id' is required and must be >= 1 on a schema_version {ENVELOPE_SCHEMA_VERSION} envelope, got {other:?}"
+                        )));
+                    }
+                }
+                match raw.community_id {
+                    Some(id) if id >= TENANT_WIDE_COMMUNITY_ID => {}
+                    other => {
+                        return Err(env_err(format!(
+                            "'community_id' is required and must be >= {TENANT_WIDE_COMMUNITY_ID} (0 = tenant-wide) on a schema_version {ENVELOPE_SCHEMA_VERSION} envelope, got {other:?}"
+                        )));
+                    }
+                }
+            }
+            other => {
+                return Err(env_err(format!(
+                    "'schema_version' must be {LEGACY_ENVELOPE_SCHEMA_VERSION} or {ENVELOPE_SCHEMA_VERSION}, got {other} -- no dual-read of the pre-D30 shape"
+                )));
+            }
         }
         if raw.tenant.is_empty() {
             return Err(env_err("'tenant' must be a non-empty string, got \"\""));
@@ -417,6 +477,8 @@ impl TryFrom<RawStageEnvelope> for StageEnvelope {
             schema_version: raw.schema_version,
             tenant: raw.tenant,
             community: raw.community,
+            tenant_id: raw.tenant_id,
+            community_id: raw.community_id,
             app_id: raw.app_id,
             stage: raw.stage,
             event: raw.event,
@@ -787,5 +849,104 @@ mod tests {
         let env: StageEnvelope = serde_json::from_value(valid_stage_envelope_json()).unwrap();
         let out = serde_json::to_value(&env).unwrap();
         assert_eq!(out, valid_stage_envelope_json());
+    }
+
+    // ---- schema v3 (numeric scope) -------------------------------------
+
+    fn v3_json() -> Value {
+        json!({
+            "schema_version": 3,
+            "tenant": "acme",
+            "community": "main",
+            "tenant_id": 10,
+            "community_id": 7,
+            "app_id": "waddles.bot.commands.default",
+            "stage": "action",
+            "event": valid_event_json(),
+            "ts": "2026-09-14T12:00:00.123Z",
+            "target_app_id": null,
+            "workstream_id": "8f14e45f-ceea-467e-adde-3fb5c9752730",
+            "event_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "session_id": null,
+            "trace": null,
+            "binding": {"kid": "k1", "mac": "0000000000000000000000000000000000000000000000000000000000000000"}
+        })
+    }
+
+    #[test]
+    fn v3_round_trips_with_numeric_ids() {
+        let env: StageEnvelope = serde_json::from_value(v3_json()).unwrap();
+        assert_eq!(env.tenant_id, Some(10));
+        assert_eq!(env.community_id, Some(7));
+        let reparsed: StageEnvelope =
+            serde_json::from_str(&serde_json::to_string(&env).unwrap()).unwrap();
+        assert_eq!(env, reparsed);
+        let out = serde_json::to_value(&env).unwrap();
+        assert_eq!(out["tenant_id"], 10);
+        assert_eq!(out["community_id"], 7);
+    }
+
+    #[test]
+    fn v3_tenant_wide_uses_community_id_zero() {
+        let mut v = v3_json();
+        v["community"] = Value::Null;
+        v["community_id"] = json!(0);
+        let env: StageEnvelope = serde_json::from_value(v).unwrap();
+        assert_eq!(env.community_id, Some(TENANT_WIDE_COMMUNITY_ID));
+    }
+
+    #[test]
+    fn v3_rejects_missing_or_out_of_range_ids() {
+        for (key, bad) in [
+            ("tenant_id", Value::Null),
+            ("tenant_id", json!(0)),
+            ("tenant_id", json!(-5)),
+            ("community_id", Value::Null),
+            ("community_id", json!(-1)),
+            ("community_id", json!(i64::from(i32::MAX) + 1)),
+            ("tenant_id", json!("10")),
+            ("tenant_id", json!(1.5)),
+        ] {
+            let mut v = v3_json();
+            v[key] = bad.clone();
+            assert!(
+                serde_json::from_value::<StageEnvelope>(v).is_err(),
+                "{key}={bad}"
+            );
+        }
+        for key in ["tenant_id", "community_id"] {
+            let mut v = v3_json();
+            v.as_object_mut().unwrap().remove(key);
+            assert!(serde_json::from_value::<StageEnvelope>(v).is_err(), "{key}");
+        }
+    }
+
+    #[test]
+    fn v2_still_parses_and_must_not_carry_numeric_ids() {
+        let mut v = v3_json();
+        v["schema_version"] = json!(2);
+        assert!(
+            serde_json::from_value::<StageEnvelope>(v.clone()).is_err(),
+            "v2 + ids must be rejected"
+        );
+        let o = v.as_object_mut().unwrap();
+        o.remove("tenant_id");
+        o.remove("community_id");
+        let env: StageEnvelope = serde_json::from_value(v).unwrap();
+        assert_eq!(env.schema_version, LEGACY_ENVELOPE_SCHEMA_VERSION);
+        // A v2 envelope re-serializes WITHOUT the id keys (byte-stable for
+        // the legacy golden fixtures).
+        let out = serde_json::to_value(&env).unwrap();
+        assert!(out.get("tenant_id").is_none());
+        assert!(out.get("community_id").is_none());
+    }
+
+    #[test]
+    fn rejects_unknown_schema_versions() {
+        for sv in [0, 1, 4, 99] {
+            let mut v = v3_json();
+            v["schema_version"] = json!(sv);
+            assert!(serde_json::from_value::<StageEnvelope>(v).is_err(), "{sv}");
+        }
     }
 }

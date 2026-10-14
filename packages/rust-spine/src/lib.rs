@@ -29,7 +29,9 @@ mod metrics;
 mod reader;
 mod scope;
 
-pub use binding::{BindingError, KeyRing, compute_binding_mac, verify_binding};
+pub use binding::{
+    BindingError, KeyRing, compute_binding_mac, compute_binding_mac_v3, verify_binding,
+};
 pub use client::{Delivered, Grant, GroupStats, SpineClient};
 pub use config::{
     ProbeClass, ProbeResult, SpineConfig, classify_connect_error, probe_valkey,
@@ -37,8 +39,9 @@ pub use config::{
 };
 pub use dlq::{DlqError, DlqErrorDetail, DlqErrorKind, DlqRecord};
 pub use envelope::{
-    Binding, ENVELOPE_SCHEMA_VERSION, EnvelopeError, PROCESS_TARGET_APP_ID_KEY, PlatformEvent,
-    Source, StageEnvelope, Trace, trace_id_from_traceparent,
+    Binding, ENVELOPE_SCHEMA_VERSION, EnvelopeError, LEGACY_ENVELOPE_SCHEMA_VERSION,
+    PROCESS_TARGET_APP_ID_KEY, PlatformEvent, Source, StageEnvelope, TENANT_WIDE_COMMUNITY_ID,
+    Trace, trace_id_from_traceparent,
 };
 pub use error::SpineError;
 pub use metrics::{NoopMetrics, SpineMetrics};

@@ -30,7 +30,10 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
-use crate::envelope::{StageEnvelope, trace_id_from_traceparent};
+use crate::envelope::{
+    ENVELOPE_SCHEMA_VERSION, LEGACY_ENVELOPE_SCHEMA_VERSION, StageEnvelope,
+    trace_id_from_traceparent,
+};
 use crate::scope::TENANT_WIDE_SEGMENT;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -151,6 +154,63 @@ pub fn compute_binding_mac(
     Ok(hex::encode(mac.finalize().into_bytes()))
 }
 
+/// Domain-separation tag prefixed to every v3 MAC input so a v3 MAC can
+/// never be confused with (or replayed as) a v2 one.
+const BINDING_V3_DOMAIN: &[u8] = b"waddles.binding.v3\0";
+
+/// Feeds one string into a v3 MAC input as `u32-BE length || bytes`, closing
+/// the field-boundary ambiguity the unframed v2 formula has.
+fn update_framed(mac: &mut HmacSha256, field: &[u8]) {
+    // Field lengths are bounded far below u32::MAX by envelope validation
+    // and the stream-entry size; saturate rather than panic regardless.
+    let len = u32::try_from(field.len()).unwrap_or(u32::MAX);
+    mac.update(&len.to_be_bytes());
+    mac.update(field);
+}
+
+/// Computes the **schema-v3** `binding.mac`: the AUTHORITATIVE numeric
+/// scope keys `tenant_id`/`community_id` are part of the signed input,
+/// so swapping either on an otherwise-valid message (cross-tenant
+/// injection) invalidates the MAC. The display strings are bound too (for
+/// integrity), and -- unlike the v2 formula -- every field is
+/// length-prefixed and the input is domain-tagged, so there is no
+/// concatenation ambiguity and a v2 MAC can never verify as v3 (or vice
+/// versa). Input: `domain || tenant_id:i64-BE || community_id:i32-BE ||
+/// frame(tenant) || presence(community)+frame(community) ||
+/// frame(workstream_id) || frame(event_id) || frame(trace_id or "")`.
+#[allow(clippy::too_many_arguments)]
+pub fn compute_binding_mac_v3(
+    ring: &KeyRing,
+    kid: &str,
+    tenant_id: i64,
+    community_id: i32,
+    tenant: &str,
+    community: Option<&str>,
+    workstream_id: &str,
+    event_id: &str,
+    trace_id: Option<&str>,
+) -> Result<String, BindingError> {
+    let key = ring
+        .key_for(kid)
+        .ok_or_else(|| BindingError::UnknownKid(kid.to_string()))?;
+    let mut mac = HmacSha256::new_from_slice(key).map_err(|_| BindingError::MacMismatch)?;
+    mac.update(BINDING_V3_DOMAIN);
+    mac.update(&tenant_id.to_be_bytes());
+    mac.update(&community_id.to_be_bytes());
+    update_framed(&mut mac, tenant.as_bytes());
+    match community {
+        Some(c) => {
+            mac.update(&[1u8]);
+            update_framed(&mut mac, c.as_bytes());
+        }
+        None => mac.update(&[0u8]),
+    }
+    update_framed(&mut mac, workstream_id.as_bytes());
+    update_framed(&mut mac, event_id.as_bytes());
+    update_framed(&mut mac, trace_id.unwrap_or("").as_bytes());
+    Ok(hex::encode(mac.finalize().into_bytes()))
+}
+
 /// Recomputes `env.binding.mac` under `env.binding.kid` and compares
 /// against the value on the wire in constant time (`subtle`) — a
 /// variable-time `==` on a MAC is a timing side channel a network attacker
@@ -165,15 +225,48 @@ pub fn verify_binding(ring: &KeyRing, env: &StageEnvelope) -> Result<(), Binding
         .trace
         .as_ref()
         .and_then(|t| trace_id_from_traceparent(&t.traceparent));
-    let expected = compute_binding_mac(
-        ring,
-        &env.binding.kid,
-        &env.tenant,
-        env.community.as_deref(),
-        &env.workstream_id,
-        &env.event_id,
-        trace_id,
-    )?;
+    // Dispatch on the envelope's own schema_version. The version is NOT
+    // itself covered by the MAC, but it does not need to be: the two
+    // formulas are domain-separated, so flipping `schema_version` on a wire
+    // envelope selects the wrong formula and the MAC fails -- there is no
+    // downgrade path from v3 to the numeric-id-less v2 formula.
+    let expected = match env.schema_version {
+        ENVELOPE_SCHEMA_VERSION => {
+            // A v3 envelope always carries both ids (enforced at parse); a
+            // hand-built one missing them is a hard failure, never "skip".
+            let (Some(tenant_id), Some(community_id)) = (env.tenant_id, env.community_id) else {
+                return Err(BindingError::MacMismatch);
+            };
+            compute_binding_mac_v3(
+                ring,
+                &env.binding.kid,
+                tenant_id,
+                community_id,
+                &env.tenant,
+                env.community.as_deref(),
+                &env.workstream_id,
+                &env.event_id,
+                trace_id,
+            )?
+        }
+        LEGACY_ENVELOPE_SCHEMA_VERSION => {
+            // A v2 MAC does not cover the numeric ids, so a v2 envelope
+            // smuggling them in is rejected rather than trusted.
+            if env.tenant_id.is_some() || env.community_id.is_some() {
+                return Err(BindingError::MacMismatch);
+            }
+            compute_binding_mac(
+                ring,
+                &env.binding.kid,
+                &env.tenant,
+                env.community.as_deref(),
+                &env.workstream_id,
+                &env.event_id,
+                trace_id,
+            )?
+        }
+        _ => return Err(BindingError::MacMismatch),
+    };
     let expected_bytes = expected.as_bytes();
     let actual_bytes = env.binding.mac.as_bytes();
     if expected_bytes.len() == actual_bytes.len() && bool::from(expected_bytes.ct_eq(actual_bytes))
@@ -203,6 +296,7 @@ mod tests {
     const TRACEPARENT: &str = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
     const TRACE_ID: &str = "4bf92f3577b34da6a3ce929d0e0e4736";
 
+    const V3_PINNED_MAC: &str = "4a7246ec724fb1cdcd88bc37b7243ecd3a10a4eec39d01a8cd3cd24f06db5fc2";
     const K1_MAIN_MAC: &str = "d94c3849257550fe817c399410113a45e22b1c9203fbd02908f6bcc19df95f3f";
     const K2_MAIN_MAC: &str = "543a96e6e39083ca2405e603ecd28f33ce38866d437b52349836d9251046a279";
     const K1_TENANT_WIDE_MAC: &str =
@@ -458,5 +552,213 @@ mod tests {
         let err = BindingError::InvalidKeyHex("k1".to_string(), "odd length".to_string());
         assert!(err.to_string().contains("k1"));
         assert!(err.to_string().contains("odd length"));
+    }
+
+    // ---- schema v3 (numeric scope) -------------------------------------
+
+    const TENANT_ID: i64 = 10;
+    const COMMUNITY_ID: i32 = 7;
+
+    fn v3_mac(ring: &KeyRing, tenant_id: i64, community_id: i32) -> String {
+        compute_binding_mac_v3(
+            ring,
+            "k1",
+            tenant_id,
+            community_id,
+            TENANT,
+            Some(COMMUNITY),
+            WORKSTREAM_ID,
+            EVENT_ID,
+            Some(TRACE_ID),
+        )
+        .unwrap()
+    }
+
+    fn v3_envelope_json(mac: &str) -> serde_json::Value {
+        serde_json::json!({
+            "schema_version": 3,
+            "tenant": TENANT,
+            "community": COMMUNITY,
+            "tenant_id": TENANT_ID,
+            "community_id": COMMUNITY_ID,
+            "app_id": "waddles.bot.commands.default",
+            "stage": "action",
+            "event": {
+                "platform": "twitch",
+                "event_type": "chat.message",
+                "actor": "some_user",
+                "payload": {},
+                "occurred_at": "2026-09-14T12:00:00.000Z",
+                "source": null
+            },
+            "ts": "2026-09-14T12:00:00.123Z",
+            "target_app_id": null,
+            "workstream_id": WORKSTREAM_ID,
+            "event_id": EVENT_ID,
+            "session_id": null,
+            "trace": {"traceparent": TRACEPARENT, "tracestate": null},
+            "binding": {"kid": "k1", "mac": mac}
+        })
+    }
+
+    fn v3_envelope(mac: &str) -> StageEnvelope {
+        serde_json::from_value(v3_envelope_json(mac)).unwrap()
+    }
+
+    #[test]
+    fn v3_mac_verifies_and_is_deterministic() {
+        let ring = ring();
+        let mac = v3_mac(&ring, TENANT_ID, COMMUNITY_ID);
+        assert_eq!(mac, v3_mac(&ring, TENANT_ID, COMMUNITY_ID));
+        assert!(verify_binding(&ring, &v3_envelope(&mac)).is_ok());
+    }
+
+    // regression: numeric-scope -- the whole point of binding the ids is that
+    // swapping tenant_id 10 -> 20 on a validly-signed message (cross-tenant
+    // injection) must NOT verify.
+    #[test]
+    fn mutating_tenant_id_invalidates_the_mac() {
+        let ring = ring();
+        let mac = v3_mac(&ring, TENANT_ID, COMMUNITY_ID);
+        let mut env = v3_envelope(&mac);
+        env.tenant_id = Some(20);
+        assert_eq!(
+            verify_binding(&ring, &env).unwrap_err(),
+            BindingError::MacMismatch
+        );
+    }
+
+    #[test]
+    fn mutating_community_id_invalidates_the_mac() {
+        let ring = ring();
+        let mac = v3_mac(&ring, TENANT_ID, COMMUNITY_ID);
+        for swapped in [0, 8, i32::MAX] {
+            let mut env = v3_envelope(&mac);
+            env.community_id = Some(swapped);
+            assert_eq!(
+                verify_binding(&ring, &env).unwrap_err(),
+                BindingError::MacMismatch,
+                "community_id {swapped}"
+            );
+        }
+    }
+
+    #[test]
+    fn mutating_any_bound_string_invalidates_the_v3_mac() {
+        let ring = ring();
+        let mac = v3_mac(&ring, TENANT_ID, COMMUNITY_ID);
+        let mut env = v3_envelope(&mac);
+        env.tenant = "other".to_string();
+        assert!(verify_binding(&ring, &env).is_err());
+        let mut env = v3_envelope(&mac);
+        env.community = None;
+        assert!(verify_binding(&ring, &env).is_err());
+        let mut env = v3_envelope(&mac);
+        env.workstream_id = "00000000-0000-4000-8000-000000000000".to_string();
+        assert!(verify_binding(&ring, &env).is_err());
+    }
+
+    #[test]
+    fn dropping_a_numeric_id_on_a_hand_built_v3_envelope_fails_verification() {
+        let ring = ring();
+        let mac = v3_mac(&ring, TENANT_ID, COMMUNITY_ID);
+        let mut env = v3_envelope(&mac);
+        env.tenant_id = None;
+        assert!(verify_binding(&ring, &env).is_err());
+        let mut env = v3_envelope(&mac);
+        env.community_id = None;
+        assert!(verify_binding(&ring, &env).is_err());
+    }
+
+    #[test]
+    fn v2_and_v3_macs_never_cross_verify() {
+        let ring = ring();
+        // v3 MAC presented as a v2 envelope (downgrade): ids stripped.
+        let v3 = v3_mac(&ring, TENANT_ID, COMMUNITY_ID);
+        let mut downgraded = v3_envelope(&v3);
+        downgraded.schema_version = 2;
+        downgraded.tenant_id = None;
+        downgraded.community_id = None;
+        assert!(verify_binding(&ring, &downgraded).is_err());
+        // v2 MAC presented as a v3 envelope (upgrade): ids attached.
+        let v2 = mac_for(&ring, "k1");
+        assert!(verify_binding(&ring, &v3_envelope(&v2)).is_err());
+    }
+
+    #[test]
+    fn a_v2_envelope_smuggling_numeric_ids_is_rejected_by_verify() {
+        let ring = ring();
+        let mut env = valid_envelope(mac_for(&ring, "k1"), "k1");
+        assert!(verify_binding(&ring, &env).is_ok());
+        env.tenant_id = Some(TENANT_ID);
+        assert_eq!(
+            verify_binding(&ring, &env).unwrap_err(),
+            BindingError::MacMismatch
+        );
+    }
+
+    #[test]
+    fn unknown_schema_version_never_verifies() {
+        let ring = ring();
+        let mut env = valid_envelope(mac_for(&ring, "k1"), "k1");
+        env.schema_version = 99;
+        assert!(verify_binding(&ring, &env).is_err());
+    }
+
+    #[test]
+    fn v3_mac_has_no_field_boundary_ambiguity() {
+        let ring = ring();
+        let mac = |tenant: &str, community: &str| {
+            compute_binding_mac_v3(
+                &ring,
+                "k1",
+                1,
+                1,
+                tenant,
+                Some(community),
+                WORKSTREAM_ID,
+                EVENT_ID,
+                None,
+            )
+            .unwrap()
+        };
+        // The unframed v2 formula collides these; v3 must not.
+        assert_ne!(mac("ab", "c"), mac("a", "bc"));
+        // A community literally named "_tenant" is not the tenant-wide marker.
+        let wide =
+            compute_binding_mac_v3(&ring, "k1", 1, 0, "t", None, WORKSTREAM_ID, EVENT_ID, None)
+                .unwrap();
+        let named = compute_binding_mac_v3(
+            &ring,
+            "k1",
+            1,
+            0,
+            "t",
+            Some("_tenant"),
+            WORKSTREAM_ID,
+            EVENT_ID,
+            None,
+        )
+        .unwrap();
+        assert_ne!(wide, named);
+    }
+
+    #[test]
+    fn v3_mac_pinned_vector() {
+        // Pinned regression value: any accidental change to the canonical
+        // v3 input encoding (which would orphan every in-flight envelope)
+        // fails here loudly.
+        let ring = ring();
+        let mac = v3_mac(&ring, TENANT_ID, COMMUNITY_ID);
+        assert_eq!(mac, V3_PINNED_MAC);
+    }
+
+    #[test]
+    fn v3_unknown_kid_is_reported() {
+        let ring = ring();
+        assert_eq!(
+            compute_binding_mac_v3(&ring, "nope", 1, 1, "t", None, "w", "e", None).unwrap_err(),
+            BindingError::UnknownKid("nope".to_string())
+        );
     }
 }

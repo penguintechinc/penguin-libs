@@ -1,6 +1,6 @@
 [package]
 name = "penguin-spine"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.97.1"
 description = "Waddles data-plane spine: Valkey Streams key builders, envelope/DLQ types, and the two client connection-separation rules"
@@ -32,7 +32,7 @@ uuid = { version = "=1.26.1", features = ["v4"] }
 # requires an explicit choice). `ring` is the traditional, widely-audited
 # choice; `probe_valkey`/`SpineClient::connect` install it once, guarded
 # by `std::sync::Once` (Sec12.6/Sec11.6.1's TLS paths, Task 10/13).
-rustls = { version = "=0.23.45", default-features = false, features = ["std", "ring"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["std", "ring"] }
 # D30 envelope binding MAC (spec Sec5.11): HMAC-SHA256 over the tenant/
 # community/workstream_id/event_id/trace_id tuple, constant-time verified.
 hmac = "=0.12.1"
