@@ -19,7 +19,7 @@ serde = { version = "=1.0.229", features = ["derive"] }
 # order rather than the crate's default alphabetical (BTreeMap) ordering.
 serde_json = { version = "=1.0.151", features = ["preserve_order"] }
 thiserror = "=2.0.20"
-tokio = { version = "=1.53.1", features = ["rt", "time", "sync", "macros", "net"] }
+tokio = { version = "=1.53.3", features = ["rt", "time", "sync", "macros", "net"] }
 tracing = "=0.1.44"
 chrono = { version = "=0.4.45", features = ["serde"] }
 uuid = { version = "=1.26.1", features = ["v4"] }
@@ -41,7 +41,7 @@ subtle = "=2.6.1"
 hex = "=0.4.3"
 
 [dev-dependencies]
-tokio = { version = "=1.53.1", features = ["full", "test-util"] }
+tokio = { version = "=1.53.3", features = ["full", "test-util"] }
 rstest = "=0.27.0"
 criterion = { version = "=0.8.2", features = ["async_tokio"] }
 # YAML parsing for the ACL-matrix conformance test only (Task 12) -- never a
