@@ -22,7 +22,7 @@ time = { version = "=0.3.55", default-features = false, features = ["std", "pars
 tokio = { version = "=1.53.1", features = ["net", "rt", "io-util", "time", "macros", "sync"] }
 tokio-rustls = "=0.26.5"
 tracing = "=0.1.44"
-webpki-roots = "=1.0.9"
+webpki-roots = "=1.0.10"
 
 [dev-dependencies]
 tokio = { version = "=1.53.1", features = ["full"] }
