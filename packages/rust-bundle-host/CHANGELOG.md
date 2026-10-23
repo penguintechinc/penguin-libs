@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.1]
+
+### Security
+- Bump `tokio` 1.53.1 -> 1.53.3 (RUSTSEC-2026-0386). Tokio-only patch off 0.2.0; no API changes.
+
 ### Security
 - `manifest`: replace `serde_yaml_ng` with `serde-saphyr` (pure safe-Rust YAML) so
   the unmaintained `unsafe-libyaml` (RUSTSEC-2024-0449) is no longer in the

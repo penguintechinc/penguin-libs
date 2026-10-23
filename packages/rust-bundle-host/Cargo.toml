@@ -1,6 +1,6 @@
 [package]
 name = "penguin-bundle-host"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.97.1"
 license = "MIT"
@@ -18,7 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 # `wire`: length-prefixed frame codec (u32 BE length + UTF-8 JSON) and the
 # correlation-id multiplexer over an async duplex stream (spec Sec6.6, A3).
-tokio = { version = "=1.53.1", features = ["rt", "macros", "io-util", "net", "sync", "time"] }
+tokio = { version = "=1.53.3", features = ["rt", "macros", "io-util", "net", "sync", "time"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.151", features = ["preserve_order"] }
 thiserror = "=2.0.20"
@@ -31,7 +31,7 @@ serde-saphyr = "=1.3.0"
 regex = "=1.13.1"
 
 [dev-dependencies]
-tokio = { version = "=1.53.1", features = ["full", "test-util"] }
+tokio = { version = "=1.53.3", features = ["full", "test-util"] }
 rstest = "=0.27.0"
 
 [lints.rust]
