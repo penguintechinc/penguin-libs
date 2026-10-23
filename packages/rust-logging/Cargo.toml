@@ -34,7 +34,7 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 regex = "=1.13.1"
 thiserror = "=2.0.20"
-tokio = { version = "=1.53.1", features = ["sync", "rt", "macros", "time"] }
+tokio = { version = "=1.53.3", features = ["sync", "rt", "macros", "time"] }
 # D30 (spec §5.11): validates workstream_id is a UUID before it is
 # recorded as a span/log field -- the last line of defense against PII
 # being smuggled into a field whose name implies a trusted identifier.
@@ -43,7 +43,7 @@ uuid = "=1.26.1"
 [dev-dependencies]
 rstest = "=0.27.0"
 axum-test = "=21.1.0"
-tokio = { version = "=1.53.1", features = ["full", "test-util"] }
+tokio = { version = "=1.53.3", features = ["full", "test-util"] }
 # Edition 2021 uses resolver = "2", which unifies dev-dependency features
 # into test/bench builds only -- redeclaring opentelemetry_sdk here with
 # `testing` means plain `cargo test` gets the in-memory exporters without
