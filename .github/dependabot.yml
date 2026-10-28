@@ -1,0 +1,89 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directories:
+      - "/packages/python-*"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: "npm"
+    directories:
+      - "/"
+      - "/packages/react-*"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: "cargo"
+    directories:
+      - "/packages/rust-licensing"
+      - "/packages/rust-rpc"
+      - "/packages/rust-rpc/crates/*"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: "gomod"
+    directories:
+      - "/packages/go-*"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: "pub"
+    directories:
+      - "/packages/flutter_libs"
+      - "/packages/flutter_libs/example"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
