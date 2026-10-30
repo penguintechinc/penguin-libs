@@ -211,18 +211,21 @@ pub enum ExportKind {
     ConnectorOnHeartbeatDue,
     /// `waddle:connector/receiver.on-disconnect`.
     ConnectorOnDisconnect,
+    /// Bundle-to-bundle tool invocation (`tool.invoke`).
+    ToolCall,
 }
 
 impl ExportKind {
     /// Every variant, so callers (and tests) can iterate the full export
     /// space without hand-maintaining a list that could drift.
-    pub const ALL: [ExportKind; 6] = [
+    pub const ALL: [ExportKind; 7] = [
         ExportKind::Transform,
         ExportKind::Dispatch,
         ExportKind::ConnectorOnConnect,
         ExportKind::ConnectorOnFrame,
         ExportKind::ConnectorOnHeartbeatDue,
         ExportKind::ConnectorOnDisconnect,
+        ExportKind::ToolCall,
     ];
 
     /// The stable, low-cardinality wire/metric label -- identical to the
@@ -237,6 +240,7 @@ impl ExportKind {
             Self::ConnectorOnFrame => "connector_on_frame",
             Self::ConnectorOnHeartbeatDue => "connector_on_heartbeat_due",
             Self::ConnectorOnDisconnect => "connector_on_disconnect",
+            Self::ToolCall => "tool_call",
         }
     }
 
@@ -246,7 +250,7 @@ impl ExportKind {
     #[must_use]
     pub const fn is_connector(self) -> bool {
         match self {
-            Self::Transform | Self::Dispatch => false,
+            Self::Transform | Self::Dispatch | Self::ToolCall => false,
             Self::ConnectorOnConnect
             | Self::ConnectorOnFrame
             | Self::ConnectorOnHeartbeatDue

@@ -423,6 +423,7 @@ fn export_kind_serializes_every_variant_to_its_stable_snake_case_label() {
             "connector_on_heartbeat_due",
         ),
         (ExportKind::ConnectorOnDisconnect, "connector_on_disconnect"),
+        (ExportKind::ToolCall, "tool_call"),
     ];
     assert_eq!(expected.len(), ExportKind::ALL.len());
     for (kind, label) in expected {
@@ -532,4 +533,24 @@ async fn connector_export_round_trips_over_the_framed_wire_and_correlation_table
         assert_eq!(result.payload["echo"], kind.as_str());
     }
     assert_eq!(table.pending_count(), 0);
+}
+
+#[test]
+fn tool_call_serializes_to_tool_call() {
+    assert_eq!(
+        serde_json::to_string(&ExportKind::ToolCall).unwrap(),
+        "\"tool_call\""
+    );
+    assert_eq!(
+        serde_json::from_str::<ExportKind>("\"tool_call\"").unwrap(),
+        ExportKind::ToolCall
+    );
+}
+
+#[test]
+fn tool_call_in_all_and_not_connector() {
+    assert!(ExportKind::ALL.contains(&ExportKind::ToolCall));
+    assert_eq!(ExportKind::ALL.len(), 7);
+    assert_eq!(ExportKind::ToolCall.as_str(), "tool_call");
+    assert!(!ExportKind::ToolCall.is_connector());
 }
