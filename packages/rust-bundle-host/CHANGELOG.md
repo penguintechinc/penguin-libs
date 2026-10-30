@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0]
+
+### Added
+- Added `ExportKind::ToolCall` wire variant for bundle-to-bundle tool invocation (source-breaking: `ExportKind` is not `#[non_exhaustive]`; downstream exhaustive matches must add a `ToolCall` arm).
+
 ## [0.3.0]
 
 ### Added
