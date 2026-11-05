@@ -424,6 +424,7 @@ fn export_kind_serializes_every_variant_to_its_stable_snake_case_label() {
         ),
         (ExportKind::ConnectorOnDisconnect, "connector_on_disconnect"),
         (ExportKind::ToolCall, "tool_call"),
+        (ExportKind::ConnectorBuildRequest, "connector_build_request"),
     ];
     assert_eq!(expected.len(), ExportKind::ALL.len());
     for (kind, label) in expected {
@@ -441,7 +442,10 @@ fn export_kind_all_has_no_duplicates_and_partitions_by_is_connector() {
         assert!(seen.insert(kind), "duplicate in ALL: {kind:?}");
     }
     let connectors = ExportKind::ALL.iter().filter(|k| k.is_connector()).count();
-    assert_eq!(connectors, 4, "the four receiver entrypoints");
+    assert_eq!(
+        connectors, 5,
+        "the four receiver entrypoints + sender.build-request"
+    );
     assert!(!ExportKind::Transform.is_connector());
     assert!(!ExportKind::Dispatch.is_connector());
 }
@@ -550,7 +554,49 @@ fn tool_call_serializes_to_tool_call() {
 #[test]
 fn tool_call_in_all_and_not_connector() {
     assert!(ExportKind::ALL.contains(&ExportKind::ToolCall));
-    assert_eq!(ExportKind::ALL.len(), 7);
+    assert_eq!(ExportKind::ALL.len(), 8);
     assert_eq!(ExportKind::ToolCall.as_str(), "tool_call");
     assert!(!ExportKind::ToolCall.is_connector());
+}
+
+#[test]
+fn connector_build_request_serializes_to_stable_label_and_is_connector() {
+    assert_eq!(
+        serde_json::to_string(&ExportKind::ConnectorBuildRequest).unwrap(),
+        "\"connector_build_request\""
+    );
+    assert_eq!(
+        serde_json::from_str::<ExportKind>("\"connector_build_request\"").unwrap(),
+        ExportKind::ConnectorBuildRequest
+    );
+    assert!(ExportKind::ALL.contains(&ExportKind::ConnectorBuildRequest));
+    assert_eq!(
+        ExportKind::ConnectorBuildRequest.as_str(),
+        "connector_build_request"
+    );
+    assert!(ExportKind::ConnectorBuildRequest.is_connector());
+}
+
+#[test]
+fn connector_build_request_invoke_frame_round_trips_with_action_payload() {
+    let frame = Frame::new(
+        77,
+        Message::Invoke(InvokeBody {
+            app_id: "waddles.core.connector.twitch".to_string(),
+            digest: format!("sha256:{}", "f".repeat(64)),
+            export: ExportKind::ConnectorBuildRequest,
+            payload: serde_json::json!({
+                "kind": "chat.send",
+                "target-source-id": "src-1",
+                "payload-json": "{\"text\":\"hi\"}"
+            }),
+            deadline_ms: 2000,
+            trace: None,
+        }),
+    );
+    let value = serde_json::to_value(&frame).expect("serialize");
+    assert_eq!(value["kind"], "invoke");
+    assert_eq!(value["export"], "connector_build_request");
+    let round_tripped: Frame = serde_json::from_value(value).expect("deserialize");
+    assert_eq!(round_tripped, frame);
 }
