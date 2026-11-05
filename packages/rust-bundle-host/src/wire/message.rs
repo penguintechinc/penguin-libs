@@ -213,12 +213,17 @@ pub enum ExportKind {
     ConnectorOnDisconnect,
     /// Bundle-to-bundle tool invocation (`tool.invoke`).
     ToolCall,
+    /// `waddle:connector/sender.build-request` (world `connector-tools`):
+    /// turns an outbound `action{kind, target-source-id, payload-json}`
+    /// into an `http-request-tpl` for the generic outbound executor. The
+    /// request/result payloads are canonical JSON, like every other export.
+    ConnectorBuildRequest,
 }
 
 impl ExportKind {
     /// Every variant, so callers (and tests) can iterate the full export
     /// space without hand-maintaining a list that could drift.
-    pub const ALL: [ExportKind; 7] = [
+    pub const ALL: [ExportKind; 8] = [
         ExportKind::Transform,
         ExportKind::Dispatch,
         ExportKind::ConnectorOnConnect,
@@ -226,6 +231,7 @@ impl ExportKind {
         ExportKind::ConnectorOnHeartbeatDue,
         ExportKind::ConnectorOnDisconnect,
         ExportKind::ToolCall,
+        ExportKind::ConnectorBuildRequest,
     ];
 
     /// The stable, low-cardinality wire/metric label -- identical to the
@@ -241,12 +247,14 @@ impl ExportKind {
             Self::ConnectorOnHeartbeatDue => "connector_on_heartbeat_due",
             Self::ConnectorOnDisconnect => "connector_on_disconnect",
             Self::ToolCall => "tool_call",
+            Self::ConnectorBuildRequest => "connector_build_request",
         }
     }
 
-    /// True for the four `waddle:connector` receiver exports; false for the
-    /// two stage script exports. Executors use it to route to the connector
-    /// world (a different component world than `stage`).
+    /// True for the `waddle:connector` exports (the four `receiver` exports
+    /// and `sender.build-request`); false for the two stage script exports
+    /// and `ToolCall`. Executors use it to route to the connector world (a
+    /// different component world than `stage`).
     #[must_use]
     pub const fn is_connector(self) -> bool {
         match self {
@@ -254,7 +262,8 @@ impl ExportKind {
             Self::ConnectorOnConnect
             | Self::ConnectorOnFrame
             | Self::ConnectorOnHeartbeatDue
-            | Self::ConnectorOnDisconnect => true,
+            | Self::ConnectorOnDisconnect
+            | Self::ConnectorBuildRequest => true,
         }
     }
 }

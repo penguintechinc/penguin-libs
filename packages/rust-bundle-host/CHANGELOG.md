@@ -5,6 +5,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0]
+
+### Added
+- `ExportKind::ConnectorBuildRequest` (wire label `connector_build_request`):
+  the `waddle:connector/sender.build-request` export of the `connector-tools`
+  world, used by the generic outbound executor to turn an
+  `action{kind, target-source-id, payload-json}` into an `http-request-tpl`.
+  `is_connector()` is `true` for it. `ExportKind::ALL` is now `[ExportKind; 8]`.
+
+### Changed (BREAKING for downstream `match`es)
+- `ExportKind` is deliberately not `#[non_exhaustive]`; every exhaustive
+  `match` on it must add a `ConnectorBuildRequest` arm. Hence `0.4.0` -> `0.5.0`.
+
 ## [0.4.0]
 
 ### Security
