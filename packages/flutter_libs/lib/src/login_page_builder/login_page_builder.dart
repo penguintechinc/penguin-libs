@@ -49,6 +49,7 @@ class LoginPageBuilder extends StatefulWidget {
     this.signUpCallback,
     this.transformErrorMessage,
     this.onLinkTap,
+    this.allowedLinkSchemes = const {},
     this.onSocialLoginInitiated,
     this.showRememberMe = true,
     this.footer,
@@ -71,6 +72,11 @@ class LoginPageBuilder extends StatefulWidget {
   final VoidCallback? signUpCallback;
   final String Function(String error)? transformErrorMessage;
   final void Function(String url)? onLinkTap;
+
+  /// Extra URL schemes (e.g. app deep links) allowed when launching external
+  /// links. `https` is always allowed; `javascript`, `data`, `file` and
+  /// `http` are never allowed. See [isAllowedLaunchUrl].
+  final Set<String> allowedLinkSchemes;
 
   /// Called right before launching a social/SSO provider's authorization
   /// URL, with the CSRF `state` (and PKCE `codeVerifier`, when applicable)
@@ -263,6 +269,12 @@ class _LoginPageBuilderState extends State<LoginPageBuilder> {
   /// Launch [url] externally, surfacing a UI error if the platform reports
   /// it could not be opened (e.g. no handler for the scheme).
   Future<void> _launch(String url, {LaunchMode? mode}) async {
+    if (!isAllowedLaunchUrl(url, appSchemes: widget.allowedLinkSchemes)) {
+      if (mounted) {
+        setState(() => _errorMessage = 'Could not open the link.');
+      }
+      return;
+    }
     bool launched;
     try {
       launched = await launchUrl(

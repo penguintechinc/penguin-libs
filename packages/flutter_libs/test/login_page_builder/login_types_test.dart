@@ -84,4 +84,47 @@ void main() {
       expect(payload.toJson().containsKey('rememberDevice'), isFalse);
     });
   });
+
+  group('isAllowedLaunchUrl', () {
+    test('allows https URLs', () {
+      expect(isAllowedLaunchUrl('https://example.com/a?b=c'), isTrue);
+      expect(isAllowedLaunchUrl('HTTPS://example.com'), isTrue);
+    });
+
+    test('rejects dangerous and plaintext schemes', () {
+      for (final u in [
+        'javascript:alert(1)',
+        'JaVaScRiPt:alert(1)',
+        'data:text/html,<script>alert(1)</script>',
+        'file:///etc/passwd',
+        'http://example.com',
+        'ftp://example.com',
+        'intent://x#Intent;end',
+      ]) {
+        expect(isAllowedLaunchUrl(u), isFalse, reason: u);
+      }
+    });
+
+    test('rejects unparseable, relative and empty input', () {
+      expect(isAllowedLaunchUrl(''), isFalse);
+      expect(isAllowedLaunchUrl('/relative/path'), isFalse);
+      expect(isAllowedLaunchUrl('http://[bad'), isFalse);
+      expect(isAllowedLaunchUrl('https:///nohost'), isFalse);
+    });
+
+    test('allows only explicitly listed app schemes', () {
+      expect(isAllowedLaunchUrl('myapp://cb', appSchemes: {'myapp'}), isTrue);
+      expect(isAllowedLaunchUrl('myapp://cb'), isFalse);
+      expect(isAllowedLaunchUrl('other://cb', appSchemes: {'myapp'}), isFalse);
+    });
+
+    test('app schemes can never re-enable dangerous schemes', () {
+      expect(
+        isAllowedLaunchUrl('javascript:alert(1)',
+            appSchemes: {'javascript', 'data', 'file'}),
+        isFalse,
+      );
+      expect(isAllowedLaunchUrl('file:///x', appSchemes: {'file'}), isFalse);
+    });
+  });
 }

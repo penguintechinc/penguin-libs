@@ -19,10 +19,9 @@ jobs:
         with:
           persist-credentials: false
       # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
-      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning] -- no cache: input, v4.0.2 caches nothing
         with:
           node-version: '20'
-          cache: false
       - run: npm ci
       - name: Security
         run: npm audit --omit=dev
@@ -39,10 +38,9 @@ jobs:
         with:
           persist-credentials: false
       # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
-      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning] -- no cache: input, v4.0.2 caches nothing
         with:
           node-version: 20
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -181,10 +179,9 @@ jobs:
         with:
           persist-credentials: false
       # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
-      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning] -- no cache: input, v4.0.2 caches nothing
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build (typecheck)
@@ -335,10 +332,9 @@ jobs:
         with:
           persist-credentials: false
       # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
-      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning] -- no cache: input, v4.0.2 caches nothing
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -359,10 +355,9 @@ jobs:
         with:
           persist-credentials: false
       # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
-      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning] -- no cache: input, v4.0.2 caches nothing
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -383,10 +378,9 @@ jobs:
         with:
           persist-credentials: false
       # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
-      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning] -- no cache: input, v4.0.2 caches nothing
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -407,10 +401,9 @@ jobs:
         with:
           persist-credentials: false
       # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
-      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning] -- no cache: input, v4.0.2 caches nothing
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
@@ -431,10 +424,9 @@ jobs:
         with:
           persist-credentials: false
       # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
-      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning] -- no cache: input, v4.0.2 caches nothing
         with:
           node-version: '20'
-          cache: false
       - name: Install
         run: npm ci
       - name: Build
