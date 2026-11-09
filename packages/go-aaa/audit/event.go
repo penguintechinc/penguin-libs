@@ -1,6 +1,8 @@
 // Package audit provides structured audit event creation and emission for
 // Penguin Tech applications. Events capture authentication, authorization,
 // and session lifecycle actions with a consistent schema.
+//
+// Deprecated: Go libraries are being phased out; use penguin-aaa (packages/rust-aaa) instead.
 package audit
 
 import (

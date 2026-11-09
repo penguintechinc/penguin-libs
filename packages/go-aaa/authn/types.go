@@ -1,6 +1,8 @@
 // Package authn provides authentication types and validation for Penguin Tech applications.
 //
 // It supports OIDC relying party, OIDC provider, and SPIFFE/SVID-based authentication patterns.
+//
+// Deprecated: Go libraries are being phased out; use penguin-aaa (packages/rust-aaa) instead.
 package authn
 
 import (

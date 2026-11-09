@@ -2,6 +2,8 @@
 //
 // It offers in-memory and file-backed key stores implementing the KeyStore interface,
 // suitable for signing and verifying JWTs.
+//
+// Deprecated: Go libraries are being phased out; use penguin-aaa (packages/rust-aaa) instead.
 package crypto
 
 import (

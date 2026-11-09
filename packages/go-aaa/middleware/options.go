@@ -1,5 +1,7 @@
 // Package middleware provides ConnectRPC interceptors for authentication,
 // authorization, tenant validation, and audit logging in Penguin Tech applications.
+//
+// Deprecated: Go libraries are being phased out; use penguin-aaa (packages/rust-aaa) instead.
 package middleware
 
 import (

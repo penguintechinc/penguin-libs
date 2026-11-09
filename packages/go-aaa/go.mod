@@ -1,6 +1,9 @@
+// Deprecated: Go libraries are being phased out; use penguin-aaa (packages/rust-aaa) instead.
 module github.com/penguintechinc/penguin-libs/packages/go-aaa
 
-go 1.25.0
+go 1.26.0
+
+toolchain go1.26.10
 
 replace github.com/penguintechinc/penguin-libs/packages/go-common => ../go-common
 
@@ -10,7 +13,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/penguintechinc/penguin-libs/packages/go-common v0.0.0-00010101000000-000000000000
-	github.com/spiffe/go-spiffe/v2 v2.6.0
+	github.com/spiffe/go-spiffe/v2 v2.8.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/oauth2 v0.36.0
 )
@@ -27,11 +30,11 @@ require (
 	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.51.0 // indirect
-	golang.org/x/net v0.54.0 // indirect
-	golang.org/x/sys v0.44.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260519071638-aa98bba5eb94 // indirect
-	google.golang.org/grpc v1.81.1 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
+	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260817212433-ac3dfec99bb1 // indirect
+	google.golang.org/grpc v1.85.0 // indirect
+	google.golang.org/protobuf v1.36.12 // indirect
 )

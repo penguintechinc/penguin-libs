@@ -18,12 +18,12 @@ import (
 // OIDCRelyingParty validates tokens issued by an external OIDC provider and
 // handles the Authorization Code flow on behalf of the application.
 type OIDCRelyingParty struct {
-	cfg            OIDCRPConfig
-	provider       *gooidc.Provider
-	verifier       *gooidc.IDTokenVerifier
-	oauth2         oauth2.Config
-	discovery      map[string]interface{}
-	discoveryOnce  sync.Once
+	cfg           OIDCRPConfig
+	provider      *gooidc.Provider
+	verifier      *gooidc.IDTokenVerifier
+	oauth2        oauth2.Config
+	discovery     map[string]interface{}
+	discoveryOnce sync.Once
 }
 
 // NewOIDCRelyingParty creates an OIDCRelyingParty by discovering the provider's
@@ -61,11 +61,33 @@ func NewOIDCRelyingParty(ctx context.Context, cfg OIDCRPConfig) (*OIDCRelyingPar
 	}, nil
 }
 
-// ValidateToken verifies rawToken against the configured provider and returns
-// the extracted Claims. It enforces the MaxTokenSize limit before parsing.
-// If expectedNonce is provided and non-empty, it validates the nonce claim in the token
-// using constant-time comparison.
+// ValidateToken verifies rawToken (signature, iss, aud, exp) and returns its Claims.
+// It is the bearer/access-token path and carries no nonce. It enforces MaxTokenSize before parsing.
+// If a nonce argument is passed it must be non-empty and must match the token's nonce claim
+// (constant-time); an explicit empty nonce is rejected, never treated as "skip".
+// Use ValidateIDToken for OIDC ID tokens from an Authorization Code flow.
 func (rp *OIDCRelyingParty) ValidateToken(ctx context.Context, rawToken string, expectedNonce ...string) (*Claims, error) {
+	if len(expectedNonce) > 0 {
+		if expectedNonce[0] == "" {
+			return nil, fmt.Errorf("oidc_rp: explicit empty nonce rejected; omit the argument for access tokens")
+		}
+		return rp.validate(ctx, rawToken, expectedNonce[0])
+	}
+	return rp.validate(ctx, rawToken, "")
+}
+
+// ValidateIDToken verifies an OIDC ID token and enforces the nonce binding (SEC-GO-06).
+// expectedNonce is required: an empty value, a missing nonce claim, or a mismatched
+// nonce all fail. The comparison is constant-time.
+func (rp *OIDCRelyingParty) ValidateIDToken(ctx context.Context, rawToken string, expectedNonce string) (*Claims, error) {
+	if expectedNonce == "" {
+		return nil, fmt.Errorf("oidc_rp: expected nonce is required for ID token validation")
+	}
+	return rp.validate(ctx, rawToken, expectedNonce)
+}
+
+// validate is the shared verification core. An empty nonce means the nonce check is not requested.
+func (rp *OIDCRelyingParty) validate(ctx context.Context, rawToken string, expectedNonce string) (*Claims, error) {
 	if len(rawToken) > MaxTokenSize {
 		return nil, fmt.Errorf("oidc_rp: token size %d exceeds maximum of %d bytes", len(rawToken), MaxTokenSize)
 	}
@@ -75,15 +97,14 @@ func (rp *OIDCRelyingParty) ValidateToken(ctx context.Context, rawToken string, 
 		return nil, fmt.Errorf("oidc_rp: token verification failed: %w", err)
 	}
 
-	// Validate nonce if provided
-	if len(expectedNonce) > 0 && expectedNonce[0] != "" {
+	if expectedNonce != "" {
 		var nonceClaims struct {
 			Nonce string `json:"nonce"`
 		}
 		if err := idToken.Claims(&nonceClaims); err != nil {
 			return nil, fmt.Errorf("oidc_rp: failed to extract nonce claim: %w", err)
 		}
-		if subtle.ConstantTimeCompare([]byte(nonceClaims.Nonce), []byte(expectedNonce[0])) != 1 {
+		if nonceClaims.Nonce == "" || subtle.ConstantTimeCompare([]byte(nonceClaims.Nonce), []byte(expectedNonce)) != 1 {
 			return nil, fmt.Errorf("oidc_rp: nonce mismatch")
 		}
 	}

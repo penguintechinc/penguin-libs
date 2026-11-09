@@ -2,6 +2,8 @@
 //
 // It supports scope-based authorization with a role registry, allowing callers
 // to check whether a subject has the required scopes for a given operation.
+//
+// Deprecated: Go libraries are being phased out; use penguin-aaa (packages/rust-aaa) instead.
 package authz
 
 import (
