@@ -8,4 +8,6 @@
 // lanes per request, tracks per-lane cooldowns after transport failures,
 // and opportunistically upgrades to HTTP/3 for future requests when a
 // server advertises it via the Alt-Svc response header (RFC 7838).
+//
+// Deprecated: Go libraries are being phased out; use rust-rpc instead.
 package client
