@@ -133,7 +133,7 @@ jobs:
           working-directory: packages/go-common
       - name: Security - govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.3
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
           cd packages/go-common && govulncheck ./...
       - name: Security - gosec
         run: |
@@ -165,7 +165,7 @@ jobs:
           working-directory: packages/go-aaa
       - name: Security - govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.3
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
           cd packages/go-aaa && govulncheck ./...
       - name: Security - gosec
         run: |
@@ -267,7 +267,7 @@ jobs:
           working-directory: packages/go-rpc
       - name: Security - govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
           cd packages/go-rpc && govulncheck ./...
       - name: Security - gosec
         run: |
