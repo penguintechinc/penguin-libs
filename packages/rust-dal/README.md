@@ -22,3 +22,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+## Security defaults
+
+- PostgreSQL TLS defaults to `verify-full` (`DB_SSLMODE`); optional CA bundle via `DB_SSL_ROOT_CERT`.
+  `disable`/`prefer` are rejected unless `DB_ALLOW_INSECURE_SSL=true` is also set (development only; a warning is logged).
+- Connections use typed `sqlx` option setters, never a hand-built DSN; `DbConfig::connection_url()` percent-encodes every component.
+- `Debug` for `DbConfig`, `S3Config` and `StreamMessage` redacts passwords, endpoint credentials and payloads.
+- `S3StorageStore::get` refuses objects above `S3_MAX_OBJECT_BYTES` (default 64 MiB).

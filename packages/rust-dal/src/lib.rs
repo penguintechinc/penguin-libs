@@ -29,7 +29,13 @@ pub use error::DalError;
 pub use stream::{StreamConsumer, StreamMessage, StreamProducer};
 
 #[cfg(feature = "sql")]
-pub use db::{DatabasePool, DbConfig, DbType, connect_pg_pool, connect_pool, connect_sqlite_pool};
+pub use db::{
+    connect_pg_pool, connect_pool, connect_sqlite_pool, DatabasePool, DbConfig, DbSslMode, DbType,
+};
 
 #[cfg(feature = "storage")]
-pub use storage::{S3Config, S3StorageStore, StorageStore, build_s3_client};
+pub use storage::{build_s3_client, S3Config, S3StorageStore, StorageStore};
+
+/// Serializes tests that mutate process environment variables.
+#[cfg(test)]
+pub(crate) static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
