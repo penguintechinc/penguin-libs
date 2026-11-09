@@ -31,7 +31,7 @@ services. Extracted from three independent reimplementations in the
   working, at a 4096-bit RSA floor.
 - [`Es256Signer`] — sign a [`Claims`] value into a compact ES256 JWS.
 - [`Es256Verifier`] — built from exactly one public key via
-  [`Es256Verifier::from_public_key_pem`]; the accepted algorithm is
+  [`Es256Verifier::builder`]; the accepted algorithm is
   *derived from the key's own type* (EC curve or RSA), never supplied by
   the caller. A token's declared `alg` must match what the key
   cryptographically is before signature verification is even attempted —
@@ -87,9 +87,9 @@ it from them too.
 methods aren't available for that crate version. This crate works around
 it by parsing the SPKI wrapper itself (via `spki`/`der`) and constructing
 the P-521 verifying key from the raw SEC1 point via
-`VerifyingKey::from_sec1_bytes` instead of `from_public_key_pem` — fully
+`VerifyingKey::from_sec1_bytes` instead of `builder` — fully
 equivalent for verification, and invisible to callers of
-[`Es256Verifier::from_public_key_pem`].
+[`Es256Verifier::builder`].
 
 ## Usage
 
@@ -97,9 +97,11 @@ equivalent for verification, and invisible to callers of
 use penguin_aaa::{Claims, Es256Signer, Es256Verifier};
 
 let signer = Es256Signer::from_ec_pem(private_key_pem)?;
-let verifier = Es256Verifier::from_public_key_pem(public_key_pem)?
-    .with_audience("hub-api")
-    .with_issuer("auth.penguintech.io");
+// audience and issuer are mandatory; build() fails without them
+let verifier = Es256Verifier::builder(public_key_pem)
+    .audience("hub-api")
+    .issuer("auth.penguintech.io")
+    .build()?;
 
 let claims = Claims::new("node-123", "auth.penguintech.io", "hub-api", iat, exp, "dns:config:read");
 let token = signer.sign(&claims)?;

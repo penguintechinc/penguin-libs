@@ -29,7 +29,7 @@ const OID_RSA_ENCRYPTION: &str = "1.2.840.113549.1.1.1";
 /// Minimum RSA modulus size this crate accepts for `RS256` verification.
 /// RSA is the *legacy* backup path only — 4096-bit is the platform's RSA
 /// floor (see the crate README's crypto-backend policy). A key below this
-/// is rejected at [`crate::Es256Verifier::from_public_key_pem`] time, not
+/// is rejected at [`crate::Es256VerifierBuilder::build`] time, not
 /// deferred to a per-token check.
 pub const RSA_MIN_MODULUS_BITS: usize = 4096;
 
