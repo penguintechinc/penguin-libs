@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .._fileio import write_secret_file
+
 _SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
 # Module-level imports so that unittest.mock.patch can target them.
@@ -47,8 +49,7 @@ def run_oauth_flow(
     flow = InstalledAppFlow.from_client_secrets_file(credentials_path, requested_scopes)
     creds = flow.run_local_server(port=0)
 
-    with open(token_path, "w") as f:
-        f.write(creds.to_json())
+    write_secret_file(token_path, creds.to_json())
 
     print(f"Token saved to {token_path}")
 

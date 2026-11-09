@@ -72,13 +72,17 @@ def _cmd_check(args: argparse.Namespace) -> int:
             print(f"ERROR: Unknown SMTP_MODE '{mode_str}'", file=sys.stderr)
             return 1
 
-        transport = SmtpTransport(
-            host=host,
-            port=int(port_str) if port_str else None,
-            mode=smtp_mode,
-            username=username,
-            password=password,
-        )
+        try:
+            transport = SmtpTransport(
+                host=host,
+                port=int(port_str) if port_str else None,
+                mode=smtp_mode,
+                username=username,
+                password=password,
+            )
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
 
     ok = transport.health_check()
     if ok:

@@ -5,7 +5,7 @@ Pluggable email sending library for Penguin Tech applications.
 ## Features
 
 - **Gmail REST API** transport (OAuth2, primary)
-- **SMTP** transport (SSL / STARTTLS / PLAIN with `InsecureConnectionWarning`)
+- **SMTP** transport (SSL / STARTTLS with verified certificates and hostnames, TLS 1.2+; PLAIN with `InsecureConnectionWarning`, never with credentials)
 - Fluent `EmailMessage` builder with Jinja2 templating
 - Built-in templates: welcome, notification, transactional, alert, password_reset, form
 - Form builder and table builder helpers
