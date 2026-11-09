@@ -52,29 +52,27 @@ impl fmt::Debug for S3Config {
     }
 }
 
-/// Redacts `user:pass@` userinfo and any query string from a URL for safe display.
-pub(crate) fn redact_url(url: &str) -> String {
-    let (base, has_query) = match url.split_once('?') {
-        Some((b, _)) => (b, true),
-        None => (url, false),
-    };
-    let mut out = match base.split_once("://") {
-        Some((scheme, rest)) => {
-            let (authority, path) = match rest.find('/') {
-                Some(i) => rest.split_at(i),
-                None => (rest, ""),
-            };
-            match authority.rsplit_once('@') {
-                Some((_, host)) => format!("{scheme}://[REDACTED]@{host}{path}"),
-                None => base.to_owned(),
+/// Placeholder returned by [`redact_url`] when the input cannot be parsed as a URL.
+const REDACTED_URL: &str = "[REDACTED-URL]";
+
+/// Redacts userinfo, query and fragment from a URL for safe display.
+///
+/// Parses with [`url::Url`] so delimiter characters inside credentials cannot
+/// split the string early; unparseable input yields a fixed placeholder and is
+/// never echoed, since it may itself contain a secret.
+pub(crate) fn redact_url(raw: &str) -> String {
+    match url::Url::parse(raw) {
+        Ok(mut u) => {
+            // set_username/set_password only fail for cannot-be-a-base URLs; clear the rest regardless.
+            if u.set_username("").is_err() || u.set_password(None).is_err() {
+                return REDACTED_URL.to_owned();
             }
+            u.set_query(None);
+            u.set_fragment(None);
+            u.to_string()
         }
-        None => base.to_owned(),
-    };
-    if has_query {
-        out.push_str("?[REDACTED]");
+        Err(_) => REDACTED_URL.to_owned(),
     }
-    out
 }
 
 fn default_max_object_bytes() -> u64 {
@@ -409,13 +407,68 @@ mod tests {
 
     #[test]
     fn redact_url_cases() {
-        assert_eq!(redact_url("http://h:9000"), "http://h:9000");
-        assert_eq!(redact_url("http://u:p@h"), "http://[REDACTED]@h");
-        assert_eq!(
-            redact_url("http://u:p@h/x?k=v"),
-            "http://[REDACTED]@h/x?[REDACTED]"
+        assert_eq!(redact_url("http://h:9000"), "http://h:9000/");
+        assert_eq!(redact_url("http://u:p@h"), "http://h/");
+        assert_eq!(redact_url("http://u:p@h/x?k=v"), "http://h/x");
+    }
+
+    /// Asserts that none of `secrets` survive redaction of `input`.
+    fn assert_redacted(input: &str, secrets: &[&str]) {
+        let out = redact_url(input);
+        for s in secrets {
+            assert!(
+                !out.contains(s),
+                "{s:?} leaked in {out:?} (input {input:?})"
+            );
+        }
+    }
+
+    // regression: S-08b — '?' in the password must not truncate userinfo before '@'
+    #[test]
+    fn redact_url_question_mark_in_password() {
+        // the url crate reads "user:p" as host:port and rejects it: placeholder, never the input
+        assert_eq!(redact_url("https://user:p?ss@host/x"), "[REDACTED-URL]");
+        assert_redacted("https://user:p?ss@host/x", &["user", "p?ss", "ss"]);
+    }
+
+    // regression: S-08b — '#' in the password
+    #[test]
+    fn redact_url_hash_in_password() {
+        assert_redacted("https://user:pa#ss@host/x", &["user", "pa", "ss"]);
+    }
+
+    // regression: S-08b — '/' in the password, raw and percent-encoded
+    #[test]
+    fn redact_url_slash_in_password() {
+        assert_redacted("https://user:pa/ss@host/x", &["user", "pa/ss", "ss"]);
+        assert_redacted("https://user:pa%2Fss@host/x", &["user", "pa%2Fss", "ss"]);
+    }
+
+    // regression: S-08b — '@' in the password and multiple '@'
+    #[test]
+    fn redact_url_at_signs_in_password() {
+        assert_redacted("https://user:p@ss@host/x", &["user", "p@ss", "ss"]);
+        assert_redacted(
+            "https://user:a@b@c@host/x",
+            &["user", "a@b", "b@c", "c@host"],
         );
-        assert_eq!(redact_url("not a url"), "not a url");
+        assert_eq!(redact_url("https://user:a@b@c@host/x"), "https://host/x");
+    }
+
+    // regression: S-08b — token in the query string and fragment
+    #[test]
+    fn redact_url_query_and_fragment_tokens() {
+        let out = redact_url("https://host/x?X-Amz-Signature=tok123&a=b#frag99");
+        assert_eq!(out, "https://host/x");
+        assert!(!out.contains("tok123") && !out.contains("frag99"));
+    }
+
+    // regression: S-08b — unparseable input never echoed back
+    #[test]
+    fn redact_url_unparseable_returns_placeholder() {
+        assert_eq!(redact_url("not a url"), "[REDACTED-URL]");
+        assert_eq!(redact_url("user:secret@"), "[REDACTED-URL]");
+        assert_eq!(redact_url(""), "[REDACTED-URL]");
     }
 
     #[test]
