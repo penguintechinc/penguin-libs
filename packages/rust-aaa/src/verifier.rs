@@ -25,8 +25,26 @@ use crate::token::{Header, b64url_decode};
 /// attempted.
 pub struct Es256Verifier {
     key: VerifyKey,
-    expected_audience: Option<String>,
-    expected_issuer: Option<String>,
+    expected_audience: String,
+    expected_issuer: String,
+}
+
+/// Maximum accepted token lifetime (`exp - iat`), the platform's 24-hour
+/// ceiling for any token. Not configurable: raising it is a policy change.
+const MAX_TOKEN_LIFETIME_SECS: i64 = 86_400;
+
+/// Clock-skew leeway applied to the `exp` and `nbf` checks. Capped small
+/// so a stale token cannot be replayed long after it should have died.
+const CLOCK_SKEW_LEEWAY_SECS: i64 = 60;
+
+/// Builder for [`Es256Verifier`]. `audience` and `issuer` are mandatory:
+/// [`Es256VerifierBuilder::build`] fails if either is unset, so a verifier
+/// that would accept tokens minted for any service cannot be constructed.
+#[derive(Debug)]
+pub struct Es256VerifierBuilder {
+    public_key_pem: Vec<u8>,
+    audience: Option<String>,
+    issuer: Option<String>,
 }
 
 /// The verification backend for one detected key type. `ring` covers
@@ -57,17 +75,33 @@ impl std::fmt::Debug for Es256Verifier {
     }
 }
 
-impl Es256Verifier {
-    /// Builds a verifier from an SPKI-wrapped public key PEM
-    /// (`-----BEGIN PUBLIC KEY-----`). The key's algorithm is detected
-    /// from the SPKI `AlgorithmIdentifier` (see [`crate::key::detect`]);
-    /// construction fails for any key type other than
-    /// P-256/P-384/P-521/Ed25519/RSA, and for an RSA key under the
-    /// 4096-bit minimum. No audience/issuer is pinned by default; chain
-    /// [`Es256Verifier::with_audience`] / [`Es256Verifier::with_issuer`]
-    /// to require a specific one.
-    pub fn from_public_key_pem(pem: &[u8]) -> Result<Self, AaaError> {
-        let pem_str = std::str::from_utf8(pem).map_err(|e| AaaError::InvalidKey(e.to_string()))?;
+impl Es256VerifierBuilder {
+    /// Requires the token's `aud` claim to equal `audience` (mandatory).
+    #[must_use]
+    pub fn audience(mut self, audience: &str) -> Self {
+        self.audience = Some(audience.to_string());
+        self
+    }
+
+    /// Requires the token's `iss` claim to equal `issuer` (mandatory).
+    #[must_use]
+    pub fn issuer(mut self, issuer: &str) -> Self {
+        self.issuer = Some(issuer.to_string());
+        self
+    }
+
+    /// Parses the key and produces the verifier. Fails with
+    /// [`AaaError::Config`] when `audience` or `issuer` is unset or empty,
+    /// and with [`AaaError::InvalidKey`] for unusable key material.
+    pub fn build(self) -> Result<Es256Verifier, AaaError> {
+        let audience = self.audience.filter(|a| !a.is_empty()).ok_or_else(|| {
+            AaaError::Config("audience is required and must be non-empty".to_string())
+        })?;
+        let issuer = self.issuer.filter(|i| !i.is_empty()).ok_or_else(|| {
+            AaaError::Config("issuer is required and must be non-empty".to_string())
+        })?;
+        let pem_str = std::str::from_utf8(&self.public_key_pem)
+            .map_err(|e| AaaError::InvalidKey(e.to_string()))?;
         let key = match detect(pem_str)? {
             DetectedKey::Es256(raw) => VerifyKey::Es256(raw),
             DetectedKey::Es384(raw) => VerifyKey::Es384(raw),
@@ -79,25 +113,25 @@ impl Es256Verifier {
             DetectedKey::EdDsa(raw) => VerifyKey::EdDsa(raw),
             DetectedKey::Rs256(raw) => VerifyKey::Rs256(raw),
         };
-        Ok(Self {
+        Ok(Es256Verifier {
             key,
-            expected_audience: None,
-            expected_issuer: None,
+            expected_audience: audience,
+            expected_issuer: issuer,
         })
     }
+}
 
-    /// Additionally requires the token's `aud` claim to equal `audience`.
+impl Es256Verifier {
+    /// Starts a builder from an SPKI-wrapped public key PEM
+    /// (`-----BEGIN PUBLIC KEY-----`). Call [`Es256VerifierBuilder::audience`]
+    /// and [`Es256VerifierBuilder::issuer`], then [`Es256VerifierBuilder::build`].
     #[must_use]
-    pub fn with_audience(mut self, audience: &str) -> Self {
-        self.expected_audience = Some(audience.to_string());
-        self
-    }
-
-    /// Additionally requires the token's `iss` claim to equal `issuer`.
-    #[must_use]
-    pub fn with_issuer(mut self, issuer: &str) -> Self {
-        self.expected_issuer = Some(issuer.to_string());
-        self
+    pub fn builder(public_key_pem: &[u8]) -> Es256VerifierBuilder {
+        Es256VerifierBuilder {
+            public_key_pem: public_key_pem.to_vec(),
+            audience: None,
+            issuer: None,
+        }
     }
 
     /// The one JWS `alg` string this verifier's key accepts.
@@ -172,9 +206,9 @@ impl Es256Verifier {
         let header: Header = serde_json::from_slice(&header_bytes)
             .map_err(|e| AaaError::Verification(e.to_string()))?;
         if header.alg != self.expected_alg() {
+            // Fixed text: the header `alg` is untrusted and must never be echoed.
             return Err(AaaError::Verification(format!(
-                "alg {:?} does not match this verifier's key (expects {:?})",
-                header.alg,
+                "algorithm does not match this verifier's key (expects {})",
                 self.expected_alg()
             )));
         }
@@ -194,21 +228,43 @@ impl Es256Verifier {
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| AaaError::Verification(e.to_string()))?
             .as_secs() as i64;
-        if claims.exp < now {
+        // Untrusted i64 arithmetic: checked/saturating so hostile values
+        // fail closed instead of wrapping or panicking.
+        let lifetime = claims
+            .exp
+            .checked_sub(claims.iat)
+            .ok_or_else(|| AaaError::Verification("token lifetime is out of range".to_string()))?;
+        if lifetime < 0 {
+            return Err(AaaError::Verification("exp precedes iat".to_string()));
+        }
+        if lifetime > MAX_TOKEN_LIFETIME_SECS {
+            return Err(AaaError::Verification(
+                "token lifetime exceeds the 24h maximum".to_string(),
+            ));
+        }
+        if claims.iat > now.saturating_add(CLOCK_SKEW_LEEWAY_SECS) {
+            return Err(AaaError::Verification(
+                "token issued in the future".to_string(),
+            ));
+        }
+        if now.saturating_sub(CLOCK_SKEW_LEEWAY_SECS) > claims.exp {
             return Err(AaaError::Verification("token expired".to_string()));
         }
-        if let Some(expected) = &self.expected_audience
-            && &claims.aud != expected
+        if let Some(nbf) = claims.nbf
+            && now.saturating_add(CLOCK_SKEW_LEEWAY_SECS) < nbf
         {
+            return Err(AaaError::Verification("token not yet valid".to_string()));
+        }
+        if claims.aud != self.expected_audience {
             return Err(AaaError::Verification(format!(
-                "audience mismatch: expected {expected:?}"
+                "audience mismatch: expected {:?}",
+                self.expected_audience
             )));
         }
-        if let Some(expected) = &self.expected_issuer
-            && &claims.iss != expected
-        {
+        if claims.iss != self.expected_issuer {
             return Err(AaaError::Verification(format!(
-                "issuer mismatch: expected {expected:?}"
+                "issuer mismatch: expected {:?}",
+                self.expected_issuer
             )));
         }
 

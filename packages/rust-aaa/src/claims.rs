@@ -26,8 +26,13 @@ pub struct Claims {
     pub aud: String,
     /// Issued-at, Unix seconds.
     pub iat: i64,
-    /// Expiration, Unix seconds.
+    /// Expiration, Unix seconds. Mandatory: a token without `exp` fails
+    /// verification.
     pub exp: i64,
+    /// Not-before, Unix seconds. Optional; when present the token is
+    /// rejected until `nbf` (minus the verifier's clock-skew leeway).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nbf: Option<i64>,
     /// Scope string, space-delimited `resource:action` entries (see
     /// security.md OIDC Claims & Scopes) — authz decisions branch on this,
     /// never on `roles`.
@@ -67,6 +72,7 @@ impl Claims {
             aud: aud.into(),
             iat,
             exp,
+            nbf: None,
             scope: scope.into(),
             tenant: None,
             teams: Vec::new(),

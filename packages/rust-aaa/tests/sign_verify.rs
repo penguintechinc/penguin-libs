@@ -26,16 +26,56 @@ use hmac::{Hmac, Mac};
 use p256::ecdsa::signature::Signer;
 use p256::ecdsa::{Signature, SigningKey, VerifyingKey};
 use p256::pkcs8::{DecodePrivateKey, EncodePrivateKey, EncodePublicKey, LineEnding};
-use penguin_aaa::{Claims, Es256Signer, Es256Verifier};
+use penguin_aaa::{AaaError, Claims, Es256Signer, Es256Verifier};
 use sha2::Sha256;
 use std::sync::OnceLock;
+
+/// Fills `N` bytes from the OS RNG. Test-only: the `p256`/`p384`/`p521`
+/// 0.14 key generators require `rand_core` 0.10 RNG traits, which the
+/// OS RNG here does not provide, so keys are built from raw scalar bytes.
+fn os_random<const N: usize>() -> [u8; N] {
+    let mut bytes = [0u8; N];
+    getrandom::fill(&mut bytes).expect("the OS RNG must be available to tests");
+    bytes
+}
+
+/// Fresh P-256 signing key from OS randomness; retries the rare
+/// out-of-range scalar.
+fn p256_key() -> p256::ecdsa::SigningKey {
+    loop {
+        if let Ok(key) = p256::ecdsa::SigningKey::from_slice(&os_random::<32>()) {
+            return key;
+        }
+    }
+}
+
+/// Fresh P-384 signing key from OS randomness.
+fn p384_key() -> p384::ecdsa::SigningKey {
+    loop {
+        if let Ok(key) = p384::ecdsa::SigningKey::from_slice(&os_random::<48>()) {
+            return key;
+        }
+    }
+}
+
+/// Fresh P-521 signing key from OS randomness. The top bit is cleared so
+/// the scalar always lies below the 521-bit group order.
+fn p521_key() -> p521::ecdsa::SigningKey {
+    loop {
+        let mut bytes = os_random::<66>();
+        bytes[0] &= 0x01;
+        if let Ok(key) = p521::ecdsa::SigningKey::from_slice(&bytes) {
+            return key;
+        }
+    }
+}
 
 /// Generates a fresh, throwaway EC P-256 keypair as PKCS#8/SPKI PEM —
 /// generated at test time, never a fixed/committed key, so nothing
 /// resembling real key material ever lands in source control (mirrors
 /// both ported sources' `generate_test_keypair`).
 fn generate_test_keypair() -> (String, String) {
-    let signing_key = SigningKey::random(&mut rand_core::OsRng);
+    let signing_key = p256_key();
     let private_pem = signing_key
         .to_pkcs8_pem(LineEnding::LF)
         .expect("encoding a freshly generated P-256 key as PKCS#8 PEM must succeed")
@@ -68,8 +108,17 @@ fn sample_claims(exp: i64) -> Claims {
     }
 }
 
+/// Builds a verifier pinned to the audience and issuer [`sample_claims`]
+/// carries, so the policy-mandatory pins never reject the happy path.
+fn pinned_verifier(public_pem: &[u8]) -> Result<Es256Verifier, AaaError> {
+    Es256Verifier::builder(public_pem)
+        .audience("hub-api")
+        .issuer("auth.penguintech.io")
+        .build()
+}
+
 fn verifier_for(public_pem: &str) -> Es256Verifier {
-    Es256Verifier::from_public_key_pem(public_pem.as_bytes())
+    pinned_verifier(public_pem.as_bytes())
         .expect("a freshly generated/exported public key must build a verifier")
 }
 
@@ -251,35 +300,29 @@ fn verify_rejects_malformed_token_with_wrong_segment_count() {
 }
 
 #[test]
-fn with_audience_rejects_mismatched_audience_and_accepts_matching() {
+fn builder_pins_audience_and_issuer_and_rejects_mismatched_token() {
     let (private_pem, public_pem) = generate_test_keypair();
     let signer = Es256Signer::from_ec_pem(private_pem.as_bytes())
         .expect("a freshly generated EC private key must build a signer");
     let token = signer
         .sign(&sample_claims(now() + 3600))
-        .expect("signing must succeed"); // aud = "hub-api"
+        .expect("signing must succeed"); // aud = "hub-api", iss = "auth.penguintech.io"
 
-    let wrong_audience = verifier_for(&public_pem).with_audience("other-service");
+    let wrong_audience = Es256Verifier::builder(public_pem.as_bytes())
+        .audience("other-service")
+        .issuer("auth.penguintech.io")
+        .build()
+        .expect("a fully pinned builder must build");
     assert!(wrong_audience.verify(&token).is_err());
 
-    let right_audience = verifier_for(&public_pem).with_audience("hub-api");
-    assert!(right_audience.verify(&token).is_ok());
-}
-
-#[test]
-fn with_issuer_rejects_mismatched_issuer_and_accepts_matching() {
-    let (private_pem, public_pem) = generate_test_keypair();
-    let signer = Es256Signer::from_ec_pem(private_pem.as_bytes())
-        .expect("a freshly generated EC private key must build a signer");
-    let token = signer
-        .sign(&sample_claims(now() + 3600))
-        .expect("signing must succeed"); // iss = "auth.penguintech.io"
-
-    let wrong_issuer = verifier_for(&public_pem).with_issuer("someone-else");
+    let wrong_issuer = Es256Verifier::builder(public_pem.as_bytes())
+        .audience("hub-api")
+        .issuer("someone-else")
+        .build()
+        .expect("a fully pinned builder must build");
     assert!(wrong_issuer.verify(&token).is_err());
 
-    let right_issuer = verifier_for(&public_pem).with_issuer("auth.penguintech.io");
-    assert!(right_issuer.verify(&token).is_ok());
+    assert!(verifier_for(&public_pem).verify(&token).is_ok());
 }
 
 #[test]
@@ -291,7 +334,7 @@ fn signer_from_ec_pem_rejects_garbage_key_material() {
 
 #[test]
 fn verifier_from_public_key_pem_rejects_garbage_key_material() {
-    let err = Es256Verifier::from_public_key_pem(b"not a real key")
+    let err = pinned_verifier(b"not a real key")
         .expect_err("garbage PEM bytes must not build a verifier");
     assert!(err.to_string().contains("invalid"));
 }
@@ -305,7 +348,7 @@ fn signer_from_ec_pem_rejects_non_utf8_bytes() {
 
 #[test]
 fn verifier_from_public_key_pem_rejects_non_utf8_bytes() {
-    let err = Es256Verifier::from_public_key_pem(&[0xFF, 0xFE, 0xFD])
+    let err = pinned_verifier(&[0xFF, 0xFE, 0xFD])
         .expect_err("non-UTF-8 bytes must not build a verifier");
     assert!(err.to_string().contains("invalid"));
 }
@@ -422,10 +465,10 @@ fn claims_new_defaults_tenant_teams_and_roles_empty() {
 #[test]
 fn es384_round_trips_and_rejects_wrong_key() {
     use p384::ecdsa::signature::Signer as _;
-    use p384::ecdsa::{Signature, SigningKey, VerifyingKey};
+    use p384::ecdsa::{Signature, VerifyingKey};
     use p384::pkcs8::EncodePublicKey as _;
 
-    let sk = SigningKey::random(&mut rand_core::OsRng);
+    let sk = p384_key();
     let pub_pem = VerifyingKey::from(&sk)
         .to_public_key_pem(LineEnding::LF)
         .expect("encode P-384 public key");
@@ -438,17 +481,17 @@ fn es384_round_trips_and_rejects_wrong_key() {
         },
     );
 
-    let verifier = Es256Verifier::from_public_key_pem(pub_pem.as_bytes())
-        .expect("a P-384 SPKI public key must build a verifier");
+    let verifier =
+        pinned_verifier(pub_pem.as_bytes()).expect("a P-384 SPKI public key must build a verifier");
     let claims = verifier.verify(&token).expect("ES384 token must verify");
     assert_eq!(claims.sub, "user-123");
 
     // Wrong key: an independently generated P-384 keypair must reject.
-    let other_sk = SigningKey::random(&mut rand_core::OsRng);
+    let other_sk = p384_key();
     let other_pub_pem = VerifyingKey::from(&other_sk)
         .to_public_key_pem(LineEnding::LF)
         .expect("encode other P-384 public key");
-    let other_verifier = Es256Verifier::from_public_key_pem(other_pub_pem.as_bytes())
+    let other_verifier = pinned_verifier(other_pub_pem.as_bytes())
         .expect("a P-384 SPKI public key must build a verifier");
     assert!(other_verifier.verify(&token).is_err());
 }
@@ -465,7 +508,7 @@ fn es384_round_trips_and_rejects_wrong_key() {
 /// around a raw uncompressed SEC1 EC point — test-only, needed because
 /// `p521` 0.13.3 can produce/consume raw SEC1 points but not SPKI PEM
 /// directly (its `ecdsa-core/pem` feature forwarding is incomplete).
-/// `Es256Verifier::from_public_key_pem`'s own SPKI parsing (via `spki`)
+/// `Es256Verifier::builder`'s own SPKI parsing (via `spki`)
 /// doesn't care how the DER was built, so this is a faithful stand-in for
 /// a real P-521 SPKI key — cross-checked against a real
 /// `openssl ecparam -name secp521r1`-generated key in
@@ -527,13 +570,11 @@ fn der_to_pem(der_bytes: &[u8], label: &str) -> String {
 #[test]
 fn es512_round_trips_and_rejects_wrong_key() {
     use p521::ecdsa::signature::Signer as _;
-    use p521::ecdsa::{Signature, SigningKey, VerifyingKey};
+    use p521::ecdsa::{Signature, VerifyingKey};
 
-    let sk = SigningKey::random(&mut rand_core::OsRng);
-    let pub_pem = wrap_ec_point_as_spki_pem(
-        "1.3.132.0.35",
-        VerifyingKey::from(&sk).to_encoded_point(false).as_bytes(),
-    );
+    let sk = p521_key();
+    let pub_pem =
+        wrap_ec_point_as_spki_pem("1.3.132.0.35", &VerifyingKey::from(&sk).to_sec1_bytes());
     let token = sign_raw_generic(
         r#"{"alg":"ES512","typ":"JWT"}"#,
         &claims_json(now() + 3600),
@@ -543,19 +584,17 @@ fn es512_round_trips_and_rejects_wrong_key() {
         },
     );
 
-    let verifier = Es256Verifier::from_public_key_pem(pub_pem.as_bytes())
-        .expect("a P-521 SPKI public key must build a verifier");
+    let verifier =
+        pinned_verifier(pub_pem.as_bytes()).expect("a P-521 SPKI public key must build a verifier");
     let claims = verifier.verify(&token).expect("ES512 token must verify");
     assert_eq!(claims.sub, "user-123");
 
-    let other_sk = SigningKey::random(&mut rand_core::OsRng);
+    let other_sk = p521_key();
     let other_pub_pem = wrap_ec_point_as_spki_pem(
         "1.3.132.0.35",
-        VerifyingKey::from(&other_sk)
-            .to_encoded_point(false)
-            .as_bytes(),
+        &VerifyingKey::from(&other_sk).to_sec1_bytes(),
     );
-    let other_verifier = Es256Verifier::from_public_key_pem(other_pub_pem.as_bytes())
+    let other_verifier = pinned_verifier(other_pub_pem.as_bytes())
         .expect("a P-521 SPKI public key must build a verifier");
     assert!(other_verifier.verify(&token).is_err());
 }
@@ -590,7 +629,7 @@ fn es512_accepts_a_real_openssl_generated_key() {
     ]);
 
     let pub_pem = std::fs::read_to_string(&pub_path).expect("read openssl P-521 pubkey");
-    Es256Verifier::from_public_key_pem(pub_pem.as_bytes())
+    pinned_verifier(pub_pem.as_bytes())
         .expect("a real openssl-generated P-521 SPKI key must build a verifier");
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -602,7 +641,9 @@ fn es512_accepts_a_real_openssl_generated_key() {
 
 #[test]
 fn eddsa_round_trips_and_rejects_wrong_key() {
-    use ed25519_dalek::pkcs8::{DecodePrivateKey as _, EncodePublicKey as _};
+    use ed25519_dalek::pkcs8::{
+        DecodePrivateKey as _, EncodePrivateKey as _, EncodePublicKey as _,
+    };
     use ed25519_dalek::{Signature, Signer as _, SigningKey};
 
     let mut csprng = rand_core::OsRng;
@@ -628,7 +669,7 @@ fn eddsa_round_trips_and_rejects_wrong_key() {
         },
     );
 
-    let verifier = Es256Verifier::from_public_key_pem(pub_pem.as_bytes())
+    let verifier = pinned_verifier(pub_pem.as_bytes())
         .expect("an Ed25519 SPKI public key must build a verifier");
     let claims = verifier.verify(&token).expect("EdDSA token must verify");
     assert_eq!(claims.sub, "user-123");
@@ -638,7 +679,7 @@ fn eddsa_round_trips_and_rejects_wrong_key() {
         .verifying_key()
         .to_public_key_pem(LineEnding::LF)
         .expect("encode other Ed25519 public key");
-    let other_verifier = Es256Verifier::from_public_key_pem(other_pub_pem.as_bytes())
+    let other_verifier = pinned_verifier(other_pub_pem.as_bytes())
         .expect("an Ed25519 SPKI public key must build a verifier");
     assert!(other_verifier.verify(&token).is_err());
 }
@@ -765,7 +806,7 @@ fn rsa_fixture() -> &'static RsaFixture {
 fn rs256_verifies_a_genuine_openssl_signature_and_rejects_wrong_key() {
     let fixture = rsa_fixture();
 
-    let verifier = Es256Verifier::from_public_key_pem(fixture.pub_pem.as_bytes())
+    let verifier = pinned_verifier(fixture.pub_pem.as_bytes())
         .expect("a 4096-bit RSA SPKI public key must build a verifier");
     let claims = verifier
         .verify(&fixture.token)
@@ -773,7 +814,7 @@ fn rs256_verifies_a_genuine_openssl_signature_and_rejects_wrong_key() {
     assert_eq!(claims.sub, "user-123");
 
     // Wrong key: the second independent RSA-4096 keypair must reject.
-    let other_verifier = Es256Verifier::from_public_key_pem(fixture.other_pub_pem.as_bytes())
+    let other_verifier = pinned_verifier(fixture.other_pub_pem.as_bytes())
         .expect("a 4096-bit RSA SPKI public key must build a verifier");
     assert!(other_verifier.verify(&fixture.token).is_err());
 }
@@ -804,7 +845,7 @@ fn rs256_rejects_a_2048_bit_key_at_construction() {
     ]);
 
     let pub_pem = std::fs::read_to_string(&pub_path).expect("read 2048-bit RSA pubkey");
-    let err = Es256Verifier::from_public_key_pem(pub_pem.as_bytes())
+    let err = pinned_verifier(pub_pem.as_bytes())
         .expect_err("a 2048-bit RSA key must be rejected below the 4096-bit minimum");
     assert!(err.to_string().contains("4096"));
 
@@ -845,7 +886,7 @@ fn verifier_rejects_ec_key_on_an_unsupported_curve() {
     ]);
 
     let pub_pem = std::fs::read_to_string(&pub_path).expect("read secp256k1 pubkey");
-    let err = Es256Verifier::from_public_key_pem(pub_pem.as_bytes())
+    let err = pinned_verifier(pub_pem.as_bytes())
         .expect_err("secp256k1 is not one of the accepted P-256/P-384/P-521 curves");
     assert!(err.to_string().contains("unsupported EC curve"));
 
@@ -879,7 +920,7 @@ fn verifier_rejects_a_non_signature_key_algorithm() {
     ]);
 
     let pub_pem = std::fs::read_to_string(&pub_path).expect("read X25519 pubkey");
-    let err = Es256Verifier::from_public_key_pem(pub_pem.as_bytes())
+    let err = pinned_verifier(pub_pem.as_bytes())
         .expect_err("X25519 is a key-agreement algorithm, not one of the five accepted JWS algs");
     assert!(err.to_string().contains("unsupported public key algorithm"));
 

@@ -24,4 +24,9 @@ pub enum AaaError {
     /// verification failed.
     #[error("token verification failed: {0}")]
     Verification(String),
+
+    /// Verifier construction was missing a mandatory setting (audience or
+    /// issuer pin). Raised at build time, never at verify time.
+    #[error("invalid verifier configuration: {0}")]
+    Config(String),
 }
