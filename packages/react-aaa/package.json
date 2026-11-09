@@ -68,12 +68,12 @@
     "@types/react": "18.3.28",
     "@typescript-eslint/eslint-plugin": "6.21.0",
     "@typescript-eslint/parser": "6.21.0",
-    "@vitest/coverage-v8": "4.1.10",
+    "@vitest/coverage-v8": "4.1.12",
     "eslint": "8.57.1",
     "jsdom": "28.1.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "typescript": "5.9.3",
-    "vitest": "4.0.18"
+    "vitest": "4.1.12"
   }
 }

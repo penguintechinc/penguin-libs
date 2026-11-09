@@ -15,7 +15,7 @@ function renderHook<T>(
   callback: (props?: any) => T,
   options?: { initialProps?: any }
 ) {
-  let result = { current: null as T | null };
+  const result = { current: null as T | null };
 
   function TestComponent({ props }: { props?: any }) {
     result.current = callback(props);
