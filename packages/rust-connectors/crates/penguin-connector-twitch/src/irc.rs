@@ -35,7 +35,7 @@ use tokio_rustls::TlsConnector;
 use crate::error::TwitchError;
 
 /// One IRC channel connection's configuration.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct IrcConfig {
     /// IRC server hostname (e.g. `irc.chat.twitch.tv`).
     pub host: String,
@@ -56,6 +56,23 @@ pub struct IrcConfig {
     pub cap_requests: Vec<String>,
     /// Deadline for connecting and completing registration.
     pub timeout: Duration,
+}
+
+impl std::fmt::Debug for IrcConfig {
+    /// Formats every field except `password`, which prints as `Some("***")`
+    /// or `None` so a `{:?}` in a log or panic message cannot leak the OAuth token.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IrcConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("nick", &self.nick)
+            .field("password", &self.password.as_ref().map(|_| "***"))
+            .field("channel", &self.channel)
+            .field("use_tls", &self.use_tls)
+            .field("cap_requests", &self.cap_requests)
+            .field("timeout", &self.timeout)
+            .finish()
+    }
 }
 
 impl IrcConfig {
@@ -152,20 +169,63 @@ async fn write_line<W: AsyncWrite + Unpin>(writer: &mut W, line: &str) -> Result
         .map_err(|e| TwitchError::Connection(e.to_string()))
 }
 
+/// Maximum bytes accepted for one inbound IRC line, including its CRLF.
+/// IRCv3 caps the tags section at 8191 bytes plus 512 for the rest of the
+/// message (8704 total), so 16 KiB leaves headroom for valid tagged lines
+/// while bounding a hostile peer's memory use.
+pub(crate) const MAX_IRC_LINE_BYTES: usize = 16 * 1024;
+
+/// Read one LF-terminated line, refusing any line longer than `max` bytes.
+///
+/// Returns `Ok(None)` on a clean EOF with nothing buffered. The `max` cap
+/// stops a peer that never sends a newline from growing memory without
+/// bound (S-13); an overlong line is reported as a retryable connection
+/// error so the caller reconnects rather than trusting a truncated line.
+async fn read_bounded_line<R: AsyncBufRead + Unpin>(
+    reader: &mut R,
+    max: usize,
+) -> Result<Option<String>, TwitchError> {
+    let mut buf: Vec<u8> = Vec::new();
+    loop {
+        let available = reader
+            .fill_buf()
+            .await
+            .map_err(|e| TwitchError::Connection(e.to_string()))?;
+        if available.is_empty() {
+            if buf.is_empty() {
+                return Ok(None);
+            }
+            break;
+        }
+        let (take, terminated) = match available.iter().position(|&b| b == b'\n') {
+            Some(idx) => (idx + 1, true),
+            None => (available.len(), false),
+        };
+        if buf.len() + take > max {
+            return Err(TwitchError::Connection(format!(
+                "irc line exceeds {max} bytes"
+            )));
+        }
+        buf.extend_from_slice(&available[..take]);
+        reader.consume(take);
+        if terminated {
+            break;
+        }
+    }
+    String::from_utf8(buf)
+        .map(Some)
+        .map_err(|e| TwitchError::Connection(e.to_string()))
+}
+
 async fn wait_for_registration<R: AsyncBufRead + Unpin>(
     reader: &mut R,
     timeout: Duration,
 ) -> Result<(), TwitchError> {
     let read_loop = async {
         loop {
-            let mut line = String::new();
-            let n = reader
-                .read_line(&mut line)
-                .await
-                .map_err(|e| TwitchError::Connection(e.to_string()))?;
-            if n == 0 {
+            let Some(line) = read_bounded_line(reader, MAX_IRC_LINE_BYTES).await? else {
                 return Err(TwitchError::ClosedBeforeRegistration);
-            }
+            };
             let text = line.trim_end();
             if text.contains(" 001 ") {
                 return Ok(());
@@ -257,15 +317,9 @@ where
     /// `IrcTransport.receive`'s loop exactly.
     pub async fn recv(&mut self) -> Result<Option<ChatMessage>, TwitchError> {
         loop {
-            let mut line = String::new();
-            let n = self
-                .reader
-                .read_line(&mut line)
-                .await
-                .map_err(|e| TwitchError::Connection(e.to_string()))?;
-            if n == 0 {
+            let Some(line) = read_bounded_line(&mut self.reader, MAX_IRC_LINE_BYTES).await? else {
                 return Ok(None);
-            }
+            };
             let text = line.trim_end();
             if let Some(rest) = text.strip_prefix("PING") {
                 write_line(&mut self.writer, &format!("PONG{rest}")).await?;
@@ -864,5 +918,86 @@ subscriber=1;user-id=1337 :ronni!ronni@ronni.tmi.twitch.tv PRIVMSG #dallas :Kapp
             .expect_err("non-TLS peer should fail the TLS handshake");
         assert!(matches!(err, TwitchError::Connection(_)));
         server_task.await.expect("server task should not panic");
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod secret_redaction_tests {
+    use super::*;
+
+    /// Regression: `{:?}` on an IRC config must never print the OAuth password (S-03).
+    #[test]
+    fn irc_config_debug_redacts_oauth_password() {
+        let mut cfg = IrcConfig::new("irc.chat.twitch.tv", "botnick", "somechannel");
+        cfg.password = Some("oauth:SECRETPASSWORDVALUE9876".to_string());
+        let dbg = format!("{cfg:?}");
+        assert!(
+            !dbg.contains("SECRETPASSWORDVALUE"),
+            "password leaked: {dbg}"
+        );
+        assert!(!dbg.contains("9876"), "password suffix leaked: {dbg}");
+        assert!(dbg.contains("***"), "redaction marker missing: {dbg}");
+        assert!(
+            dbg.contains("irc.chat.twitch.tv"),
+            "non-secret field missing: {dbg}"
+        );
+    }
+
+    /// Regression: an IRC config without a password still formats without panicking (S-03).
+    #[test]
+    fn irc_config_debug_without_password_shows_none() {
+        let cfg = IrcConfig::new("irc.chat.twitch.tv", "botnick", "somechannel");
+        let dbg = format!("{cfg:?}");
+        assert!(dbg.contains("password: None"), "{dbg}");
+    }
+
+    /// Regression: an overlong IRC line must error instead of growing memory without bound (S-13).
+    #[tokio::test]
+    async fn read_bounded_line_rejects_overlong_line() {
+        let data = vec![b'a'; MAX_IRC_LINE_BYTES + 10];
+        let mut reader = tokio::io::BufReader::new(&data[..]);
+        let err = read_bounded_line(&mut reader, MAX_IRC_LINE_BYTES)
+            .await
+            .expect_err("line over the cap must be rejected");
+        assert!(matches!(err, TwitchError::Connection(_)), "{err:?}");
+    }
+
+    /// Regression: a line exactly at the cap (including CRLF) is still accepted (S-13).
+    #[tokio::test]
+    async fn read_bounded_line_accepts_line_at_cap() {
+        let mut data = vec![b'a'; MAX_IRC_LINE_BYTES - 2];
+        data.extend_from_slice(b"\r\n");
+        let mut reader = tokio::io::BufReader::new(&data[..]);
+        let line = read_bounded_line(&mut reader, MAX_IRC_LINE_BYTES)
+            .await
+            .expect("line at cap must parse")
+            .expect("line present");
+        assert_eq!(line.len(), MAX_IRC_LINE_BYTES);
+        assert!(read_bounded_line(&mut reader, MAX_IRC_LINE_BYTES)
+            .await
+            .expect("eof ok")
+            .is_none());
+    }
+
+    /// Regression: a clean EOF yields `None`, and a trailing unterminated line is still returned (S-13).
+    #[tokio::test]
+    async fn read_bounded_line_handles_eof_and_partial_tail() {
+        let data = b"PING :x\r\ntail-no-newline";
+        let mut reader = tokio::io::BufReader::new(&data[..]);
+        let first = read_bounded_line(&mut reader, 1024)
+            .await
+            .expect("ok")
+            .expect("line");
+        assert_eq!(first, "PING :x\r\n");
+        let tail = read_bounded_line(&mut reader, 1024)
+            .await
+            .expect("ok")
+            .expect("tail");
+        assert_eq!(tail, "tail-no-newline");
+        assert!(read_bounded_line(&mut reader, 1024)
+            .await
+            .expect("ok")
+            .is_none());
     }
 }

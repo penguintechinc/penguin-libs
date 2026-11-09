@@ -15,12 +15,23 @@ use crate::error::DiscordError;
 use crate::gateway::DEFAULT_API_BASE;
 
 /// Discord REST sender configuration.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DiscordConfig {
     /// The bot token, sent as `Authorization: Bot <token>`. Never logged.
     pub bot_token: String,
     /// The Discord REST API base URL.
     pub api_base: String,
+}
+
+impl std::fmt::Debug for DiscordConfig {
+    /// Formats `api_base` and replaces `bot_token` with `***`, so a `{:?}`
+    /// in a log or panic message cannot leak the bot credential.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DiscordConfig")
+            .field("bot_token", &"***")
+            .field("api_base", &self.api_base)
+            .finish()
+    }
 }
 
 impl DiscordConfig {
@@ -273,5 +284,25 @@ mod tests {
         let cfg = DiscordConfig::new("tok");
         assert_eq!(cfg.bot_token, "tok");
         assert_eq!(cfg.api_base, crate::gateway::DEFAULT_API_BASE);
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod secret_redaction_tests {
+    use super::*;
+
+    /// Regression: `{:?}` on a config must never print the bot token (S-02).
+    #[test]
+    fn discord_config_debug_redacts_bot_token() {
+        let cfg = DiscordConfig::new("MTIzNDU2.SECRETTOKENVALUE.wXyZ9");
+        let dbg = format!("{cfg:?}");
+        assert!(!dbg.contains("SECRETTOKENVALUE"), "token leaked: {dbg}");
+        assert!(!dbg.contains("wXyZ9"), "token suffix leaked: {dbg}");
+        assert!(dbg.contains("***"), "redaction marker missing: {dbg}");
+        assert!(
+            dbg.contains(DEFAULT_API_BASE),
+            "non-secret field missing: {dbg}"
+        );
     }
 }

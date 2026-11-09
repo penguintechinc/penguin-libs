@@ -108,7 +108,7 @@ pub const DEFAULT_GATEWAY_URL: &str = "wss://gateway.discord.gg/?v=10&encoding=j
 pub const DEFAULT_API_BASE: &str = "https://discord.com/api/v10";
 
 /// The `{op, d, s, t}` envelope every gateway frame uses.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct GatewayPayload {
     /// The opcode (see the `OP_*` constants).
     pub op: u8,
@@ -121,6 +121,24 @@ pub struct GatewayPayload {
     /// The event name, present only on `Dispatch` frames.
     #[serde(default)]
     pub t: Option<String>,
+}
+
+impl std::fmt::Debug for GatewayPayload {
+    /// Formats the envelope, but hides `d` on `IDENTIFY`/`RESUME` frames,
+    /// where it carries the bot token.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let data: &dyn std::fmt::Debug = if self.op == OP_IDENTIFY || self.op == OP_RESUME {
+            &"***"
+        } else {
+            &self.d
+        };
+        f.debug_struct("GatewayPayload")
+            .field("op", &self.op)
+            .field("d", data)
+            .field("s", &self.s)
+            .field("t", &self.t)
+            .finish()
+    }
 }
 
 /// Parse one raw gateway text frame into a [`GatewayPayload`].
@@ -297,7 +315,7 @@ pub struct GatewaySessionInfo {
 }
 
 /// Gateway connection configuration.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GatewayConfig {
     /// The bot token, sent in `IDENTIFY`. Never logged.
     pub token: String,
@@ -306,6 +324,18 @@ pub struct GatewayConfig {
     /// The Gateway Intents bitfield (`message_content` + `guilds` at
     /// minimum, to match `DiscordGatewayReceiver`'s own intents).
     pub intents: u64,
+}
+
+impl std::fmt::Debug for GatewayConfig {
+    /// Formats `gateway_url` and `intents`, replacing `token` with `***`
+    /// so a `{:?}` in a log or panic message cannot leak the bot credential.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GatewayConfig")
+            .field("token", &"***")
+            .field("gateway_url", &self.gateway_url)
+            .field("intents", &self.intents)
+            .finish()
+    }
 }
 
 impl GatewayConfig {
@@ -1616,5 +1646,43 @@ mod tests {
             ensure_gateway_query_params("wss://resume.example/?v=10&encoding=json"),
             "wss://resume.example/?v=10&encoding=json"
         );
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod secret_redaction_tests {
+    use super::*;
+
+    /// Regression: `{:?}` on a gateway config must never print the bot token (S-02).
+    #[test]
+    fn gateway_config_debug_redacts_token() {
+        let cfg = GatewayConfig::new("MTIzNDU2.SECRETTOKENVALUE.wXyZ9");
+        let dbg = format!("{cfg:?}");
+        assert!(!dbg.contains("SECRETTOKENVALUE"), "token leaked: {dbg}");
+        assert!(!dbg.contains("wXyZ9"), "token suffix leaked: {dbg}");
+        assert!(dbg.contains("***"), "redaction marker missing: {dbg}");
+        assert!(
+            dbg.contains(DEFAULT_GATEWAY_URL),
+            "non-secret field missing: {dbg}"
+        );
+    }
+
+    /// Regression: IDENTIFY frames carry the token inside `d`; Debug must hide it (S-02).
+    #[test]
+    fn identify_payload_debug_redacts_token() {
+        let payload = build_identify("SECRETTOKENVALUE", 1);
+        let dbg = format!("{payload:?}");
+        assert!(!dbg.contains("SECRETTOKENVALUE"), "token leaked: {dbg}");
+        assert!(dbg.contains("op: 2"), "opcode missing: {dbg}");
+    }
+
+    /// Regression: RESUME frames carry the token inside `d`; Debug must hide it (S-02).
+    #[test]
+    fn resume_payload_debug_redacts_token() {
+        let payload = build_resume("SECRETTOKENVALUE", "sess-1", Some(7));
+        let dbg = format!("{payload:?}");
+        assert!(!dbg.contains("SECRETTOKENVALUE"), "token leaked: {dbg}");
+        assert!(dbg.contains("op: 6"), "opcode missing: {dbg}");
     }
 }
