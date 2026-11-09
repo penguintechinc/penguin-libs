@@ -7,6 +7,14 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// the access/refresh tokens automatically on a successful login. This
 /// class only stores/reads/clears tokens; call [clear] yourself wherever
 /// your app implements logout (this widget has no logout UI of its own).
+///
+/// Migration from flutter_secure_storage 9.x (10.x defaults are used):
+/// - Android: existing encrypted-shared-preferences data is migrated to the
+///   new ciphers automatically (`migrateOnAlgorithmChange`); on an
+///   unrecoverable key error storage is reset and the user signs in again.
+/// - macOS: tokens move to the data-protection keychain (the 10.x default),
+///   so tokens saved by 9.x are not found and the user signs in once.
+/// - iOS/Linux/Windows: existing entries remain readable.
 class TokenStorage {
   TokenStorage({FlutterSecureStorage? storage})
       : _storage = storage ?? const FlutterSecureStorage();

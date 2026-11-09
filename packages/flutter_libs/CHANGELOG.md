@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Security
+
+- `flutter_secure_storage` 9.2.4 -> 10.0.0: drops the discontinued
+  `flutter_secure_storage_macos` and `js` packages (now
+  `flutter_secure_storage_darwin`). Android tokens migrate automatically;
+  macOS tokens saved by 9.x require one re-login (data-protection keychain
+  is the new default). Android minSdk is now 23.
+- External links (`forgotPasswordUrl`, `signUpUrl`, social login) are only
+  launched if `https` (or a scheme in the new `allowedLinkSchemes`);
+  `javascript:`, `data:`, `file:` and `http:` are always rejected
+  (`isAllowedLaunchUrl`).
+
 ### Breaking / Platform Support
 
 - **Flutter web is no longer supported** by this package. The SAML

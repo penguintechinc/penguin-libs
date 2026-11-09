@@ -22,6 +22,23 @@ bool isSecureLoginUrl(String url, {bool isRelease = kReleaseMode}) {
   return false;
 }
 
+/// Whether [url] may be handed to the platform URL launcher.
+///
+/// Only `https` URLs with a host are allowed, plus any scheme explicitly
+/// listed in [appSchemes] (app deep links such as `myapp`). `javascript`,
+/// `data`, `file` and `http` are never allowed, even if listed in
+/// [appSchemes], so a misconfiguration cannot re-enable script or local-file
+/// navigation. Comparison is case-insensitive.
+bool isAllowedLaunchUrl(String url, {Set<String> appSchemes = const {}}) {
+  final uri = Uri.tryParse(url.trim());
+  if (uri == null || !uri.hasScheme) return false;
+  final scheme = uri.scheme.toLowerCase();
+  const blocked = {'javascript', 'data', 'file', 'http', 'vbscript', 'blob'};
+  if (blocked.contains(scheme)) return false;
+  if (scheme == 'https') return uri.host.isNotEmpty;
+  return appSchemes.map((s) => s.toLowerCase()).contains(scheme);
+}
+
 /// Configuration for the login API endpoint.
 ///
 /// In release builds, [loginUrl] must use `https://` (plain `http://` is
