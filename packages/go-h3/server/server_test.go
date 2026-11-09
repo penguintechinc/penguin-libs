@@ -166,7 +166,9 @@ func TestServer_ListenAddr_StoppedServer(t *testing.T) {
 
 	// Wait for context to cancel and server to shut down
 	<-ctx.Done()
-	<-errChan
+	if err := <-errChan; err != nil {
+		t.Logf("server Start returned after shutdown: %v", err)
+	}
 	time.Sleep(50 * time.Millisecond)
 
 	// ListenAddr for h3 (not started) should return empty

@@ -1,0 +1,28 @@
+version: "2"
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+    - gosec
+    - bodyclose
+    - noctx
+    - exhaustive
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - noctx
+          - errcheck
+          - bodyclose
+      # Intentional: every package in this module carries a deprecation notice.
+      - linters:
+          - staticcheck
+        text: "Go libraries are being phased out"
+run:
+  timeout: 5m
