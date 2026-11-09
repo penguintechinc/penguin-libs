@@ -394,18 +394,18 @@ func TestSanitizeFields_MixedFields(t *testing.T) {
 
 	// Verify specific fields
 	tests := []struct {
-		idx             int
-		expectedKey     string
+		idx              int
+		expectedKey      string
 		expectedSanitize bool
 	}{
-		{0, "username", false},          // should not be sanitized
-		{1, "password", true},           // should be sanitized
-		{2, "user_id", false},           // non-string field
-		{3, "api_key", true},            // should be sanitized
-		{4, "name", false},              // should not be sanitized
-		{5, "email", false},             // email field, but value should be masked
-		{6, "active", false},            // non-string field
-		{7, "session_id", true},         // should be sanitized
+		{0, "username", false},  // should not be sanitized
+		{1, "password", true},   // should be sanitized
+		{2, "user_id", false},   // non-string field
+		{3, "api_key", true},    // should be sanitized
+		{4, "name", false},      // should not be sanitized
+		{5, "email", false},     // email field, but value should be masked
+		{6, "active", false},    // non-string field
+		{7, "session_id", true}, // should be sanitized
 	}
 
 	for _, tt := range tests {
