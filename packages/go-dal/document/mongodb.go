@@ -90,7 +90,9 @@ func NewMongoDB(ctx context.Context, cfg MongoConfig) (*MongoDB, error) {
 
 	// Verify connection
 	if err := client.Ping(ctx, nil); err != nil {
-		client.Disconnect(ctx)
+		if derr := client.Disconnect(ctx); derr != nil {
+			return nil, fmt.Errorf("go-dal: mongodb: ping: %w (disconnect: %v)", err, derr)
+		}
 		return nil, fmt.Errorf("go-dal: mongodb: ping: %w", err)
 	}
 
@@ -131,10 +133,14 @@ func (m *MongoDB) InsertOne(ctx context.Context, collection string, document int
 
 // FindOne finds a single document matching the filter.
 func (m *MongoDB) FindOne(ctx context.Context, collection string, filter interface{}) (map[string]interface{}, error) {
+	filter, err := validateFilter(filter)
+	if err != nil {
+		return nil, err
+	}
 	coll := m.db.Collection(collection)
 
 	result := bson.M{}
-	err := coll.FindOne(ctx, filter).Decode(&result)
+	err = coll.FindOne(ctx, filter).Decode(&result)
 	if err == mongo.ErrNoDocuments {
 		return nil, fmt.Errorf("go-dal: mongodb: find: %w", dal.ErrNotFound)
 	}
@@ -152,6 +158,10 @@ func (m *MongoDB) FindOne(ctx context.Context, collection string, filter interfa
 
 // Find finds multiple documents matching the filter.
 func (m *MongoDB) Find(ctx context.Context, collection string, filter interface{}, opts ...dal.FindOption) ([]map[string]interface{}, error) {
+	filter, err := validateFilter(filter)
+	if err != nil {
+		return nil, err
+	}
 	coll := m.db.Collection(collection)
 
 	fo := &dal.FindOptions{}
@@ -180,7 +190,7 @@ func (m *MongoDB) Find(ctx context.Context, collection string, filter interface{
 	if err != nil {
 		return nil, fmt.Errorf("go-dal: mongodb: find: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var results []map[string]interface{}
 	if err := cursor.All(ctx, &results); err != nil {
@@ -198,8 +208,18 @@ func (m *MongoDB) Find(ctx context.Context, collection string, filter interface{
 	return results, nil
 }
 
-// UpdateOne updates a single document matching the filter.
+// UpdateOne updates a single document matching the filter. Both the filter and
+// the update (including pipeline-form updates) are screened for server-side
+// code operators; wrap application-authored values in Trusted to bypass.
 func (m *MongoDB) UpdateOne(ctx context.Context, collection string, filter, update interface{}) (int64, error) {
+	filter, err := validateFilter(filter)
+	if err != nil {
+		return 0, err
+	}
+	update, err = validateUpdate(update)
+	if err != nil {
+		return 0, err
+	}
 	coll := m.db.Collection(collection)
 
 	result, err := coll.UpdateOne(ctx, filter, update)
@@ -212,6 +232,10 @@ func (m *MongoDB) UpdateOne(ctx context.Context, collection string, filter, upda
 
 // DeleteOne deletes a single document matching the filter.
 func (m *MongoDB) DeleteOne(ctx context.Context, collection string, filter interface{}) (int64, error) {
+	filter, err := validateFilter(filter)
+	if err != nil {
+		return 0, err
+	}
 	coll := m.db.Collection(collection)
 
 	result, err := coll.DeleteOne(ctx, filter)
@@ -224,6 +248,10 @@ func (m *MongoDB) DeleteOne(ctx context.Context, collection string, filter inter
 
 // Count returns the count of documents matching the filter.
 func (m *MongoDB) Count(ctx context.Context, collection string, filter interface{}) (int64, error) {
+	filter, err := validateFilter(filter)
+	if err != nil {
+		return 0, err
+	}
 	coll := m.db.Collection(collection)
 
 	count, err := coll.CountDocuments(ctx, filter)

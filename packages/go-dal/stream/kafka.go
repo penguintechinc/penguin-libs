@@ -143,10 +143,10 @@ func NewKafkaConsumer(cfg KafkaConfig) (*KafkaConsumer, error) {
 	}
 
 	configMap := kafka.ConfigMap{
-		"bootstrap.servers":       cfg.BootstrapServers,
-		"group.id":                cfg.GroupID,
-		"enable.auto.commit":      cfg.EnableAutoCommit,
-		"auto.offset.reset":       "earliest",
+		"bootstrap.servers":  cfg.BootstrapServers,
+		"group.id":           cfg.GroupID,
+		"enable.auto.commit": cfg.EnableAutoCommit,
+		"auto.offset.reset":  "earliest",
 	}
 
 	if cfg.AutoOffsetReset != "" {

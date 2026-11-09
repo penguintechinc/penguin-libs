@@ -117,10 +117,10 @@ func TestNFSStoreExistsStatError(t *testing.T) {
 
 	// Create a file, then make the parent directory unreadable.
 	subDir := filepath.Join(tmpDir, "restricted")
-	os.MkdirAll(subDir, 0755) //nolint:errcheck
+	os.MkdirAll(subDir, 0755)                                       //nolint:errcheck
 	os.WriteFile(filepath.Join(subDir, "f.txt"), []byte("x"), 0644) //nolint:errcheck
-	os.Chmod(subDir, 0000) //nolint:errcheck
-	defer os.Chmod(subDir, 0755)
+	os.Chmod(subDir, 0000)                                          //nolint:errcheck
+	defer func() { _ = os.Chmod(subDir, 0755) }()
 
 	// Stat a file inside the unreadable dir — should get EACCES.
 	exists, err := store.Exists(ctx, "restricted/f.txt")
@@ -147,10 +147,10 @@ func TestNFSStoreListWalkError(t *testing.T) {
 
 	// Create a subdir with a file, then make subdir unreadable.
 	subDir := filepath.Join(tmpDir, "locked")
-	os.MkdirAll(subDir, 0755) //nolint:errcheck
+	os.MkdirAll(subDir, 0755)                                       //nolint:errcheck
 	os.WriteFile(filepath.Join(subDir, "f.txt"), []byte("x"), 0644) //nolint:errcheck
-	os.Chmod(subDir, 0000) //nolint:errcheck
-	defer os.Chmod(subDir, 0755)
+	os.Chmod(subDir, 0000)                                          //nolint:errcheck
+	defer func() { _ = os.Chmod(subDir, 0755) }()
 
 	// Walk over the locked dir — should get EACCES during walk.
 	_, err = store.List(ctx, "locked")

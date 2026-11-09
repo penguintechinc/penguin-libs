@@ -1,4 +1,6 @@
 // Package stream provides streaming backend implementations (Kafka, Redis Streams).
+//
+// Deprecated: Go libraries are being phased out; use rust-dal (packages/rust-dal) instead.
 package stream
 
 import (

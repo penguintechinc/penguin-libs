@@ -1,4 +1,6 @@
 // Package cache provides cache backend implementations (Redis, Valkey).
+//
+// Deprecated: Go libraries are being phased out; use rust-dal (packages/rust-dal) instead.
 package cache
 
 import (

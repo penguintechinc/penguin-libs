@@ -22,8 +22,8 @@ type mockRedisStreamClient struct {
 	xReadResults   []redis.XStream
 
 	// XGroupCreateMkStream
-	failXGroupCreate     bool
-	xGroupCreateErrOnce  bool   // error on first call, pass on second (to exercise XInfoStream path)
+	failXGroupCreate      bool
+	xGroupCreateErrOnce   bool // error on first call, pass on second (to exercise XInfoStream path)
 	xGroupCreateCallCount int
 
 	// XInfoStream

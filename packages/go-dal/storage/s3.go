@@ -87,6 +87,20 @@ type S3Config struct {
 	SecretKey   string
 	EndpointURL string
 	Prefix      string
+	// MaxReadBytes caps the size of a single object read by Get. Zero uses
+	// DefaultS3MaxReadBytes; reads over the cap fail instead of buffering.
+	MaxReadBytes int64
+}
+
+// DefaultS3MaxReadBytes is the object read cap applied when S3Config.MaxReadBytes is zero (256 MiB).
+const DefaultS3MaxReadBytes int64 = 256 << 20
+
+// maxReadBytes returns the effective read cap for the config.
+func (c S3Config) maxReadBytes() int64 {
+	if c.MaxReadBytes <= 0 {
+		return DefaultS3MaxReadBytes
+	}
+	return c.MaxReadBytes
 }
 
 // S3Store implements dal.StorageStore for AWS S3.
@@ -189,11 +203,15 @@ func (s *S3Store) Get(ctx context.Context, key string) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("go-dal: s3: get: %w", err)
 	}
-	defer output.Body.Close()
+	defer func() { _ = output.Body.Close() }()
 
-	data, err := io.ReadAll(output.Body)
+	limit := s.cfg.maxReadBytes()
+	data, err := io.ReadAll(io.LimitReader(output.Body, limit+1))
 	if err != nil {
 		return nil, fmt.Errorf("go-dal: s3: get read: %w", err)
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("go-dal: s3: get: object exceeds max read size of %d bytes", limit)
 	}
 
 	return data, nil
