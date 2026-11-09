@@ -227,3 +227,36 @@ class TestGmailTransportFromConfig:
                 )
         finally:
             gm_mod.Credentials = original
+
+
+class TestGmailTokenFilePermissions:
+    """Regression tests for F-03: refreshed OAuth token must be written 0o600."""
+
+    def test_refreshed_token_file_is_owner_only(self, tmp_path) -> None:
+        import os
+        import stat
+
+        token_data = {"token": "old", "refresh_token": "rt", "client_id": "c", "client_secret": "s"}
+        token_file = tmp_path / "token.json"
+        cred_file = tmp_path / "creds.json"
+        token_file.write_text(json.dumps(token_data))
+        os.chmod(token_file, 0o644)
+        cred_file.write_text(json.dumps({"installed": {}}))
+
+        mock_creds = MagicMock()
+        mock_creds.expired = True
+        mock_creds.refresh_token = "rt"
+        mock_creds.to_json.return_value = json.dumps({"token": "new_tok", "refresh_token": "rt"})
+
+        with (
+            patch("penguin_email.transports.gmail.Credentials") as mock_creds_cls,
+            patch("penguin_email.transports.gmail.build", return_value=MagicMock()),
+            patch("google.auth.transport.requests.Request"),
+        ):
+            mock_creds_cls.from_authorized_user_info.return_value = mock_creds
+            from penguin_email.transports.gmail import GmailTransport
+
+            GmailTransport.from_files(str(cred_file), str(token_file))
+
+        assert stat.S_IMODE(os.stat(token_file).st_mode) == 0o600
+        assert json.loads(token_file.read_text())["token"] == "new_tok"

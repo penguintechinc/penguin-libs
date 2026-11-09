@@ -64,3 +64,25 @@ class TestRefreshCredentials:
 
         mock_creds.refresh.assert_called_once_with(mock_request)
         assert result is mock_creds
+
+
+class TestRunOAuthFlowPermissions:
+    """Regression tests for F-03: OAuth token written by the auth flow is 0o600."""
+
+    def test_token_file_is_owner_only(self, tmp_path) -> None:
+        import os
+        import stat
+
+        token_path = tmp_path / "token.json"
+        mock_creds = MagicMock()
+        mock_creds.to_json.return_value = '{"token": "abc", "refresh_token": "r"}'
+        mock_flow = MagicMock()
+        mock_flow.run_local_server.return_value = mock_creds
+
+        with patch("penguin_email.auth.gmail_oauth.InstalledAppFlow") as mock_flow_cls:
+            mock_flow_cls.from_client_secrets_file.return_value = mock_flow
+            from penguin_email.auth.gmail_oauth import run_oauth_flow
+
+            run_oauth_flow("credentials.json", str(token_path))
+
+        assert stat.S_IMODE(os.stat(token_path).st_mode) == 0o600

@@ -12,6 +12,7 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .. import _fileio
 from . import SendResult
 
 if TYPE_CHECKING:
@@ -107,8 +108,7 @@ class GmailTransport:
 
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            with open(token_path, "w") as f:
-                f.write(creds.to_json())
+            _fileio.write_secret_file(token_path, creds.to_json())
 
         with open(credentials_path) as f:
             cred_data = json.load(f)

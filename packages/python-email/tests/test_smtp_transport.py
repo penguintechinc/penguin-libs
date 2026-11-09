@@ -1,7 +1,7 @@
 """Tests for SmtpTransport."""
 
 import smtplib
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -24,7 +24,7 @@ class TestSmtpTransport:
 
         with patch("smtplib.SMTP_SSL", return_value=mock_conn) as mock_ssl:
             transport.send(_make_message())
-            mock_ssl.assert_called_once_with("smtp.example.com", 465, timeout=30)
+            mock_ssl.assert_called_once_with("smtp.example.com", 465, timeout=30, context=ANY)
 
     def test_starttls_mode_calls_starttls(self) -> None:
         transport = SmtpTransport(host="smtp.example.com", mode=SmtpMode.STARTTLS)
@@ -199,3 +199,117 @@ class TestSmtpTransport:
         assert result.success is True
         mime_str = mock_conn.sendmail.call_args[0][2]
         assert "mixed" in mime_str.lower() or len(mime_str) > 0
+
+
+class TestSmtpTlsVerification:
+    """Regression tests for F-01: SSL/STARTTLS must verify server certificates."""
+
+    @staticmethod
+    def _mock_conn() -> MagicMock:
+        conn = MagicMock()
+        conn.__enter__ = MagicMock(return_value=conn)
+        conn.__exit__ = MagicMock(return_value=False)
+        return conn
+
+    @staticmethod
+    def _assert_verified(ctx: object) -> None:
+        import ssl
+
+        assert isinstance(ctx, ssl.SSLContext)
+        assert ctx.verify_mode == ssl.CERT_REQUIRED
+        assert ctx.check_hostname is True
+        assert ctx.minimum_version in (ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_3)
+
+    def test_ssl_mode_passes_verified_context(self) -> None:
+        transport = SmtpTransport(host="smtp.example.com", mode=SmtpMode.SSL)
+        mock_conn = self._mock_conn()
+        with patch("smtplib.SMTP_SSL", return_value=mock_conn) as mock_ssl:
+            transport.send(_make_message())
+        self._assert_verified(mock_ssl.call_args.kwargs["context"])
+
+    def test_starttls_mode_passes_verified_context_to_starttls(self) -> None:
+        transport = SmtpTransport(host="smtp.example.com", mode=SmtpMode.STARTTLS)
+        mock_conn = self._mock_conn()
+        with patch("smtplib.SMTP", return_value=mock_conn):
+            transport.send(_make_message())
+        self._assert_verified(mock_conn.starttls.call_args.kwargs["context"])
+
+    def test_health_check_uses_verified_context(self) -> None:
+        transport = SmtpTransport(host="smtp.example.com", mode=SmtpMode.STARTTLS)
+        mock_conn = self._mock_conn()
+        with patch("smtplib.SMTP", return_value=mock_conn):
+            assert transport.health_check() is True
+        self._assert_verified(mock_conn.starttls.call_args.kwargs["context"])
+
+    def test_injected_custom_ca_context_is_used(self) -> None:
+        import ssl
+
+        custom = ssl.create_default_context()
+        transport = SmtpTransport(
+            host="smtp.example.com", mode=SmtpMode.SSL, ssl_context=custom
+        )
+        with patch("smtplib.SMTP_SSL", return_value=self._mock_conn()) as mock_ssl:
+            transport.send(_make_message())
+        assert mock_ssl.call_args.kwargs["context"] is custom
+
+    def test_injected_context_with_cert_verification_disabled_is_rejected(self) -> None:
+        import ssl
+
+        unverified = ssl.create_default_context()
+        unverified.check_hostname = False
+        unverified.verify_mode = ssl.CERT_NONE
+        with pytest.raises(ValueError, match="certificate verification"):
+            SmtpTransport(host="h", mode=SmtpMode.SSL, ssl_context=unverified)
+
+    def test_injected_context_without_hostname_check_is_rejected(self) -> None:
+        import ssl
+
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        with pytest.raises(ValueError, match="certificate verification"):
+            SmtpTransport(host="h", mode=SmtpMode.STARTTLS, ssl_context=ctx)
+
+    def test_injected_context_allowing_tls_below_1_2_is_rejected(self) -> None:
+        import ssl
+
+        ctx = ssl.create_default_context()
+        ctx.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+        with pytest.raises(ValueError, match="TLS 1.2"):
+            SmtpTransport(host="h", mode=SmtpMode.SSL, ssl_context=ctx)
+
+    def test_default_context_enforces_tls_1_2_minimum(self) -> None:
+        import ssl
+
+        transport = SmtpTransport(host="smtp.example.com", mode=SmtpMode.SSL)
+        mock_conn = self._mock_conn()
+        with patch("smtplib.SMTP_SSL", return_value=mock_conn) as mock_ssl:
+            transport.send(_make_message())
+        ctx = mock_ssl.call_args.kwargs["context"]
+        assert ctx.minimum_version.value >= ssl.TLSVersion.TLSv1_2.value
+
+
+class TestSmtpPlainWithCredentials:
+    """Regression tests for F-02: PLAIN mode must never send AUTH credentials."""
+
+    def test_plain_mode_with_password_raises(self) -> None:
+        with pytest.raises(ValueError, match="PLAIN"):
+            SmtpTransport(
+                host="smtp.example.com",
+                mode=SmtpMode.PLAIN,
+                username="user",
+                password="secret",
+            )
+
+    def test_plain_mode_with_username_only_raises(self) -> None:
+        with pytest.raises(ValueError, match="PLAIN"):
+            SmtpTransport(host="smtp.example.com", mode=SmtpMode.PLAIN, username="user")
+
+    def test_plain_mode_without_credentials_still_allowed(self) -> None:
+        transport = SmtpTransport(host="smtp.example.com", mode=SmtpMode.PLAIN)
+        assert transport._mode is SmtpMode.PLAIN
+
+    def test_starttls_with_credentials_still_allowed(self) -> None:
+        transport = SmtpTransport(
+            host="smtp.example.com", mode=SmtpMode.STARTTLS, username="u", password="p"
+        )
+        assert transport._username == "u"

@@ -232,3 +232,20 @@ class TestMain:
                 with pytest.raises(SystemExit) as exc:
                     main()
         assert exc.value.code == 0
+
+
+class TestCheckPlainWithCredentials:
+    """Regression tests for F-02 at the CLI boundary: PLAIN + credentials is a config error."""
+
+    def test_plain_mode_with_credentials_returns_1(self, capsys, monkeypatch) -> None:
+        monkeypatch.setenv("EMAIL_TRANSPORT", "smtp")
+        monkeypatch.setenv("SMTP_MODE", "PLAIN")
+        monkeypatch.setenv("SMTP_USERNAME", "user")
+        monkeypatch.setenv("SMTP_PASSWORD", "secret")
+        with patch("penguin_email.transports.smtp.SmtpTransport.health_check") as hc:
+            rc = _cmd_check(_make_args())
+        assert rc == 1
+        hc.assert_not_called()
+        err = capsys.readouterr().err
+        assert "PLAIN" in err
+        assert "secret" not in err

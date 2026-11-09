@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import smtplib
+import ssl
 import warnings
 from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
@@ -53,10 +54,35 @@ class SmtpMode(Enum):
     every send call."""
 
 
+def _verified_context(ctx: ssl.SSLContext | None) -> ssl.SSLContext:
+    """Return a TLS context that verifies server certificates and hostnames.
+
+    With ``None``, builds :func:`ssl.create_default_context` pinned to a TLS 1.2
+    minimum. A caller-supplied context (e.g. a private CA bundle) is accepted
+    only if it still verifies certificates and hostnames and keeps TLS 1.2+.
+    Raises :class:`ValueError` otherwise, so an unverified connection can never
+    be configured.
+    """
+    if ctx is None:
+        ctx = ssl.create_default_context()
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        return ctx
+    if ctx.verify_mode != ssl.CERT_REQUIRED or not ctx.check_hostname:
+        raise ValueError(
+            "ssl_context must enable certificate verification "
+            "(verify_mode=CERT_REQUIRED and check_hostname=True)"
+        )
+    if ctx.minimum_version not in (ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_3):
+        raise ValueError("ssl_context must set minimum_version to TLS 1.2 or higher")
+    return ctx
+
+
 class SmtpTransport:
     """Send email via SMTP.
 
-    Supports SSL, STARTTLS, and plain (unencrypted) connections.
+    Supports SSL, STARTTLS, and plain (unencrypted) connections. SSL and
+    STARTTLS verify the server certificate and hostname; PLAIN mode cannot
+    carry credentials.
     """
 
     transport_name: str = "smtp"
@@ -69,13 +95,27 @@ class SmtpTransport:
         username: str = "",
         password: str = "",
         timeout: int = 30,
+        ssl_context: ssl.SSLContext | None = None,
     ) -> None:
+        """Configure the transport.
+
+        Raises ``ValueError`` when *mode* is :attr:`SmtpMode.PLAIN` and credentials
+        are set (AUTH would go out in cleartext), or when *ssl_context* disables
+        certificate or hostname verification.
+        """
+        if mode is SmtpMode.PLAIN and (username or password):
+            raise ValueError(
+                "SmtpMode.PLAIN cannot be used with credentials: AUTH would be sent "
+                "in cleartext. Use SmtpMode.STARTTLS or SmtpMode.SSL, or omit the "
+                "username and password."
+            )
         self._host = host
         self._port = port if port is not None else _DEFAULT_PORTS[mode.value]
         self._mode = mode
         self._username = username
         self._password = password
         self._timeout = timeout
+        self._ssl_context = _verified_context(ssl_context)
 
     # ------------------------------------------------------------------
     # Transport interface
@@ -136,14 +176,15 @@ class SmtpTransport:
     # ------------------------------------------------------------------
 
     def _connect(self) -> smtplib.SMTP:
+        """Open a connection, verifying the server certificate for SSL and STARTTLS."""
         if self._mode == SmtpMode.SSL:
             conn: smtplib.SMTP = smtplib.SMTP_SSL(
-                self._host, self._port, timeout=self._timeout
+                self._host, self._port, timeout=self._timeout, context=self._ssl_context
             )
         else:
             conn = smtplib.SMTP(self._host, self._port, timeout=self._timeout)
             if self._mode == SmtpMode.STARTTLS:
-                conn.starttls()
+                conn.starttls(context=self._ssl_context)
         return conn
 
     def _build_mime(self, message: "EmailMessage") -> MIMEMultipart:
