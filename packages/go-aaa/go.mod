@@ -1,6 +1,8 @@
 module github.com/penguintechinc/penguin-libs/packages/go-aaa
 
-go 1.25.0
+go 1.26.0
+
+toolchain go1.26.10
 
 replace github.com/penguintechinc/penguin-libs/packages/go-common => ../go-common
 
