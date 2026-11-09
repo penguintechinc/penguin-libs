@@ -10,7 +10,7 @@ export const ClaimsSchema = z.object({
   roles: z.array(z.string()).optional(),
   teams: z.array(z.string()).optional(),
   tenant: z.string().optional(),
-  ext: z.record(z.unknown()).optional(),
+  ext: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const TokenSetSchema = z.object({

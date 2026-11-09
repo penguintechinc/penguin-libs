@@ -1,70 +1,70 @@
 /**
- * Sanitizes redirect paths to prevent open redirect attacks.
- * Accepts only same-origin relative paths starting with '/', rejects protocol-relative
- * paths ('//'), backslash tricks ('\\' or '/%5C'), and other attack vectors.
+ * Matches control characters (U+0000-U+001F, U+007F), any whitespace, and backslash.
+ * Browsers strip or normalise these, so "/\t/evil" can become "//evil" (F-01).
+ */
+// eslint-disable-next-line no-control-regex
+const FORBIDDEN_CHARS = /[\u0000-\u001F\u007F\s\\]/;
+
+/**
+ * Checks that a string has the shape of a single-slash relative path.
+ * Rejects forbidden characters and any value not starting with exactly one '/'.
+ */
+function hasSafePathShape(value: string): boolean {
+  return value.startsWith('/') && !value.startsWith('//') && !FORBIDDEN_CHARS.test(value);
+}
+
+/**
+ * Detects "." or ".." path segments (case-insensitive, incl. percent-encoded) in the path
+ * portion of a value. URL resolution collapses them, which can yield "//host" pathnames.
+ */
+function hasDotSegment(value: string): boolean {
+  const pathOnly = value.split(/[?#]/, 1)[0];
+  return pathOnly.split('/').some((seg) => /^(?:\.|%2e){1,2}$/i.test(seg));
+}
+
+/**
+ * Sanitizes redirect paths to prevent open redirect attacks (F-01).
+ * Accepts only a single-slash relative path that resolves to the current origin; the
+ * raw and percent-decoded forms must both pass, and any failure returns defaultPath.
  */
 export function sanitizeRedirectPath(path: string, defaultPath: string = '/'): string {
-  // Null/undefined → default
   if (!path || typeof path !== 'string') {
     return defaultPath;
   }
-
-  // Trim whitespace
-  const trimmed = path.trim();
-
-  // Reject if empty after trim
-  if (trimmed.length === 0) {
+  if (!hasSafePathShape(path)) {
     return defaultPath;
   }
 
-  // Reject protocol-relative URLs (//) — open redirect vector
-  if (trimmed.startsWith('//')) {
-    return defaultPath;
-  }
-
-  // Reject backslash tricks (\\) — some browsers treat \\ as //
-  if (trimmed.startsWith('\\')) {
-    return defaultPath;
-  }
-
-  // Reject absolute URLs with protocol (http://, https://, etc.) — open redirect
-  if (/^[a-z][a-z0-9+\-.]*:/i.test(trimmed)) {
-    return defaultPath;
-  }
-
-  // Reject data: and javascript: URLs
-  if (/^(data|javascript):/i.test(trimmed)) {
-    return defaultPath;
-  }
-
-  // Only accept paths starting with / (relative, same-origin)
-  if (!trimmed.startsWith('/')) {
-    return defaultPath;
-  }
-
-  // Reject /\ attack vector (slash followed by backslash)
-  // This can be interpreted as // in some browser contexts
-  if (trimmed.length > 1 && trimmed[1] === '\\') {
-    return defaultPath;
-  }
-
-  // Reject encoded variants of attack patterns
+  let decoded: string;
   try {
-    const decoded = decodeURIComponent(trimmed);
-
-    // After decoding, check for // or \ at start
-    if (decoded.startsWith('//') || decoded.startsWith('\\')) {
-      return defaultPath;
-    }
-
-    // Check for /\ pattern after decoding (e.g., /%5C decodes to /\)
-    if (decoded.length > 1 && decoded[1] === '\\') {
-      return defaultPath;
-    }
+    decoded = decodeURIComponent(path);
   } catch {
-    // Invalid encoding → reject as potential attack
+    return defaultPath;
+  }
+  if (!hasSafePathShape(decoded)) {
+    return defaultPath;
+  }
+  if (hasDotSegment(path) || hasDotSegment(decoded)) {
     return defaultPath;
   }
 
-  return trimmed;
+  if (typeof window === 'undefined' || !window.location) {
+    return defaultPath;
+  }
+  const origin = window.location.origin;
+  let resolved: URL;
+  try {
+    resolved = new URL(path, origin);
+  } catch {
+    return defaultPath;
+  }
+  if (resolved.origin !== origin) {
+    return defaultPath;
+  }
+
+  if (resolved.pathname.startsWith('//') || resolved.pathname.startsWith('/\\')) {
+    return defaultPath;
+  }
+
+  return resolved.pathname + resolved.search + resolved.hash;
 }

@@ -1,5 +1,5 @@
 import { sanitizeRedirectPath } from '../utils/redirect-sanitizer.js';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 
 describe('sanitizeRedirectPath', () => {
   it('accepts valid same-origin paths', () => {
@@ -57,9 +57,9 @@ describe('sanitizeRedirectPath', () => {
     expect(sanitizeRedirectPath('', '/dashboard')).toBe('/dashboard');
   });
 
-  it('handles edge cases with whitespace', () => {
-    expect(sanitizeRedirectPath('  /dashboard  ')).toBe('/dashboard');
-    expect(sanitizeRedirectPath('\t/page\n')).toBe('/page');
+  it('rejects paths containing whitespace (regression: F-01)', () => {
+    expect(sanitizeRedirectPath('  /dashboard  ')).toBe('/');
+    expect(sanitizeRedirectPath('\t/page\n')).toBe('/');
   });
 
   it('preserves trailing slashes', () => {
@@ -85,5 +85,156 @@ describe('sanitizeRedirectPath', () => {
     expect(sanitizeRedirectPath('/%5C/evil.com')).toBe('/');
     expect(sanitizeRedirectPath('/%5C%5Cevil.com')).toBe('/');
     expect(sanitizeRedirectPath('/%2f%5c/evil.com')).toBe('/');
+  });
+});
+
+describe('sanitizeRedirectPath regression: F-01 (control chars, whitespace, backslash)', () => {
+  const DEFAULT = '/home';
+
+  it('regression: F-01 falls back on literal tab in /\\t/evil.example', () => {
+    expect(sanitizeRedirectPath('/\t/evil.example', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back on encoded tab %09', () => {
+    expect(sanitizeRedirectPath('/%09/evil.example', DEFAULT)).toBe(DEFAULT);
+    expect(sanitizeRedirectPath('%2F%09%2Fevil', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back on literal newline', () => {
+    expect(sanitizeRedirectPath('/\n/evil.example', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back on encoded newline %0A', () => {
+    expect(sanitizeRedirectPath('/%0A/evil.example', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back on literal carriage return', () => {
+    expect(sanitizeRedirectPath('/\r/evil.example', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back on encoded carriage return %0D', () => {
+    expect(sanitizeRedirectPath('/%0D/evil.example', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back on literal backslash', () => {
+    expect(sanitizeRedirectPath('\\', DEFAULT)).toBe(DEFAULT);
+    expect(sanitizeRedirectPath('/\\evil', DEFAULT)).toBe(DEFAULT);
+    expect(sanitizeRedirectPath('/a\\b', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back on encoded backslash %5C', () => {
+    expect(sanitizeRedirectPath('/%5Cevil', DEFAULT)).toBe(DEFAULT);
+    expect(sanitizeRedirectPath('%2F%5Cevil', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back on protocol-relative //evil', () => {
+    expect(sanitizeRedirectPath('//evil', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back on /\\evil', () => {
+    expect(sanitizeRedirectPath('/\\evil', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back on https://evil', () => {
+    expect(sanitizeRedirectPath('https://evil', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back on javascript:alert(1)', () => {
+    expect(sanitizeRedirectPath('javascript:alert(1)', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back on encoded //evil (%2F%2Fevil)', () => {
+    expect(sanitizeRedirectPath('%2F%2Fevil', DEFAULT)).toBe(DEFAULT);
+    expect(sanitizeRedirectPath('/%2F%2Fevil', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back on malformed percent-encoding', () => {
+    expect(sanitizeRedirectPath('/%E0%A4%A', DEFAULT)).toBe(DEFAULT);
+  });
+
+  it('regression: F-01 falls back when no window is available', () => {
+    const original = globalThis.window;
+    // @ts-expect-error simulate non-browser environment
+    delete globalThis.window;
+    try {
+      expect(sanitizeRedirectPath('/dashboard', DEFAULT)).toBe(DEFAULT);
+    } finally {
+      globalThis.window = original;
+    }
+  });
+
+  it('regression: F-01 accepts a safe same-origin path with query and hash', () => {
+    expect(sanitizeRedirectPath('/dashboard?x=1#y', DEFAULT)).toBe('/dashboard?x=1#y');
+  });
+});
+
+describe('sanitizeRedirectPath regression: F-01 defensive resolution branches', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('regression: F-01 falls back when resolved origin differs from current origin', () => {
+    class OtherOriginURL {
+      origin = 'https://other.example';
+      pathname = '/';
+      search = '';
+      hash = '';
+      constructor(_path: string, _base: string) {}
+    }
+    vi.stubGlobal('URL', OtherOriginURL);
+    expect(sanitizeRedirectPath('/dashboard', '/home')).toBe('/home');
+  });
+
+  it('regression: F-01 falls back when URL resolution throws', () => {
+    class ThrowingURL {
+      constructor(_path: string, _base: string) {
+        throw new TypeError('Invalid URL');
+      }
+    }
+    vi.stubGlobal('URL', ThrowingURL);
+    expect(sanitizeRedirectPath('/dashboard', '/home')).toBe('/home');
+  });
+});
+
+describe('sanitizeRedirectPath regression: dot-segment protocol-relative bypass', () => {
+  it.each([
+    '/.//evil.com',
+    '/..//evil.com',
+    '/%2e%2e//evil.com',
+    '/%2E%2E//evil.com',
+    '/./%2F%2Fevil.com',
+    '/a/../..//evil.com',
+    '/a/./b',
+    '/a/../b',
+    '/%2e/x',
+    '/x/%2E%2e/y',
+  ])('rejects %s', (input) => {
+    expect(sanitizeRedirectPath(input, '/home')).toBe('/home');
+  });
+
+  it('still accepts dots that are not whole segments', () => {
+    expect(sanitizeRedirectPath('/file.name/..hidden/a.b')).toBe('/file.name/..hidden/a.b');
+  });
+
+  it('rejects when resolution yields a // or /\\ pathname', () => {
+    class FakeURL {
+      origin = window.location.origin;
+      pathname: string;
+      search = '';
+      hash = '';
+      constructor(_p: string, _b: string) {
+        this.pathname = FakeURL.next;
+      }
+      static next = '//evil.com';
+    }
+    vi.stubGlobal('URL', FakeURL);
+    try {
+      FakeURL.next = '//evil.com';
+      expect(sanitizeRedirectPath('/ok', '/home')).toBe('/home');
+      FakeURL.next = '/\\evil.com';
+      expect(sanitizeRedirectPath('/ok', '/home')).toBe('/home');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

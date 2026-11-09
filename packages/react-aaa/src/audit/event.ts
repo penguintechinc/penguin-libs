@@ -37,8 +37,8 @@ export const AuditEventSchema = z.object({
       id: z.string().optional(),
     })
     .optional(),
-  metadata: z.record(z.unknown()).optional(),
-  timestamp: z.string().datetime().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  timestamp: z.iso.datetime().optional(),
   traceId: z.string().optional(),
 });
 
