@@ -1,0 +1,14 @@
+package penguin:tools@0.1.0;
+
+/// Host import: call another tool. The host is the sole authority on scope
+/// and the callee runs under its own grants.
+interface invoker {
+  use types.{tool-error};
+
+  invoke: func(
+    target: string,
+    tool: string,
+    args: list<u8>,
+    idempotency-key: option<string>,
+  ) -> result<list<u8>, tool-error>;
+}

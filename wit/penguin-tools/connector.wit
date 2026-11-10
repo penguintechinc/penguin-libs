@@ -1,0 +1,25 @@
+package penguin:tools@0.1.0;
+
+/// Outbound chat/stream platform send. Credentials are held host-side and
+/// never visible to the guest. Each platform is a separately granted
+/// capability id (`penguin:connector.<platform>`).
+interface connector {
+  record send-outcome {
+    /// Platform message id when the platform returns one.
+    message-id: option<string>,
+  }
+
+  variant connector-error {
+    not-granted,
+    auth,
+    rate-limited(u32),
+    unavailable,
+    rejected(string),
+    too-long,
+  }
+
+  /// `platform` is one of: twitch, discord, slack, youtube, kick.
+  /// `target` is the channel or room id and is the grant resource.
+  send: func(platform: string, target: option<string>, text: string)
+    -> result<send-outcome, connector-error>;
+}

@@ -1,0 +1,6 @@
+package penguin:tools@0.1.0;
+
+interface feature-flags {
+  /// Fails closed: any backend error returns false.
+  enabled: func(key: string) -> bool;
+}

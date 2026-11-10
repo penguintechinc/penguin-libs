@@ -1,0 +1,36 @@
+package penguin:tools@0.1.0;
+
+interface types {
+  /// Side-effect class drives idempotency and approval policy.
+  enum effect { read, write, destructive }
+
+  record tool-descriptor {
+    /// `[a-z][a-z0-9_.-]{0,63}`, unique within a module.
+    name: string,
+    /// Semver of the tool contract.
+    version: string,
+    description: string,
+    /// JSON Schema 2020-12, canonical JSON.
+    input-schema: string,
+    /// JSON Schema 2020-12, canonical JSON.
+    output-schema: string,
+    effect: effect,
+    /// Required capability ids, e.g. "penguin:http".
+    capabilities: list<string>,
+  }
+
+  variant tool-error {
+    not-granted,
+    forbidden,
+    /// Schema violation or malformed arguments.
+    invalid-args(string),
+    timeout,
+    depth-exceeded,
+    pool-exhausted,
+    target-unavailable,
+    /// The capability id that failed.
+    capability-failed(string),
+    /// Tool-defined failure, at most 512 bytes, no secrets.
+    failed(string),
+  }
+}
