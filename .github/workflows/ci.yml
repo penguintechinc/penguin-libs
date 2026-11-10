@@ -137,7 +137,7 @@ jobs:
           cd packages/go-common && govulncheck ./...
       - name: Security - gosec
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.0
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
           cd packages/go-common && gosec -quiet ./...
 
   build-go-aaa:
@@ -169,7 +169,7 @@ jobs:
           cd packages/go-aaa && govulncheck ./...
       - name: Security - gosec
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.0
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
           cd packages/go-aaa && gosec -quiet ./...
 
   build-react-testutils:
