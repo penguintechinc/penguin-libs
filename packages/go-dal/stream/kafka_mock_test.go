@@ -13,9 +13,9 @@ import (
 // --- mock producer ---
 
 type mockKafkaProducer struct {
-	failProduce   bool
+	failProduce    bool
 	flushRemaining int
-	closed        bool
+	closed         bool
 
 	// produceDeliverErr simulates a delivery-level error in the kafka.Message.
 	produceDeliverErr bool
@@ -27,7 +27,7 @@ func (m *mockKafkaProducer) Produce(msg *kafka.Message, deliveryChan chan kafka.
 		return errors.New("produce enqueue failed")
 	}
 	// Simulate async delivery notification.
-	var deliveredMsg kafka.Message = *msg
+	deliveredMsg := *msg
 	if m.produceDeliverErr {
 		deliveredMsg.TopicPartition.Error = errors.New("broker error")
 	}

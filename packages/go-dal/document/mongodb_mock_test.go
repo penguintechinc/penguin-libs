@@ -29,8 +29,8 @@ func (m *mockMongoConn) Disconnect(ctx context.Context) error {
 
 type mockMongoCollection struct {
 	// InsertOne
-	failInsert  bool
-	insertedID  interface{}
+	failInsert bool
+	insertedID interface{}
 
 	// FindOne
 	failFindOne bool
@@ -45,15 +45,14 @@ type mockMongoCollection struct {
 	modifiedCount int64
 
 	// DeleteOne
-	failDelete    bool
-	deletedCount  int64
+	failDelete   bool
+	deletedCount int64
 
 	// CountDocuments
 	failCount   bool
 	countResult int64
 
 	// Indexes
-	indexCreateErr error
 }
 
 func (m *mockMongoCollection) InsertOne(ctx context.Context, document interface{}, opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error) {
@@ -336,11 +335,9 @@ func TestMongoDBCreateIndexPanicsWithMock(t *testing.T) {
 	// The mock returns a zero-value mongo.IndexView that panics on CreateOne.
 	// We use recover to verify the function reaches the CreateOne call (exercises setup code).
 	m := newTestMongoDB(&mockMongoCollection{})
-	defer func() {
-		if r := recover(); r == nil {
-			// If it doesn't panic, that's also acceptable (future driver may handle gracefully).
-		}
-	}()
+	// A panic is expected from the zero-value IndexView; not panicking is also acceptable
+	// (a future driver may handle it gracefully).
+	defer func() { _ = recover() }()
 	_ = m.CreateIndex(context.Background(), "col", []dal.IndexKey{{Field: "x", Direction: 1}}, true)
 }
 
@@ -383,4 +380,3 @@ func TestNewMongoDBEmptyDBName(t *testing.T) {
 		t.Errorf("NewMongoDB() = %v, want ErrInvalidConfiguration", err)
 	}
 }
-

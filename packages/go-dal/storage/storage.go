@@ -1,4 +1,6 @@
 // Package storage provides storage backend implementations (S3, NFS).
+//
+// Deprecated: Go libraries are being phased out; use rust-dal (packages/rust-dal) instead.
 package storage
 
 import (

@@ -16,16 +16,16 @@ import (
 // ---------------------------------------------------------------------------
 
 type mockRedisClient struct {
-	data       map[string]string
-	counters   map[string]int64
-	failGet    bool
-	failSet    bool
-	failDel    bool
-	failExists bool
-	failIncrBy bool
-	failMGet   bool
-	failFlush  bool
-	failScan   bool
+	data         map[string]string
+	counters     map[string]int64
+	failGet      bool
+	failSet      bool
+	failDel      bool
+	failExists   bool
+	failIncrBy   bool
+	failMGet     bool
+	failFlush    bool
+	failScan     bool
 	failDelBatch bool
 	// scanResults, if set, are keys returned by the mock Scan
 	scanResults []string

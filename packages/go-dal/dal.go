@@ -1,5 +1,7 @@
 // Package dal provides a universal data abstraction layer for databases,
 // object storage, caching, message streaming, and document stores.
+//
+// Deprecated: Go libraries are being phased out; use rust-dal (packages/rust-dal) instead.
 package dal
 
 import (
@@ -103,11 +105,12 @@ type FindOptions struct {
 
 // Sentinel errors.
 var (
-	ErrNotFound              = errors.New("dal: key not found")
-	ErrUnsupportedOperation  = errors.New("dal: unsupported operation")
-	ErrConnectionFailed      = errors.New("dal: connection failed")
-	ErrInvalidConfiguration  = errors.New("dal: invalid configuration")
-	ErrAlreadyExists         = errors.New("dal: already exists")
+	ErrNotFound             = errors.New("dal: key not found")
+	ErrUnsupportedOperation = errors.New("dal: unsupported operation")
+	ErrConnectionFailed     = errors.New("dal: connection failed")
+	ErrInvalidConfiguration = errors.New("dal: invalid configuration")
+	ErrAlreadyExists        = errors.New("dal: already exists")
+	ErrInvalidKey           = errors.New("dal: invalid key")
 )
 
 // WithContentType sets the content type for storage puts.

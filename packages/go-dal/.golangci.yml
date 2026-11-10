@@ -1,0 +1,7 @@
+version: "2"
+linters:
+  exclusions:
+    rules:
+      # The module is deprecated; its own packages still import the root package.
+      - linters: [staticcheck]
+        text: "SA1019: github.com/penguintechinc/penguin-libs/packages/go-dal is deprecated"
