@@ -1,0 +1,183 @@
+package penguin:tools@0.1.0;
+
+interface clock {
+  /// Unix time in milliseconds.
+  now-ms: func() -> u64;
+
+  /// Monotonic nanoseconds since an arbitrary per-invocation origin.
+  monotonic-ns: func() -> u64;
+}
+
+/// Outbound chat/stream platform send. Credentials are held host-side and
+/// never visible to the guest. Each platform is a separately granted
+/// capability id (`penguin:connector.<platform>`).
+interface connector {
+  record send-outcome {
+    /// Platform message id when the platform returns one.
+    message-id: option<string>,
+  }
+
+  variant connector-error {
+    not-granted,
+    auth,
+    rate-limited(u32),
+    unavailable,
+    rejected(string),
+    too-long,
+  }
+
+  /// `platform` is one of: twitch, discord, slack, youtube, kick.
+  /// `target` is the channel or room id and is the grant resource.
+  send: func(platform: string, target: option<string>, text: string) -> result<send-outcome, connector-error>;
+}
+
+/// Read-only view of the host-built scope. UUIDs only, no PII.
+interface context {
+  record scope {
+    tenant: string,
+    team: option<string>,
+    actor: option<string>,
+    module: string,
+    trace-id: string,
+  }
+
+  current: func() -> scope;
+}
+
+interface feature-flags {
+  /// Fails closed: any backend error returns false.
+  enabled: func(key: string) -> bool;
+}
+
+/// Outbound HTTP via the host egress guard (SSRF protection, DNS pinning,
+/// redirect re-check, host-side secret-ref injection).
+interface http {
+  record header {
+    name: string,
+    value: string,
+  }
+
+  record http-request {
+    method: string,
+    url: string,
+    headers: list<header>,
+    body: option<list<u8>>,
+    timeout-ms: option<u32>,
+  }
+
+  record http-response {
+    status: u16,
+    headers: list<header>,
+    body: list<u8>,
+  }
+
+  variant http-error {
+    not-granted,
+    blocked-destination,
+    too-large,
+    timeout,
+    failed(string),
+  }
+
+  send: func(req: http-request) -> result<http-response, http-error>;
+}
+
+/// Key-value store, partitioned by the host per scope.
+interface kv {
+  variant kv-error {
+    not-granted,
+    too-large,
+    backend-unavailable,
+  }
+
+  get: func(key: string) -> result<option<list<u8>>, kv-error>;
+
+  set: func(key: string, value: list<u8>, ttl-seconds: option<u32>) -> result<_, kv-error>;
+
+  delete: func(key: string) -> result<_, kv-error>;
+}
+
+/// Forwards into the host's penguin-logging / OpenTelemetry pipeline.
+interface log {
+  enum level {
+    error,
+    warn,
+    info,
+    debug,
+  }
+
+  /// `fields-json` is a flat JSON object; the host redacts and bounds it.
+  emit: func(level: level, message: string, fields-json: string);
+}
+
+interface types {
+  /// Side-effect class drives idempotency and approval policy.
+  enum effect {
+    read,
+    write,
+    destructive,
+  }
+
+  record tool-descriptor {
+    /// `[a-z][a-z0-9_.-]{0,63}`, unique within a module.
+    name: string,
+    /// Semver of the tool contract.
+    version: string,
+    description: string,
+    /// JSON Schema 2020-12, canonical JSON.
+    input-schema: string,
+    /// JSON Schema 2020-12, canonical JSON.
+    output-schema: string,
+    effect: effect,
+    /// Required capability ids, e.g. "penguin:http".
+    capabilities: list<string>,
+  }
+
+  variant tool-error {
+    not-granted,
+    forbidden,
+    /// Schema violation or malformed arguments.
+    invalid-args(string),
+    timeout,
+    depth-exceeded,
+    pool-exhausted,
+    target-unavailable,
+    /// The capability id that failed.
+    capability-failed(string),
+    /// Tool-defined failure, at most 512 bytes, no secrets.
+    failed(string),
+  }
+}
+
+/// Host import: call another tool. The host is the sole authority on scope
+/// and the callee runs under its own grants.
+interface invoker {
+  use types.{tool-error};
+
+  invoke: func(target: string, tool: string, args: list<u8>, idempotency-key: option<string>) -> result<list<u8>, tool-error>;
+}
+
+/// Guest export: every tool module implements this.
+interface provider {
+  use types.{tool-descriptor, tool-error};
+
+  describe: func() -> list<tool-descriptor>;
+
+  /// `args` and the result are canonical JSON bytes, validated by the host
+  /// against the descriptor schemas.
+  call: func(name: string, args: list<u8>) -> result<list<u8>, tool-error>;
+}
+
+world tool-module {
+  import context;
+  import log;
+  import clock;
+  import http;
+  import kv;
+  import feature-flags;
+  import types;
+  import invoker;
+  import connector;
+
+  export provider;
+}

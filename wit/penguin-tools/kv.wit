@@ -1,0 +1,14 @@
+package penguin:tools@0.1.0;
+
+/// Key-value store, partitioned by the host per scope.
+interface kv {
+  variant kv-error {
+    not-granted,
+    too-large,
+    backend-unavailable,
+  }
+
+  get: func(key: string) -> result<option<list<u8>>, kv-error>;
+  set: func(key: string, value: list<u8>, ttl-seconds: option<u32>) -> result<_, kv-error>;
+  delete: func(key: string) -> result<_, kv-error>;
+}

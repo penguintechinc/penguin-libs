@@ -1,0 +1,9 @@
+package penguin:tools@0.1.0;
+
+interface clock {
+  /// Unix time in milliseconds.
+  now-ms: func() -> u64;
+
+  /// Monotonic nanoseconds since an arbitrary per-invocation origin.
+  monotonic-ns: func() -> u64;
+}

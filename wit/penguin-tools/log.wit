@@ -1,0 +1,9 @@
+package penguin:tools@0.1.0;
+
+/// Forwards into the host's penguin-logging / OpenTelemetry pipeline.
+interface log {
+  enum level { error, warn, info, debug }
+
+  /// `fields-json` is a flat JSON object; the host redacts and bounds it.
+  emit: func(level: level, message: string, fields-json: string);
+}

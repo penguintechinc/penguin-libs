@@ -1,0 +1,12 @@
+package penguin:tools@0.1.0;
+
+/// Guest export: every tool module implements this.
+interface provider {
+  use types.{tool-descriptor, tool-error};
+
+  describe: func() -> list<tool-descriptor>;
+
+  /// `args` and the result are canonical JSON bytes, validated by the host
+  /// against the descriptor schemas.
+  call: func(name: string, args: list<u8>) -> result<list<u8>, tool-error>;
+}

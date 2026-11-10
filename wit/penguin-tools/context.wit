@@ -1,0 +1,14 @@
+package penguin:tools@0.1.0;
+
+/// Read-only view of the host-built scope. UUIDs only, no PII.
+interface context {
+  record scope {
+    tenant: string,
+    team: option<string>,
+    actor: option<string>,
+    module: string,
+    trace-id: string,
+  }
+
+  current: func() -> scope;
+}
