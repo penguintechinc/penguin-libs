@@ -33,8 +33,10 @@ func TestPoolGetPut(t *testing.T) {
 		t.Fatalf("Get() = %d, want 42", v)
 	}
 	pool.Put(99, 0)
+	// sync.Pool may drop a Put (always possible, randomly so under -race), in
+	// which case Get falls back to the constructor value.
 	v2 := pool.Get(0)
-	if v2 != 99 {
-		t.Fatalf("Get() after Put() = %d, want 99", v2)
+	if v2 != 99 && v2 != 42 {
+		t.Fatalf("Get() after Put() = %d, want 99 or 42", v2)
 	}
 }
