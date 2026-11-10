@@ -6,4 +6,6 @@
 // A Checker tracks per-service serving status in memory, keyed by service
 // name with the empty string standing in for whole-process health, and
 // notifies Watch subscribers of status changes over buffered channels.
+//
+// Deprecated: Go libraries are being phased out; use rust-rpc instead.
 package health

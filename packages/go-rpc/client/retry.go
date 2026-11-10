@@ -5,8 +5,9 @@ package client
 
 import (
 	"context"
+	crand "crypto/rand"
+	"encoding/binary"
 	"math"
-	"math/rand/v2"
 	"time"
 
 	"connectrpc.com/connect"
@@ -104,6 +105,17 @@ func DoWithRetry[T any](ctx context.Context, c *Client, rcfg RetryConfig, logger
 	return zero, lastErr
 }
 
+// jitterFraction returns a uniform value in [0,1) drawn from crypto/rand so
+// retry timing is not predictable from a seeded PRNG. On a read failure it
+// returns 0.5, which leaves the backoff unjittered rather than failing the call.
+func jitterFraction() float64 {
+	var b [8]byte
+	if _, err := crand.Read(b[:]); err != nil {
+		return 0.5
+	}
+	return float64(binary.BigEndian.Uint64(b[:])>>11) / (1 << 53)
+}
+
 // calcBackoff computes the exponential backoff duration for attempt,
 // capped at cfg.MaxBackoff and optionally jittered to +/-50%. Salvaged
 // verbatim from go-h3.
@@ -113,7 +125,7 @@ func calcBackoff(cfg RetryConfig, attempt int) time.Duration {
 		backoff = float64(cfg.MaxBackoff)
 	}
 	if cfg.Jitter {
-		backoff *= 0.5 + rand.Float64()
+		backoff *= 0.5 + jitterFraction()
 	}
 	return time.Duration(backoff)
 }

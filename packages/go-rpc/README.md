@@ -1,3 +1,5 @@
+> **DEPRECATED:** Go libraries are being phased out; use rust-rpc instead. This module remains available and receives security fixes only (new patch versions); no new features.
+
 # Penguin RPC (pRPC) — Go Implementation
 
 Penguin RPC (pRPC) is the Go implementation of the pRPC specification (spec/SPEC.md), providing a high-performance, zero-trust Connect RPC framework over HTTP/3 (QUIC) with automatic HTTP/2 fallback. It enables secure service-to-service communication with zero-trust authentication defaults and built-in support for mounting MCP and A2A (application-to-application) agent protocols.

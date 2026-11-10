@@ -66,4 +66,6 @@
 // endpoint to anonymous callers — a direct violation of spec §7 — even
 // though the agent card at WellKnownAgentCardPath is correctly public
 // either way.
+//
+// Deprecated: Go libraries are being phased out; use rust-rpc instead.
 package a2a

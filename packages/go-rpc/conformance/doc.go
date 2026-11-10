@@ -35,4 +35,6 @@
 // a longer-lived request/response body), so a single HTTP-level wrap covers
 // every method without per-method plumbing, and without needing connect-go
 // to expose *http.Request through its typed stream wrappers.
+//
+// Deprecated: Go libraries are being phased out; use rust-rpc instead.
 package conformance

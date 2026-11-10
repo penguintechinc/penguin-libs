@@ -193,4 +193,6 @@
 // from the validated SPIFFE ID's trust domain — that is out of scope for
 // this package, which only composes go-aaa's interceptors. Flagged here for
 // go-aaa maintainer follow-up.
+//
+// Deprecated: Go libraries are being phased out; use rust-rpc instead.
 package auth

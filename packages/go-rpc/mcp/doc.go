@@ -50,4 +50,6 @@
 // the whole server) behind auth.HTTPMiddleware is the operator's
 // responsibility, exactly as it is for any other endpoint mounted outside
 // the Connect interceptor chain.
+//
+// Deprecated: Go libraries are being phased out; use rust-rpc instead.
 package mcp
