@@ -70,3 +70,4 @@ pubspec.lock
 
 # git
 .egg-info/
+.worktrees/
