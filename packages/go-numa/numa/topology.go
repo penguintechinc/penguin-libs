@@ -88,7 +88,7 @@ func discover() (*Topology, error) {
 }
 
 func parseCPUList(path string) ([]int, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}

@@ -3,4 +3,6 @@
 //
 // This package is Linux-only. On other platforms, compile with //go:build !linux
 // stubs that return ErrNotSupported.
+//
+// Deprecated: Go libraries are being phased out; Rust replacement planned.
 package numa
