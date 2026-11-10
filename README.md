@@ -55,6 +55,9 @@ All published to **public npm** (npmjs.com) under the `@penguintechinc` scope.
 
 | Package | Version | Description |
 |---------|---------|-------------|
+| [penguin-aaa](./packages/rust-aaa) | 0.2.0 | Authentication, authorization, and audit — ES256/EdDSA JWT signing & verification, claims, and tenant/scope authorization |
+| [penguin-dal](./packages/rust-dal) | 0.1.0 | Database access layer — PostgreSQL/SQLite connection pools (sqlx), S3/MinIO object storage, cache, and streaming contracts |
+| [penguin-logging](./packages/rust-logging) | 0.1.0 | Structured, sanitized logging (tracing) + OpenTelemetry logs/metrics/traces + health/metrics endpoints |
 | [penguin-rpc](./packages/rust-rpc/crates/penguin-rpc) | 0.1.0 | pRPC — Connect RPC over HTTP/3/QUIC, Rust implementation (Apache-2.0) |
 | [penguin-h3-tower](./packages/rust-rpc/crates/penguin-h3-tower) | 0.1.0 | HTTP/3 bridge for Tower services, used by penguin-rpc (Apache-2.0) |
 | [penguin-licensing](./packages/rust-licensing) | 0.1.0 | License entitlement + PostHog feature-flag client |
