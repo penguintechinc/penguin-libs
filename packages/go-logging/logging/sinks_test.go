@@ -62,7 +62,7 @@ func TestFileSink_WritesJSONToFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileSink: %v", err)
 	}
-	defer sink.Close()
+	defer func() { _ = sink.Close() }()
 
 	event := map[string]interface{}{"level": "info", "msg": "file test"}
 	if err := sink.Write(event); err != nil {
@@ -96,7 +96,7 @@ func TestFileSink_RotatesWhenMaxSizeExceeded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileSink: %v", err)
 	}
-	defer sink.Close()
+	defer func() { _ = sink.Close() }()
 
 	// Each event is roughly 60 bytes; 20,000 events ≈ 1.2 MiB, exceeding the limit.
 	payload := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" // 40 bytes
@@ -144,7 +144,7 @@ func TestSyslogSink_WriteAndClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create UDP listener: %v", err)
 	}
-	defer pc.Close()
+	defer func() { _ = pc.Close() }()
 
 	sink, err := NewSyslogSink(pc.LocalAddr().String())
 	if err != nil {

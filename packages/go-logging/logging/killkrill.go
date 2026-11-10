@@ -171,7 +171,7 @@ func (s *KillKrillSink) send(batch []map[string]interface{}) error {
 	if err != nil {
 		return fmt.Errorf("killkrill: http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("killkrill: unexpected status %d", resp.StatusCode)

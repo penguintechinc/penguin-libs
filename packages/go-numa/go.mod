@@ -1,6 +1,6 @@
 module github.com/penguintechinc/penguin-libs/packages/go-numa
 
-go 1.25
+go 1.26.0
 
 require (
 	github.com/penguintechinc/penguin-libs/packages/go-logging v0.0.0

@@ -1,6 +1,6 @@
 module github.com/penguintechinc/penguin-libs/packages/go-xdp
 
-go 1.25
+go 1.26.0
 
 require (
 	github.com/cilium/ebpf v0.17.3

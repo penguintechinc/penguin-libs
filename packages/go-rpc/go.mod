@@ -1,6 +1,6 @@
 module github.com/penguintechinc/penguin-libs/packages/go-rpc
 
-go 1.25.0
+go 1.26.0
 
 replace (
 	github.com/penguintechinc/penguin-libs/packages/go-aaa => ../go-aaa
