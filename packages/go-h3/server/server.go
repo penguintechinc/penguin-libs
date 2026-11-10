@@ -120,7 +120,7 @@ func (s *Server) listen(errc chan<- error) (err error) {
 	}()
 
 	if s.cfg.H2Enabled {
-		ln, lerr := net.Listen("tcp", s.cfg.H2Addr)
+		ln, lerr := (&net.ListenConfig{}).Listen(context.Background(), "tcp", s.cfg.H2Addr)
 		if lerr != nil {
 			return fmt.Errorf("h2 listen: %w", lerr)
 		}

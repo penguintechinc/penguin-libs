@@ -44,6 +44,7 @@ func main() {
 			msg = "hello"
 		}
 		w.Header().Set("Content-Type", "text/plain")
+		// #nosec G705 -- text/plain response, not rendered as HTML; escaping is defensive
 		_, _ = fmt.Fprintf(w, "echo: %s (protocol: %s)\n", html.EscapeString(msg), r.Proto)
 	})
 

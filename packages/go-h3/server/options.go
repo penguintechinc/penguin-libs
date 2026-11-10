@@ -1,4 +1,6 @@
 // Package server provides a dual-protocol HTTP/2 + HTTP/3 server using ConnectRPC.
+//
+// Deprecated: Go libraries are being phased out; Rust replacement planned.
 package server
 
 import (

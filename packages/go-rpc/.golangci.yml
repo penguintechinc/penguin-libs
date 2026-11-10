@@ -1,17 +1,36 @@
+version: "2"
 linters:
   enable:
     - govet
     - staticcheck
     - errcheck
-    - gosimple
     - ineffassign
     - unused
     - gosec
     - bodyclose
     - noctx
     - exhaustive
-linters-settings:
-  exhaustive:
-    default-signifies-exhaustive: true
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+  exclusions:
+    paths:
+      - gen
+    rules:
+      # Intentional: every package in this module carries a deprecation notice.
+      - linters:
+          - staticcheck
+        text: "Go libraries are being phased out"
+      # Test-only: request/listener contexts, unchecked Close on teardown, and
+      # intentionally weak TLS / fake bearer tokens that exercise rejection paths.
+      - path: _test\.go
+        linters:
+          - noctx
+          - errcheck
+          - bodyclose
+      - path: _test\.go
+        text: "G101|G402"
+      - path: _test\.go
+        text: SA4000
 run:
   timeout: 5m

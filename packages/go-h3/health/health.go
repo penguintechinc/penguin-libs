@@ -1,4 +1,6 @@
 // Package health provides a ConnectRPC-compatible health check handler.
+//
+// Deprecated: Go libraries are being phased out; Rust replacement planned.
 package health
 
 import (

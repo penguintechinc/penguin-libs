@@ -1,4 +1,6 @@
 // Package client provides an HTTP/3-preferred client with automatic HTTP/2 fallback.
+//
+// Deprecated: Go libraries are being phased out; Rust replacement planned.
 package client
 
 import (

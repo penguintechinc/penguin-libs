@@ -121,8 +121,8 @@ pre-commit: ## Run full pre-commit gate
 
 install-tools: ## Install Go development tools
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
-	go install golang.org/x/vuln/cmd/govulncheck@v1.1.3
-	go install github.com/securego/gosec/v2/cmd/gosec@v2.21.0
+	go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+	go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
 
 install-hooks: ## Install git pre-commit hook
 	@./scripts/install-hooks.sh
