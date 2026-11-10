@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/penguintechinc/penguin-libs/packages/go-common/logging"
+	"github.com/penguintechinc/penguin-libs/packages/go-common/logging" //nolint:staticcheck // SA1019: go-common/logging is deprecated for the Go phase-out; migration tracked separately
 )
 
 func TestEmitter_Emit_SingleSink(t *testing.T) {

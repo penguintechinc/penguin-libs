@@ -3,7 +3,7 @@ package audit
 import (
 	"fmt"
 
-	"github.com/penguintechinc/penguin-libs/packages/go-common/logging"
+	"github.com/penguintechinc/penguin-libs/packages/go-common/logging" //nolint:staticcheck // SA1019: go-common/logging is deprecated for the Go phase-out; migration tracked separately
 )
 
 // Emitter fans out audit events to one or more logging Sinks.

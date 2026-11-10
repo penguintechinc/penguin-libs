@@ -105,14 +105,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (no `cache:` input below; `cache: false` breaks v4.0.2); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -384,7 +383,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
-          go-version: '1.25'
+          go-version: '1.26.10'
           cache: false
 
       - name: Download dependencies
@@ -597,14 +596,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (no `cache:` input below; `cache: false` breaks v4.0.2); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -652,7 +650,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
-          go-version: '1.25'
+          go-version: '1.26.10'
           cache: false
 
       - name: Download dependencies
@@ -698,14 +696,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (no `cache:` input below; `cache: false` breaks v4.0.2); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -976,7 +973,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
-          go-version: '1.25'
+          go-version: '1.26.10'
           cache: false
 
       - name: Download dependencies
@@ -1073,14 +1070,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (no `cache:` input below; `cache: false` breaks v4.0.2); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -1130,14 +1126,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (no `cache:` input below; `cache: false` breaks v4.0.2); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -1187,14 +1182,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (no `cache:` input below; `cache: false` breaks v4.0.2); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -1244,14 +1238,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (no `cache:` input below; `cache: false` breaks v4.0.2); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -1301,14 +1294,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (explicitly false below); the package-manager-cache input zizmor keys on only exists in v5+.
+      # zizmor cache-poisoning false positive: setup-node v4.0.2 caches nothing unless `cache:` is set (no `cache:` input below; `cache: false` breaks v4.0.2); the package-manager-cache input zizmor keys on only exists in v5+.
       - name: Setup Node.js
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@penguintechinc'
-          cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -1359,7 +1351,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version: '1.25'
+          go-version: '1.26.10'
           cache: false
 
       - name: Build, vet and test go split packages

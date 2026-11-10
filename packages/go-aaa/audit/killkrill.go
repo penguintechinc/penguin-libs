@@ -1,7 +1,7 @@
 package audit
 
 import (
-	"github.com/penguintechinc/penguin-libs/packages/go-common/logging"
+	"github.com/penguintechinc/penguin-libs/packages/go-common/logging" //nolint:staticcheck // SA1019: go-common/logging is deprecated for the Go phase-out; migration tracked separately
 )
 
 // NewKillKrillSink returns a logging.Sink that batches audit events and ships them

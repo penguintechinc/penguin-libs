@@ -1,5 +1,7 @@
 // Package logging provides logger and sink abstractions.
 // This package was refactored during crypto-modernization; old go-logging is removed.
+//
+// Deprecated: Go libraries are being phased out; Rust replacement planned.
 package logging
 
 import "go.uber.org/zap"
