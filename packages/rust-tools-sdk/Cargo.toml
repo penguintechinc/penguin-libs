@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/penguin-tools-sdk",
+    "crates/penguin-tools-sdk-macros",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.97"
+license = "MIT"
+repository = "https://github.com/penguintechinc/penguin-libs"
+authors = ["Penguin Tech Inc <support@penguintech.io>"]
+publish = false
