@@ -1,12 +1,15 @@
+// Deprecated: Go libraries are being phased out; Rust replacement planned.
 module github.com/penguintechinc/penguin-libs/packages/go-xdp
 
-go 1.25
+go 1.26.0
+
+toolchain go1.26.10
 
 require (
-	github.com/cilium/ebpf v0.17.3
+	github.com/cilium/ebpf v0.22.0
 	github.com/penguintechinc/penguin-libs/packages/go-logging v0.0.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/sys v0.30.0
+	golang.org/x/sys v0.50.0
 )
 
 require go.uber.org/multierr v1.11.0 // indirect
