@@ -10,7 +10,7 @@ import (
 	"github.com/penguintechinc/penguin-libs/packages/go-aaa/audit"
 	"github.com/penguintechinc/penguin-libs/packages/go-aaa/authn"
 	"github.com/penguintechinc/penguin-libs/packages/go-aaa/authz"
-	"github.com/penguintechinc/penguin-libs/packages/go-common/logging"
+	"github.com/penguintechinc/penguin-libs/packages/go-common/logging" //nolint:staticcheck // SA1019: go-common/logging is deprecated for the Go phase-out; migration tracked separately
 )
 
 func buildAuditEmitter(events *[]audit.AuditEvent) *audit.Emitter {
