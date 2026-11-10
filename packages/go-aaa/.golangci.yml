@@ -13,5 +13,11 @@ linters:
   settings:
     exhaustive:
       default-signifies-exhaustive: true
+  exclusions:
+    rules:
+      # Intentional: every package in this module carries a deprecation notice.
+      - linters:
+          - staticcheck
+        text: "Go libraries are being phased out"
 run:
   timeout: 5m

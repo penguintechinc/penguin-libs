@@ -3,6 +3,8 @@
 //
 // It composes the authn and crypto sub-packages into ready-to-use relying party,
 // provider, and Connect RPC interceptor instances with a single function call.
+//
+// Deprecated: Go libraries are being phased out; use penguin-aaa (packages/rust-aaa) instead.
 package goaaa
 
 import (
