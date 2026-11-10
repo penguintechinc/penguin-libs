@@ -269,8 +269,18 @@ No changes are made to consumer repos. The table records what each product would
 | D11 | Connectors integration | ✅ **DECIDED 2026-11-10** — shared `Connector` trait in `penguin-connectors` (new `penguin-connector-core`); tools-host adapts connectors as capabilities (`penguin:connector.<platform>`) via the new `penguin-tools-connectors` crate. |
 | D12 | Scope | ✅ **DECIDED 2026-11-10** — penguin-libs only. No edits to waddles/penguind/waddleai/gough/tobogganing; adoption is handoff notes (§6). |
 | D13 | Inbound events | ✅ **DECIDED 2026-11-10** — connector events can trigger tools through host-scoped `TriggerBinding`s (§5.8). Scope never derives from event content. |
-| D14 | Cross-package deps | ⏳ **OPEN** — `penguin-logging`, `penguin-bundle-host`, `penguin-connectors` live only on their `release/*` branches, not `main`. Proposal: git-rev pins (D8) until each is on `main`. |
+| D14 | Cross-package deps | ✅ **DECIDED 2026-11-10** — `penguin-logging`, `penguin-bundle-host`, `penguin-connectors` live only on `release/*` branches, so tools crates depend on them by **git + full-SHA `rev`** (repo is public, no auth needed), recorded in the table below. A tag is used instead of a SHA only when it contains the needed code. Bumping a pin is a deliberate PR. Swap to path/version deps once each package is on `main`. `deny.toml` must list the repo under `[sources] allow-git`. |
 | D10 | Logging/telemetry | ✅ **DECIDED** — `penguin-logging` (OTel) everywhere (§5.5). |
+
+**Dependency pins (D14)** — all from `https://github.com/penguintechinc/penguin-libs`, resolved 2026-11-10:
+
+| Crate | Source branch | Pinned `rev` | Version | Note |
+|---|---|---|---|---|
+| `penguin-logging` | `release/rust-logging/v0.1.x` | `0a320ba2b08a6850b66e3062f6a9dfb44fec6950` | 0.1.0 | untagged |
+| `penguin-bundle-host` | `release/rust-bundle-host/v0.2.x` | `53e95619f1b3e49e1150b78a125981fcc5905d8a` | 0.5.0 | untagged; `publish = false`; Phase 0.2 tags it |
+| `penguin-connector-*` | `release/rust-connectors/v0.1.x` | `793da9943f51c6bf3acf8538ea149b251dd1ad41` | 0.1.0 | tag `rust-connectors-v0.1.0` predates #153 hardening, so SHA is used |
+
+Shared exact pins already agree across all three (`tokio =1.53.3`, `serde =1.0.229`, `serde_json =1.0.151`, `thiserror =2.0.20`), so no version unification is needed. The `penguin-connector-core` crate is added to `rust-connectors` in Phase 2C.1, after which the connectors pin moves to the SHA containing it.
 
 ## 9. Pre-existing issues found during review (fix independently)
 *Only the penguin-libs items are in scope. The rest are listed for their repo owners and are not touched by this work.*

@@ -1,6 +1,6 @@
 # penguin-tools — Implementation Plan
 
-**Spec:** `docs/superpowers/specs/2026-11-09-penguin-tools-design.md` · **Status:** DRAFT r2 — D1–D13 decided, D14 open
+**Spec:** `docs/superpowers/specs/2026-11-09-penguin-tools-design.md` · **Status:** DRAFT r2 — D1–D14 decided
 **Scope:** penguin-libs only. No consumer repo is modified.
 **Release line:** `release/rust-tools-host/v0.1.x` (new) · `release/rust-bundle-host/v0.2.x` (wire additions)
 **Model routing:** code/tests → Sonnet developer dispatch; ops (worktrees, pushes, PRs) → Haiku / github-ops; plan review → architect; security gate → security persona.
@@ -8,7 +8,7 @@
 ## Phase 0 — Unblock (penguin-libs only)
 | # | Task | Exit criteria |
 |---|---|---|
-| 0.1 | Resolve D14: dependency strategy for `penguin-logging` / `penguin-bundle-host` / `penguin-connectors` (git-rev pins vs landing on `main`) | decision recorded in spec §8 |
+| 0.1 | ~~Resolve D14~~ **Done:** git + full-SHA `rev` pins for `penguin-logging` / `penguin-bundle-host` / `penguin-connectors` (table in spec §8); add the repo to `deny.toml` `allow-git` | pins recorded; `cargo deny check` passes with git sources |
 | 0.2 | Tag `penguin-bundle-host` 0.5.0; rebase PR #132 onto it | tag exists; #132 mergeable |
 | 0.3 | Create `release/rust-tools-host/v0.1.x` | branch exists; feature PRs target it |
 | — | *(removed)* penguind commit, waddles actor-scope merge: other repos, out of scope — see spec §6 handoff | — |
