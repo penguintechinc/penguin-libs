@@ -136,15 +136,15 @@ function buildFieldSchema(field: FormField): ZodType {
 
   switch (field.type) {
     case 'email':
-      schema = z.string().email(`${field.label} must be a valid email`);
+      schema = z.email(`${field.label} must be a valid email`);
       break;
 
     case 'url':
-      schema = z.string().url(`${field.label} must be a valid URL`);
+      schema = z.url(`${field.label} must be a valid URL`);
       break;
 
     case 'number': {
-      let numSchema = z.coerce.number({ invalid_type_error: `${field.label} must be a number` });
+      let numSchema = z.coerce.number({ error: `${field.label} must be a number` });
       if (field.min !== undefined) {
         numSchema = numSchema.min(field.min, `${field.label} must be at least ${field.min}`);
       }
@@ -201,7 +201,7 @@ function buildFieldSchema(field: FormField): ZodType {
     case 'radio':
       if (field.options && field.options.length > 0) {
         const values = field.options.map((o) => String(o.value)) as [string, ...string[]];
-        schema = z.enum(values, { invalid_type_error: `${field.label} must be one of the available options` });
+        schema = z.enum(values, { error: `${field.label} must be one of the available options` });
       } else {
         schema = z.string();
       }
@@ -254,12 +254,12 @@ function buildFieldSchema(field: FormField): ZodType {
   if (field.required) {
     if (field.type === 'checkbox') {
       // For required checkboxes, must be true
-      return z.literal(true, { invalid_type_error: `${field.label} must be checked` });
+      return z.literal(true, { error: `${field.label} must be checked` });
     }
     if (field.type === 'checkbox_multi') {
       // For required multi-select, must have at least one selection
       return schema.refine((val: unknown) => Array.isArray(val) && val.length > 0, {
-        message: `${field.label} requires at least one selection`,
+        error: `${field.label} requires at least one selection`,
       });
     }
     // For strings, add non-empty check
@@ -267,7 +267,7 @@ function buildFieldSchema(field: FormField): ZodType {
         field.type === 'email' || field.type === 'url' || field.type === 'password' ||
         field.type === 'password_generate' || field.type === 'tel' || field.type === 'select' || field.type === 'radio') {
       return schema.refine((val: unknown) => val !== undefined && val !== null && val !== '', {
-        message: `${field.label} is required`,
+        error: `${field.label} is required`,
       });
     }
     return schema;
@@ -697,7 +697,7 @@ export const FormModalBuilder: React.FC<FormModalBuilderProps> = ({
     const result = visibleSchema.safeParse(dataToValidate);
 
     if (!result.success) {
-      // Zod v4 uses issues array
+      // Zod v4 reports validation failures via the issues array
       const issues = result.error.issues || [];
       issues.forEach((issue) => {
         const fieldName = String(issue.path[0]);

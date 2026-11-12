@@ -25,6 +25,9 @@ jobs:
       - run: npm ci
       - name: Security
         run: npm audit --omit=dev
+      # react-libs re-exports these workspace siblings; their package entry is dist/, so build them first.
+      - name: Build workspace dependencies
+        run: npm run build -w @penguintechinc/react-console-version -w @penguintechinc/react-form-builder -w @penguintechinc/react-hooks -w @penguintechinc/react-login -w @penguintechinc/react-sidebar
       - run: npm run build -w @penguintechinc/react-libs
       - run: npm run typecheck -w @penguintechinc/react-libs
       - run: npm run test -w @penguintechinc/react-libs
