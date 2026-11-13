@@ -76,7 +76,7 @@ jobs:
         if: matrix.language == 'go'
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version: '1.26'
+          go-version: '1.26.11'
           cache: false
       - name: Go Build
         if: matrix.language == 'go'
@@ -164,7 +164,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version: '1.26'
+          go-version: '1.26.11'
           cache: false
       - name: Integration Test
         run: go test -race -tags=integration ./integration/...
@@ -179,7 +179,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version: '1.26'
+          go-version: '1.26.11'
           cache: false
       - uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
       - name: Codegen drift check
