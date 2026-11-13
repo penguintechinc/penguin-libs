@@ -18,12 +18,12 @@ import (
 // OIDCRelyingParty validates tokens issued by an external OIDC provider and
 // handles the Authorization Code flow on behalf of the application.
 type OIDCRelyingParty struct {
-	cfg            OIDCRPConfig
-	provider       *gooidc.Provider
-	verifier       *gooidc.IDTokenVerifier
-	oauth2         oauth2.Config
-	discovery      map[string]interface{}
-	discoveryOnce  sync.Once
+	cfg           OIDCRPConfig
+	provider      *gooidc.Provider
+	verifier      *gooidc.IDTokenVerifier
+	oauth2        oauth2.Config
+	discovery     map[string]interface{}
+	discoveryOnce sync.Once
 }
 
 // NewOIDCRelyingParty creates an OIDCRelyingParty by discovering the provider's

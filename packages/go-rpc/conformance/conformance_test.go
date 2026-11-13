@@ -65,7 +65,7 @@ func TestServerStream_RepeatThree_SendsExactlyThreeMessages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ServerStream: unexpected error: %v", err)
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	var got []string
 	for stream.Receive() {
@@ -96,7 +96,7 @@ func TestServerStream_RepeatZero_SendsOneMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ServerStream: unexpected error: %v", err)
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	var got []string
 	for stream.Receive() {
@@ -249,7 +249,7 @@ func TestProtocolMiddleware_StampsProtoMajorIntoContext(t *testing.T) {
 			})
 			handler := ProtocolMiddleware(next)
 
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 			req.ProtoMajor = tt.protoMajor
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
