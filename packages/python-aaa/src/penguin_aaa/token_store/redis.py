@@ -66,7 +66,7 @@ class RedisTokenStore:
     def is_jti_revoked(self, jti: str) -> bool:
         """Check if a JTI is revoked."""
         key = self._make_key("revoked_jti", jti)
-        exists_count: int = self._client.exists(key)  # type: ignore
+        exists_count: int = self._client.exists(key)
         return exists_count > 0
 
     def store_nonce(self, nonce: str, sub: str, ttl: timedelta) -> None:
