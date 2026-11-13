@@ -432,6 +432,8 @@ jobs:
           node-version: '20'
       - name: Install
         run: npm ci
+      - name: Build workspace dependencies
+        run: npm run build -w @penguintechinc/react-form-builder
       - name: Build
         run: npm run build -w @penguintechinc/react-hooks
       - name: Typecheck
