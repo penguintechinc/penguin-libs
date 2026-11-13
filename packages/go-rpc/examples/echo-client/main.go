@@ -97,7 +97,7 @@ func run() error {
 // path (not a skipped check) for a self-signed server whose cert isn't in
 // any system trust store.
 func loadCertPool(path string) (*x509.CertPool, error) {
-	pemBytes, err := os.ReadFile(path) //nolint:gosec // operator-controlled demo path, not user input from a request
+	pemBytes, err := os.ReadFile(filepath.Clean(path)) // #nosec G304 -- operator-controlled demo path (cleaned), not user input from a request
 	if err != nil {
 		return nil, err
 	}
