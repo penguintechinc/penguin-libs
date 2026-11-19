@@ -15,8 +15,9 @@
 //! - **Domain bypass**: deployments on PenguinTech-internal domains
 //!   (`*.penguincloud.io`, `*.penguintech.cloud`, plus product `.app`
 //!   domains registered in code with
-//!   [`LicenseConfig::with_bypass_domain`]) bypass gating entirely — flags
-//!   and features evaluate to enabled.
+//!   [`LicenseConfig::with_bypass_domain`]) bypass LICENSE gating only —
+//!   features are entitled and the tier is Enterprise. Bypass never forces
+//!   PostHog flags on; they resolve from the snapshot (unset = OFF).
 //! - **Fail-closed by default**: the cached snapshot is downgraded to
 //!   community tier (and cached flags dropped) on *any* license-server
 //!   response that is not a success and not an outage — explicit refusals

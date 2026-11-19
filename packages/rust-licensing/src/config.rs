@@ -19,7 +19,7 @@ use crate::error::LicenseError;
 /// Default license + flag server.
 pub const DEFAULT_SERVER_URL: &str = "https://license.penguintech.io";
 
-/// Domain suffixes that always bypass license/flag gating — PenguinTech
+/// Domain suffixes that always bypass license/entitlement gating (never PostHog flags) — PenguinTech
 /// internal deployments. Bypass is domain-based ONLY, never an env toggle.
 /// Product `.app` domains are added in code with
 /// [`LicenseConfig::with_bypass_domain`].

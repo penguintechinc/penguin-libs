@@ -72,10 +72,46 @@ async fn gates_deny_with_403_when_unlicensed() {
     res.assert_json_contains(&serde_json::json!({ "error": "tier_required" }));
 }
 
+/// regression: bypass is license-only (2026-11-12). License gates (feature,
+/// tier) allow under bypass; the flag gate does NOT -- an unset flag denies.
 #[tokio::test]
-async fn gates_allow_under_domain_bypass() {
+async fn license_gates_allow_but_unset_flag_gate_denies_under_domain_bypass() {
     let server = axum_test::TestServer::new(app(offline_client(true)));
-    server.get("/icebox").await.assert_status_ok();
     server.get("/sso").await.assert_status_ok();
     server.get("/analytics").await.assert_status_ok();
+    let res = server.get("/icebox").await;
+    res.assert_status(http::StatusCode::FORBIDDEN);
+    res.assert_json_contains(&serde_json::json!({ "error": "feature_disabled" }));
+}
+
+/// regression: bypass is license-only (2026-11-12). An explicitly-on
+/// PostHog flag allows the flag gate on a bypass domain.
+#[tokio::test]
+async fn explicitly_on_flag_gate_allows_under_domain_bypass() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let mock = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/decide/"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(
+                serde_json::json!({ "featureFlags": { "skauswatch.icebox": true } }),
+            ),
+        )
+        .mount(&mock)
+        .await;
+    let mut cfg = LicenseConfig::new("skauswatch")
+        .unwrap()
+        .with_deployment_domain("skauswatch.penguintech.cloud");
+    cfg.server_url = Url::parse(&mock.uri()).unwrap();
+    cfg.posthog_host = cfg.server_url.clone();
+    cfg.posthog_key = Some("phc_test".to_owned());
+    cfg.cache_ttl = Duration::from_secs(300);
+    let client = LicenseClient::new(cfg).unwrap();
+    assert!(client.bypass_active());
+    client.refresh().await.unwrap();
+
+    let server = axum_test::TestServer::new(app(client));
+    server.get("/icebox").await.assert_status_ok();
 }

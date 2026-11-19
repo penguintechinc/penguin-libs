@@ -12,10 +12,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwapOption;
-use chrono::Utc;
 use reqwest::header::{AUTHORIZATION, HeaderValue};
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use time::OffsetDateTime;
 use tokio::sync::Mutex;
 
 use crate::config::LicenseConfig;
@@ -110,8 +110,10 @@ impl LicenseClient {
     }
 
     /// Whether gating is bypassed: the deployment domain is on the bypass
-    /// list. Bypass means every feature, flag, and tier check evaluates as
-    /// enabled/Enterprise.
+    /// list. Bypass satisfies LICENSE/entitlement checks only:
+    /// [`LicenseClient::check_feature`] passes and [`LicenseClient::tier`] is
+    /// Enterprise. It never forces PostHog flags or kill switches on; see
+    /// [`LicenseClient::flag_enabled`].
     ///
     /// Bypass is domain-based ONLY — there is no environment variable,
     /// CLI flag, or build profile that disables enforcement.
@@ -248,7 +250,7 @@ impl LicenseClient {
         self.snapshot.store(Some(Arc::new(Snapshot {
             info,
             flags,
-            fetched_at: Utc::now(),
+            fetched_at: OffsetDateTime::now_utc(),
         })));
     }
 
@@ -313,8 +315,8 @@ impl LicenseClient {
     fn is_stale(&self) -> bool {
         match self.snapshot.load_full() {
             Some(snap) => {
-                let age = Utc::now().signed_duration_since(snap.fetched_at);
-                age.to_std()
+                let age = OffsetDateTime::now_utc() - snap.fetched_at;
+                Duration::try_from(age)
                     .map(|a| a >= self.cfg.cache_ttl)
                     .unwrap_or(true)
             }
@@ -398,11 +400,10 @@ impl LicenseClient {
     }
 
     /// Whether a PostHog flag (`{product}.{feature}`) is enabled.
-    /// Fail-closed: never-seen flags are OFF; `true` under domain bypass.
+    /// Fail-closed: never-seen flags are OFF. Domain bypass is license-only
+    /// and does NOT affect flag resolution; the PostHog snapshot is evaluated
+    /// normally (and refreshed) on bypass domains.
     pub async fn flag_enabled(self: &Arc<Self>, key: &str) -> bool {
-        if self.bypass_active() {
-            return true;
-        }
         self.schedule_refresh();
         match self.snapshot.load_full() {
             Some(snap) => snap.flags.get(key).copied().unwrap_or(false),

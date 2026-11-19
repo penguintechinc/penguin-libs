@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 
 /// License tiers, cumulative. `Free` is also spelled `community` by older
 /// servers — both parse to `Tier::Free`.
@@ -76,11 +76,11 @@ pub struct LicenseInfo {
     #[serde(default = "default_tier")]
     pub tier: Tier,
     /// Expiry timestamp.
-    #[serde(default)]
-    pub expires_at: Option<DateTime<Utc>>,
+    #[serde(default, with = "wire::option")]
+    pub expires_at: Option<OffsetDateTime>,
     /// Issue timestamp.
-    #[serde(default)]
-    pub issued_at: Option<DateTime<Utc>>,
+    #[serde(default, with = "wire::option")]
+    pub issued_at: Option<OffsetDateTime>,
     /// Per-feature entitlements.
     #[serde(default)]
     pub features: Vec<Feature>,
@@ -110,7 +110,7 @@ impl LicenseInfo {
             product: product.to_owned(),
             tier: Tier::Free,
             expires_at: None,
-            issued_at: Some(Utc::now()),
+            issued_at: Some(OffsetDateTime::now_utc()),
             features: Vec::new(),
             limits: serde_json::Value::Null,
             metadata: serde_json::Value::Null,
@@ -129,21 +129,24 @@ impl LicenseInfo {
     /// The grace window exists so a briefly unreachable license server
     /// cannot hard-cut a healthy customer at the moment of renewal; past
     /// it, entitlement fails closed.
-    pub fn is_live_at(&self, now: DateTime<Utc>, grace: Duration) -> bool {
+    pub fn is_live_at(&self, now: OffsetDateTime, grace: Duration) -> bool {
         let Some(expires_at) = self.expires_at else {
             return true;
         };
-        match chrono::Duration::from_std(grace) {
-            Ok(grace) => now <= expires_at + grace,
+        match time::Duration::try_from(grace)
+            .ok()
+            .and_then(|grace| expires_at.checked_add(grace))
+        {
+            Some(deadline) => now <= deadline,
             // Absurd grace value: fall back to strict expiry.
-            Err(_) => now <= expires_at,
+            None => now <= expires_at,
         }
     }
 
     /// Whether the license is still usable now, allowing `grace` beyond
     /// `expires_at`. See [`LicenseInfo::is_live_at`].
     pub fn is_live(&self, grace: Duration) -> bool {
-        self.is_live_at(Utc::now(), grace)
+        self.is_live_at(OffsetDateTime::now_utc(), grace)
     }
 
     /// Returns this license if it is still live, else the community
@@ -188,7 +191,67 @@ pub struct Snapshot {
     /// Last successfully fetched flag decisions (PostHog `/decide`).
     pub flags: HashMap<String, bool>,
     /// When this snapshot was fetched.
-    pub fetched_at: DateTime<Utc>,
+    pub fetched_at: OffsetDateTime,
+}
+
+/// RFC 3339 wire format for timestamps, byte-identical to the previous
+/// chrono `DateTime<Utc>` serde output: always UTC with a `Z` suffix and the
+/// fractional part omitted when zero, else 3, 6 or 9 digits.
+mod wire {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer, de, ser};
+    use time::format_description::well_known::Rfc3339;
+    use time::{OffsetDateTime, UtcOffset};
+
+    fn format(dt: OffsetDateTime) -> Result<String, time::error::Format> {
+        let dt = dt.to_offset(UtcOffset::UTC);
+        let nanos = dt.nanosecond();
+        let digits = if nanos == 0 {
+            0
+        } else if nanos.is_multiple_of(1_000_000) {
+            3
+        } else if nanos.is_multiple_of(1_000) {
+            6
+        } else {
+            9
+        };
+        let base = dt.replace_nanosecond(0).unwrap_or(dt).format(&Rfc3339)?;
+        if digits == 0 {
+            return Ok(base);
+        }
+        let frac = format!("{nanos:09}");
+        // `base` is `YYYY-MM-DDTHH:MM:SSZ`; splice the fraction before `Z`.
+        let secs = base.trim_end_matches('Z');
+        Ok(format!("{secs}.{}Z", &frac[..digits]))
+    }
+
+    fn parse(raw: &str) -> Result<OffsetDateTime, time::error::Parse> {
+        OffsetDateTime::parse(raw, &Rfc3339).map(|dt| dt.to_offset(UtcOffset::UTC))
+    }
+
+    /// `Option<OffsetDateTime>` as an optional RFC 3339 string.
+    pub mod option {
+        use super::*;
+
+        /// Serializes `Some` as RFC 3339 and `None` as null.
+        pub fn serialize<S: Serializer>(
+            value: &Option<OffsetDateTime>,
+            ser: S,
+        ) -> Result<S::Ok, S::Error> {
+            match value {
+                Some(dt) => format(*dt).map_err(ser::Error::custom)?.serialize(ser),
+                None => ser.serialize_none(),
+            }
+        }
+
+        /// Deserializes an optional RFC 3339 string.
+        pub fn deserialize<'de, D: Deserializer<'de>>(
+            de: D,
+        ) -> Result<Option<OffsetDateTime>, D::Error> {
+            Option::<String>::deserialize(de)?
+                .map(|raw| parse(&raw).map_err(de::Error::custom))
+                .transpose()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -218,7 +281,7 @@ mod tests {
         assert!(!info.feature_entitled("sso"));
     }
 
-    fn licensed(expires_at: Option<DateTime<Utc>>) -> LicenseInfo {
+    fn licensed(expires_at: Option<OffsetDateTime>) -> LicenseInfo {
         LicenseInfo {
             valid: true,
             customer: "ACME".to_owned(),
@@ -244,8 +307,8 @@ mod tests {
     #[test]
     fn expiry_is_enforced_past_the_grace_window() {
         let grace = Duration::from_secs(72 * 60 * 60);
-        let now = Utc::now();
-        let expired = licensed(Some(now - chrono::Duration::hours(100)));
+        let now = OffsetDateTime::now_utc();
+        let expired = licensed(Some(now - time::Duration::hours(100)));
 
         assert!(!expired.is_live(grace));
         let enforced = expired.enforce_expiry(grace);
@@ -256,8 +319,8 @@ mod tests {
     #[test]
     fn expiry_within_grace_still_entitles() {
         let grace = Duration::from_secs(72 * 60 * 60);
-        let now = Utc::now();
-        let just_expired = licensed(Some(now - chrono::Duration::hours(1)));
+        let now = OffsetDateTime::now_utc();
+        let just_expired = licensed(Some(now - time::Duration::hours(1)));
 
         assert!(just_expired.is_live(grace));
         assert!(just_expired.enforce_expiry(grace).feature_entitled("sso"));
@@ -266,7 +329,7 @@ mod tests {
     #[test]
     fn live_license_and_never_expiring_license_are_entitled() {
         let grace = Duration::from_secs(0);
-        let future = licensed(Some(Utc::now() + chrono::Duration::days(30)));
+        let future = licensed(Some(OffsetDateTime::now_utc() + time::Duration::days(30)));
         assert!(future.is_live(grace));
         assert!(future.enforce_expiry(grace).feature_entitled("sso"));
 
@@ -311,18 +374,42 @@ mod tests {
 
     #[test]
     fn absurd_grace_value_falls_back_to_strict_expiry() {
-        // chrono::Duration::from_std() fails for durations with too many seconds.
-        // Use a duration that exceeds chrono's limits to trigger the Err(_) path.
-        let absurd_grace = Duration::from_secs(u64::MAX / 2);
-        let grace_as_chrono = chrono::Duration::from_std(absurd_grace);
+        // time::Duration::try_from(std Duration) fails for durations with too
+        // many seconds; that path must fall back to strict expiry.
+        let absurd_grace = Duration::from_secs(u64::MAX);
         assert!(
-            grace_as_chrono.is_err(),
-            "Expected grace to exceed chrono limits"
+            time::Duration::try_from(absurd_grace).is_err(),
+            "Expected grace to exceed time limits"
         );
+        // A grace that converts but overflows the timestamp range is also
+        // strict expiry, never a panic.
+        let overflow_grace = Duration::from_secs(u64::MAX / 2);
 
-        let now = Utc::now();
-        let just_expired = licensed(Some(now - chrono::Duration::hours(1)));
+        let now = OffsetDateTime::now_utc();
+        let just_expired = licensed(Some(now - time::Duration::hours(1)));
         // With absurd grace, is_live_at should fall back to strict expiry without grace
         assert!(!just_expired.is_live_at(now, absurd_grace));
+        assert!(!just_expired.is_live_at(now, overflow_grace));
+    }
+
+    /// Wire format must match the previous chrono output byte for byte.
+    #[test]
+    fn timestamps_round_trip_in_chrono_compatible_rfc3339() {
+        for (raw, expected) in [
+            ("2027-01-01T00:00:00Z", "2027-01-01T00:00:00Z"),
+            ("2027-01-01T00:00:00.5Z", "2027-01-01T00:00:00.500Z"),
+            ("2027-01-01T00:00:00.123456Z", "2027-01-01T00:00:00.123456Z"),
+            (
+                "2027-01-01T00:00:00.123456789Z",
+                "2027-01-01T00:00:00.123456789Z",
+            ),
+            ("2027-01-01T02:00:00+02:00", "2027-01-01T00:00:00Z"),
+        ] {
+            let json = format!(r#"{{"expires_at":"{raw}","issued_at":null}}"#);
+            let info: LicenseInfo = serde_json::from_str(&json).expect("deserialize");
+            let out = serde_json::to_value(&info).expect("serialize");
+            assert_eq!(out["expires_at"], expected, "input {raw}");
+            assert!(out["issued_at"].is_null());
+        }
     }
 }
