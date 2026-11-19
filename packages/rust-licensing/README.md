@@ -19,7 +19,10 @@ Rust port of the `penguin-licensing` PyPI package semantics.
   or build profile that disables license checking.
 - **Domain bypass** (the only bypass): deployments on `*.penguincloud.io`,
   `*.penguintech.cloud`, plus product `.app` domains registered in code via
-  `with_bypass_domain`, evaluate everything as enabled. The deployment
+  `with_bypass_domain`, satisfy **license/entitlement** checks only
+  (`check_feature` passes, tier is Enterprise). Bypass never forces PostHog
+  flags or kill switches on: `flag_enabled` resolves from the PostHog
+  snapshot (unset = OFF) on every domain. The deployment
   domain itself is set in code (`with_deployment_domain`) and is **never**
   read from the environment — see [Environment](#environment).
 - **Fail-closed by default**: the cached snapshot is replaced with

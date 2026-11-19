@@ -155,14 +155,79 @@ async fn no_license_key_is_valid_community() {
 // --- Finding 1: no env-var bypass -----------------------------------------
 
 #[tokio::test]
-async fn domain_bypass_grants_everything_without_network() {
+async fn domain_bypass_grants_entitlement_without_network() {
     let cfg = offline_config().with_deployment_domain("skauswatch.penguintech.cloud");
 
     let client = LicenseClient::new(cfg).unwrap();
     assert!(client.bypass_active());
     assert!(client.check_feature("sso").await);
-    assert!(client.flag_enabled("skauswatch.icebox").await);
     assert_eq!(client.tier().await, Tier::Enterprise);
+    // regression: bypass is license-only (2026-11-12) -- never forces flags on.
+    assert!(!client.flag_enabled("skauswatch.icebox").await);
+}
+
+/// regression: bypass is license-only (2026-11-12). On a bypass domain an
+/// unset flag is OFF, an explicitly-off flag is OFF, an explicitly-on flag
+/// (or variant) is ON, and entitlement/tier still pass.
+#[tokio::test]
+async fn bypass_flags_follow_posthog_snapshot() {
+    let server = MockServer::start().await;
+    mock_validate(&server, validate_body()).await;
+    mock_decide(
+        &server,
+        serde_json::json!({
+            "skauswatch.on": true,
+            "skauswatch.off": false,
+            "skauswatch.variant": "variant-b"
+        }),
+    )
+    .await;
+
+    let cfg = test_config(&server).with_deployment_domain("skauswatch.penguintech.cloud");
+    let client = LicenseClient::new(cfg).unwrap();
+    assert!(client.bypass_active());
+    client.refresh().await.unwrap();
+
+    assert!(client.flag_enabled("skauswatch.on").await);
+    assert!(client.flag_enabled("skauswatch.variant").await);
+    assert!(!client.flag_enabled("skauswatch.off").await);
+    assert!(!client.flag_enabled("skauswatch.unset").await);
+    assert!(client.check_feature("anything").await);
+    assert_eq!(client.tier().await, Tier::Enterprise);
+}
+
+/// regression: bypass is license-only (2026-11-12). The snapshot refresh
+/// scheduled by `flag_enabled` still happens on a bypass domain, so PostHog
+/// values arrive and flip the flag ON without an explicit `refresh()`.
+#[tokio::test]
+async fn bypass_flag_read_still_schedules_snapshot_refresh() {
+    let server = MockServer::start().await;
+    mock_validate(&server, validate_body()).await;
+    mock_decide(&server, serde_json::json!({ "skauswatch.on": true })).await;
+
+    let cfg = test_config(&server).with_deployment_domain("skauswatch.penguintech.cloud");
+    let client = LicenseClient::new(cfg).unwrap();
+    assert!(client.bypass_active());
+
+    // Empty cache: first read is OFF but must kick off a background refresh.
+    assert!(!client.flag_enabled("skauswatch.on").await);
+    let mut seen = false;
+    for _ in 0..50 {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        if client.flag_enabled("skauswatch.on").await {
+            seen = true;
+            break;
+        }
+    }
+    assert!(seen, "bypass client never refreshed the PostHog snapshot");
+    let decides = server
+        .received_requests()
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|r| r.url.path() == "/decide/")
+        .count();
+    assert!(decides >= 1, "no /decide/ request received ({decides})");
 }
 
 #[tokio::test]

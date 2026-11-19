@@ -110,8 +110,10 @@ impl LicenseClient {
     }
 
     /// Whether gating is bypassed: the deployment domain is on the bypass
-    /// list. Bypass means every feature, flag, and tier check evaluates as
-    /// enabled/Enterprise.
+    /// list. Bypass satisfies LICENSE/entitlement checks only:
+    /// [`LicenseClient::check_feature`] passes and [`LicenseClient::tier`] is
+    /// Enterprise. It never forces PostHog flags or kill switches on; see
+    /// [`LicenseClient::flag_enabled`].
     ///
     /// Bypass is domain-based ONLY — there is no environment variable,
     /// CLI flag, or build profile that disables enforcement.
@@ -398,11 +400,10 @@ impl LicenseClient {
     }
 
     /// Whether a PostHog flag (`{product}.{feature}`) is enabled.
-    /// Fail-closed: never-seen flags are OFF; `true` under domain bypass.
+    /// Fail-closed: never-seen flags are OFF. Domain bypass is license-only
+    /// and does NOT affect flag resolution; the PostHog snapshot is evaluated
+    /// normally (and refreshed) on bypass domains.
     pub async fn flag_enabled(self: &Arc<Self>, key: &str) -> bool {
-        if self.bypass_active() {
-            return true;
-        }
         self.schedule_refresh();
         match self.snapshot.load_full() {
             Some(snap) => snap.flags.get(key).copied().unwrap_or(false),
