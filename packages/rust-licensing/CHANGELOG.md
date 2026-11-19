@@ -1,6 +1,6 @@
 # penguin-licensing (Rust) Changelog
 
-## 0.2.0
+## 0.1.0 (Unreleased)
 
 - **BREAKING (behaviour, for callers):** `LicenseClient::flag_enabled` no longer
   returns `true` on a domain-bypass client. Bypass domains (`*.penguincloud.io`,
@@ -10,7 +10,5 @@
   snapshot (never-seen = OFF) on every domain, and the snapshot refresh keeps
   running on bypass domains. Consumers that relied on bypass forcing flags on
   must set explicit PostHog values (or an env baseline in their own code).
-
-## 0.1.0
 
 - Initial release
