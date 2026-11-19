@@ -11,4 +11,9 @@
   running on bypass domains. Consumers that relied on bypass forcing flags on
   must set explicit PostHog values (or an env baseline in their own code).
 
+- **BREAKING (API):** replaced the direct `chrono` dependency (RUSTSEC-2026-0543,
+  unmaintained) with `time`. `LicenseInfo::{expires_at, issued_at}`,
+  `Snapshot::fetched_at` and `LicenseInfo::is_live_at` now use
+  `time::OffsetDateTime` instead of `chrono::DateTime<Utc>`. The RFC 3339 wire
+  format is byte-identical (UTC `Z`, fractional digits omitted/3/6/9).
 - Initial release

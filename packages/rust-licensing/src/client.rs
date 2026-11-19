@@ -12,10 +12,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwapOption;
-use chrono::Utc;
 use reqwest::header::{AUTHORIZATION, HeaderValue};
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use time::OffsetDateTime;
 use tokio::sync::Mutex;
 
 use crate::config::LicenseConfig;
@@ -250,7 +250,7 @@ impl LicenseClient {
         self.snapshot.store(Some(Arc::new(Snapshot {
             info,
             flags,
-            fetched_at: Utc::now(),
+            fetched_at: OffsetDateTime::now_utc(),
         })));
     }
 
@@ -315,8 +315,8 @@ impl LicenseClient {
     fn is_stale(&self) -> bool {
         match self.snapshot.load_full() {
             Some(snap) => {
-                let age = Utc::now().signed_duration_since(snap.fetched_at);
-                age.to_std()
+                let age = OffsetDateTime::now_utc() - snap.fetched_at;
+                Duration::try_from(age)
                     .map(|a| a >= self.cfg.cache_ttl)
                     .unwrap_or(true)
             }

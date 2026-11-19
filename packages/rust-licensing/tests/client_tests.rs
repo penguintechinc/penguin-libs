@@ -30,6 +30,13 @@ fn offline_config() -> LicenseConfig {
     cfg
 }
 
+/// RFC 3339 timestamp `hours` in the past.
+fn rfc3339_ago(hours: i64) -> String {
+    (time::OffsetDateTime::now_utc() - time::Duration::hours(hours))
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap()
+}
+
 fn validate_body() -> serde_json::Value {
     body_expiring("2027-01-01T00:00:00Z")
 }
@@ -471,7 +478,7 @@ async fn transport_error_retains_cached_snapshot() {
 #[tokio::test]
 async fn expired_license_within_grace_is_still_entitled() {
     let server = MockServer::start().await;
-    let expired_1h_ago = (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
+    let expired_1h_ago = rfc3339_ago(1);
     mock_validate(&server, body_expiring(&expired_1h_ago)).await;
     mock_decide(&server, serde_json::json!({})).await;
 
@@ -488,7 +495,7 @@ async fn expired_license_within_grace_is_still_entitled() {
 #[tokio::test]
 async fn expired_license_past_grace_falls_back_to_community() {
     let server = MockServer::start().await;
-    let expired_100h_ago = (chrono::Utc::now() - chrono::Duration::hours(100)).to_rfc3339();
+    let expired_100h_ago = rfc3339_ago(100);
     mock_validate(&server, body_expiring(&expired_100h_ago)).await;
     mock_decide(&server, serde_json::json!({})).await;
 

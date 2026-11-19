@@ -10,7 +10,9 @@ all-features = true
 # Fail on any known vulnerability or unmaintained dependency.
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "deny"
-ignore = []
+ignore = [
+    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained; TRANSITIVE dev-only via axum-test -> expect-json, cannot be removed until upstream drops chrono - expires 2027-01-31" },
+]
 
 [licenses]
 # The crate itself is MIT-licensed. Dependencies must be permissive
