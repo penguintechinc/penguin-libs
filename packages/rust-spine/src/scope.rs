@@ -159,17 +159,17 @@ mod tests {
     }
 
     #[rstest]
-    #[case("acme", Some("main".to_string()), "waddles.bot.commands.default",
-        "waddles:t:acme:c:main:app:waddles.bot.commands.default:action",
-        "waddles:t:acme:c:main:app:waddles.bot.commands.default:cfg",
-        "waddles:t:acme:c:main:app:waddles.bot.commands.default:state")]
+    #[case("acme", Some("main".to_string()), "penguintechinc.waddles.commands",
+        "waddles:t:acme:c:main:app:penguintechinc.waddles.commands:action",
+        "waddles:t:acme:c:main:app:penguintechinc.waddles.commands:cfg",
+        "waddles:t:acme:c:main:app:penguintechinc.waddles.commands:state")]
     #[case(
         "global",
         None,
-        "waddles.bot.commands.default",
-        "waddles:t:global:c:_tenant:app:waddles.bot.commands.default:action",
-        "waddles:t:global:c:_tenant:app:waddles.bot.commands.default:cfg",
-        "waddles:t:global:c:_tenant:app:waddles.bot.commands.default:state"
+        "penguintechinc.waddles.commands",
+        "waddles:t:global:c:_tenant:app:penguintechinc.waddles.commands:action",
+        "waddles:t:global:c:_tenant:app:penguintechinc.waddles.commands:cfg",
+        "waddles:t:global:c:_tenant:app:penguintechinc.waddles.commands:state"
     )]
     fn app_keys_match_spec_shape(
         #[case] tenant: &str,
@@ -201,7 +201,7 @@ mod tests {
 
     #[rstest]
     #[case("waddles:t:acme:c:main:src:twitch:tw-channelA:events", Some(("acme".to_string(), Some("main".to_string()))))]
-    #[case("waddles:t:global:c:_tenant:app:waddles.bot.commands.default:action", Some(("global".to_string(), None)))]
+    #[case("waddles:t:global:c:_tenant:app:penguintechinc.waddles.commands:action", Some(("global".to_string(), None)))]
     #[case("not-a-spine-key", None)]
     #[case("waddles:dlq:process", None)]
     fn parse_scope_from_key_recovers_tenant_and_community(

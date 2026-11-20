@@ -318,7 +318,7 @@ mod tests {
             "schema_version": 2,
             "tenant": TENANT,
             "community": COMMUNITY,
-            "app_id": "waddles.bot.commands.default",
+            "app_id": "penguintechinc.waddles.commands",
             "stage": "action",
             "event": {
                 "platform": "twitch",
@@ -520,7 +520,7 @@ mod tests {
             "schema_version": 2,
             "tenant": TENANT,
             "community": COMMUNITY,
-            "app_id": "waddles.bot.commands.default",
+            "app_id": "penguintechinc.waddles.commands",
             "stage": "action",
             "event": {
                 "platform": "twitch",
@@ -581,7 +581,7 @@ mod tests {
             "community": COMMUNITY,
             "tenant_id": TENANT_ID,
             "community_id": COMMUNITY_ID,
-            "app_id": "waddles.bot.commands.default",
+            "app_id": "penguintechinc.waddles.commands",
             "stage": "action",
             "event": {
                 "platform": "twitch",
