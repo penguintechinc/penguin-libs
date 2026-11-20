@@ -82,6 +82,12 @@ pub struct HelloBody {
     /// The wasmtime GC collector in use, e.g. `"drc"`.
     pub collector: String,
     pub sandbox: SandboxInfo,
+    /// Stable executor identity (StatefulSet pod name, e.g.
+    /// `waddlebot-svc-bundles-executor-0`) used by stages for slot
+    /// ownership. Optional for back-compat: older executors omit it, and it
+    /// is not serialized when `None`, so older stages never see the key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executor_id: Option<String>,
 }
 
 /// The executor's reported sandbox runtime and whether the stage has

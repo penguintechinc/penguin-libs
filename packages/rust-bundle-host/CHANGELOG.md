@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0]
+
+### Added
+- `HelloBody.executor_id: Option<String>`: stable executor identity sent in
+  the executor->stage handshake for slot ownership. `#[serde(default)]` and
+  skipped when `None`, so old and new peers interoperate on the wire.
+
+### Changed (BREAKING for struct literals)
+- Downstream `HelloBody { .. }` literals must set `executor_id`. Hence
+  `0.5.0` -> `0.6.0`.
+
 ## [0.5.0]
 
 ### Added

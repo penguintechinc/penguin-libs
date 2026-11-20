@@ -26,8 +26,38 @@ fn hello_frame() -> Frame {
                 runtime: "gvisor".to_string(),
                 verified: true,
             },
+            executor_id: None,
         }),
     )
+}
+
+/// An older executor's `hello` (no `executor_id` key) still decodes, and
+/// `None` is never serialized (so older stages never see the key).
+#[test]
+fn hello_without_executor_id_decodes_from_old_peer() {
+    let value = serde_json::to_value(hello_frame()).expect("serialize");
+    assert!(
+        !value.to_string().contains("executor_id"),
+        "None must not be serialized: {value}"
+    );
+    let frame: Frame = serde_json::from_value(value).expect("old hello decodes");
+    match frame.message {
+        Message::Hello(h) => assert_eq!(h.executor_id, None),
+        other => panic!("expected hello, got {other:?}"),
+    }
+}
+
+/// A new executor's `executor_id` round-trips through the frame codec.
+#[test]
+fn hello_executor_id_round_trips() {
+    let mut frame = hello_frame();
+    if let Message::Hello(ref mut h) = frame.message {
+        h.executor_id = Some("waddlebot-svc-bundles-executor-0".to_string());
+    }
+    let json = serde_json::to_string(&frame).expect("serialize");
+    assert!(json.contains("\"executor_id\":\"waddlebot-svc-bundles-executor-0\""));
+    let decoded: Frame = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(decoded, frame);
 }
 
 #[test]
