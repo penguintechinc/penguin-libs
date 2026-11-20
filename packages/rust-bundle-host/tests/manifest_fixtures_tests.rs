@@ -27,7 +27,7 @@ fn valid_basic_manifest_passes_every_rule() {
     let raw = read_fixture(VALID_DIR, "basic.yaml");
     let ctx = ValidationContext::default();
     let manifest = validate(&raw, &ctx).expect("golden valid manifest must pass all 31 rules");
-    assert_eq!(manifest.app_id, "waddles.socials.music.default");
+    assert_eq!(manifest.app_id, "penguintechinc.waddles.music");
     assert_eq!(manifest.schema_version, 2);
     assert!(manifest.stages.contains(&"process".to_string()));
     assert!(manifest.stages.contains(&"action".to_string()));
@@ -65,8 +65,8 @@ fn invalid_cases() -> Vec<(&'static str, Reason, ValidationContext<'static>)> {
             ValidationContext::default(),
         ),
         (
-            "v06_feature_prefix_mismatch.yaml",
-            Reason::FeaturePrefixMismatch,
+            "v03_legacy_four_segment_app_id.yaml",
+            Reason::NotNamespaced,
             ValidationContext::default(),
         ),
         (

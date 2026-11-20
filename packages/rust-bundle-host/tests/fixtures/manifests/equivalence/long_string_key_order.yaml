@@ -1,8 +1,8 @@
 schema_version: 2
-app_id: waddles.socials.music.default
+app_id: penguintechinc.waddles.music
 name: Music
 version: 3.0.0
-feature: waddles.socials.music
+feature: socials.music
 module: socials
 provider: builtin
 language: python
@@ -14,4 +14,4 @@ stages:
 data:
   tables: [t1, t2, t3]
 routs_to: [x]
-routes_to: [waddles.socials.music.default]
+routes_to: [penguintechinc.waddles.music]

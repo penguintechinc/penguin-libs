@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed (BREAKING, hard cutover; folded into the untagged 0.6.0)
+- V3: `app_id` must match exactly `^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$`
+  (`<github-org>.<repo>.<bundle-name>`). The legacy four-segment
+  `waddles.<module>.<feature>.<app>` form is rejected.
+- V4: `feature` is optional and descriptive (dotted lowercase tokens, max
+  128 chars); defaults to `app_id` minus its last segment.
+- V6 retired: feature/module no longer derive from `app_id`;
+  `Reason::FeaturePrefixMismatch` is no longer emitted. `module` must still
+  be a known module (V5).
+
 ## [0.6.0]
 
 ### Added

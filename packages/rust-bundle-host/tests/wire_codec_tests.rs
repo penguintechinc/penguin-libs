@@ -104,11 +104,11 @@ fn load_and_loaded_frames_round_trip() {
     let load = Frame::new(
         7,
         Message::Load(LoadBody {
-            app_id: "waddles.socials.music.default".to_string(),
+            app_id: "penguintechinc.waddles.music".to_string(),
             version: "3.0.0".to_string(),
             digest: format!("sha256:{}", "a".repeat(64)),
-            component_key: "bundles/waddles.socials.music.default/3.0.0/deadbeef.wasm".to_string(),
-            sidecar_key: "bundles/waddles.socials.music.default/3.0.0/deadbeef.json".to_string(),
+            component_key: "bundles/penguintechinc.waddles.music/3.0.0/deadbeef.wasm".to_string(),
+            sidecar_key: "bundles/penguintechinc.waddles.music/3.0.0/deadbeef.json".to_string(),
             capabilities: vec![
                 CapabilityKind::Http,
                 CapabilityKind::Kv,
@@ -131,7 +131,7 @@ fn load_and_loaded_frames_round_trip() {
     let loaded = Frame::new(
         7,
         Message::Loaded(LoadedBody {
-            app_id: "waddles.socials.music.default".to_string(),
+            app_id: "penguintechinc.waddles.music".to_string(),
             digest: format!("sha256:{}", "a".repeat(64)),
             precompile_ms: 42,
             exports: vec!["transform".to_string()],
@@ -152,7 +152,7 @@ fn unload_and_unloaded_frames_round_trip() {
     let unload = Frame::new(
         9,
         Message::Unload(UnloadBody {
-            app_id: "waddles.socials.music.default".to_string(),
+            app_id: "penguintechinc.waddles.music".to_string(),
             digest: format!("sha256:{}", "b".repeat(64)),
             tenant_id: 1,
             community_id: 0,
@@ -161,7 +161,7 @@ fn unload_and_unloaded_frames_round_trip() {
     let unloaded = Frame::new(
         9,
         Message::Unloaded(UnloadedBody {
-            app_id: "waddles.socials.music.default".to_string(),
+            app_id: "penguintechinc.waddles.music".to_string(),
             digest: format!("sha256:{}", "b".repeat(64)),
         }),
     );
@@ -178,7 +178,7 @@ fn invoke_frame_carries_optional_trace_context() {
     let with_trace = Frame::new(
         3,
         Message::Invoke(InvokeBody {
-            app_id: "waddles.socials.music.default".to_string(),
+            app_id: "penguintechinc.waddles.music".to_string(),
             digest: format!("sha256:{}", "c".repeat(64)),
             export: ExportKind::Transform,
             payload: serde_json::json!({"platform": "twitch"}),
@@ -199,7 +199,7 @@ fn invoke_frame_carries_optional_trace_context() {
     let without_trace = Frame::new(
         4,
         Message::Invoke(InvokeBody {
-            app_id: "waddles.socials.music.default".to_string(),
+            app_id: "penguintechinc.waddles.music".to_string(),
             digest: format!("sha256:{}", "c".repeat(64)),
             export: ExportKind::Dispatch,
             payload: serde_json::Value::Null,
@@ -221,7 +221,7 @@ fn host_call_and_host_result_frames_round_trip_both_outcomes() {
     let host_call = Frame::new(
         11,
         Message::HostCall(HostCallBody {
-            app_id: "waddles.socials.music.default".to_string(),
+            app_id: "penguintechinc.waddles.music".to_string(),
             capability: CapabilityKind::Db,
             op: "execute".to_string(),
             args: serde_json::json!({"statement": "select 1"}),
@@ -351,7 +351,7 @@ async fn write_frame_rejects_a_payload_over_max_frame_bytes() {
     let oversized = Frame::new(
         1,
         Message::Invoke(InvokeBody {
-            app_id: "waddles.socials.music.default".to_string(),
+            app_id: "penguintechinc.waddles.music".to_string(),
             digest: format!("sha256:{}", "a".repeat(64)),
             export: ExportKind::Transform,
             payload: serde_json::Value::String("x".repeat(MAX_FRAME_BYTES as usize + 1024)),
@@ -496,7 +496,7 @@ fn connector_invoke_frame_round_trips_for_every_connector_export() {
         let frame = Frame::new(
             21,
             Message::Invoke(InvokeBody {
-                app_id: "waddles.core.connector.twitch".to_string(),
+                app_id: "penguintechinc.waddles.connector-twitch".to_string(),
                 digest: format!("sha256:{}", "d".repeat(64)),
                 export: kind,
                 payload: serde_json::json!({"ctx": {"platform": "twitch"}}),
@@ -528,7 +528,7 @@ async fn connector_export_round_trips_over_the_framed_wire_and_correlation_table
         let invoke = Frame::new(
             id,
             Message::Invoke(InvokeBody {
-                app_id: "waddles.core.connector.twitch".to_string(),
+                app_id: "penguintechinc.waddles.connector-twitch".to_string(),
                 digest: format!("sha256:{}", "e".repeat(64)),
                 export: kind,
                 payload: serde_json::json!({"bytes": [1, 2, 3]}),
@@ -612,7 +612,7 @@ fn connector_build_request_invoke_frame_round_trips_with_action_payload() {
     let frame = Frame::new(
         77,
         Message::Invoke(InvokeBody {
-            app_id: "waddles.core.connector.twitch".to_string(),
+            app_id: "penguintechinc.waddles.connector-twitch".to_string(),
             digest: format!("sha256:{}", "f".repeat(64)),
             export: ExportKind::ConnectorBuildRequest,
             payload: serde_json::json!({

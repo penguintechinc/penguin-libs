@@ -14,20 +14,23 @@ use regex::Regex;
 use super::error::{ManifestError, Reason};
 use super::schema::{Manifest, RawConsumeRule, RawManifest};
 
-const SEGMENT_PATTERN: &str = "[a-z0-9][a-z0-9_-]*";
-
+/// `app_id` is exactly `<github-org>.<repo>.<bundle-name>`: three
+/// dot-separated segments, each lowercase alphanumeric plus `-`. The
+/// legacy four-segment `waddles.<module>.<feature>.<app>` form is rejected.
 static APP_ID_RE: LazyLock<Regex> = LazyLock::new(|| {
     #[allow(clippy::unwrap_used)] // infallible: a literal regex built once at process startup.
-    Regex::new(&format!(
-        r"^waddles\.{SEGMENT_PATTERN}\.{SEGMENT_PATTERN}\.{SEGMENT_PATTERN}$"
-    ))
-    .unwrap()
+    Regex::new(r"^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$").unwrap()
 });
 
+/// `feature` is descriptive only: dotted lowercase tokens with no relation
+/// to `app_id`.
 static FEATURE_RE: LazyLock<Regex> = LazyLock::new(|| {
     #[allow(clippy::unwrap_used)] // infallible: a literal regex built once at process startup.
-    Regex::new(&format!(r"^waddles\.{SEGMENT_PATTERN}\.{SEGMENT_PATTERN}$")).unwrap()
+    Regex::new(r"^[a-z0-9][a-z0-9_-]*(\.[a-z0-9][a-z0-9_-]*)*$").unwrap()
 });
+
+/// Maximum length of the descriptive `feature` id.
+const FEATURE_MAX_LEN: usize = 128;
 
 /// SemVer 2.0.0 core + optional pre-release/build metadata, ported
 /// verbatim from `app_manifest.py::_SEMVER_RE`.
@@ -182,7 +185,6 @@ pub fn validate(raw: &RawManifest, ctx: &ValidationContext<'_>) -> Result<Manife
     let app_id = require_str(raw.app_id.as_deref(), "app_id")?;
     let name = require_str(raw.name.as_deref(), "name")?;
     let version = require_str(raw.version.as_deref(), "version")?;
-    let feature = require_str(raw.feature.as_deref(), "feature")?;
     let module = require_str(raw.module.as_deref(), "module")?;
     let provider = require_str(raw.provider.as_deref(), "provider")?;
     let language = require_str(raw.language.as_deref(), "language")?;
@@ -191,19 +193,24 @@ pub fn validate(raw: &RawManifest, ctx: &ValidationContext<'_>) -> Result<Manife
     // V2: version is valid SemVer 2.0.0.
     require_semver(version, "version")?;
 
-    // V3: app_id matches the four-segment pattern.
+    // V3: app_id matches the three-segment `<github-org>.<repo>.<bundle-name>` pattern.
     if !APP_ID_RE.is_match(app_id) {
         return Err(ManifestError::new(
             Reason::NotNamespaced,
-            format!("app_id {app_id:?} must be namespaced 'waddles.<module>.<feature>.<app>'"),
+            format!("app_id {app_id:?} must be '<github-org>.<repo>.<bundle-name>'"),
         ));
     }
 
-    // V4: feature matches the three-segment pattern.
-    if !FEATURE_RE.is_match(feature) {
+    // V4: feature is optional and descriptive; when absent it defaults to
+    // app_id minus its last segment. It must be dotted lowercase tokens.
+    let feature = match raw.feature.as_deref() {
+        Some(f) if !f.trim().is_empty() => f,
+        _ => app_id.rsplit_once('.').map_or(app_id, |(prefix, _)| prefix),
+    };
+    if feature.len() > FEATURE_MAX_LEN || !FEATURE_RE.is_match(feature) {
         return Err(ManifestError::new(
             Reason::NotNamespaced,
-            format!("feature {feature:?} must be namespaced 'waddles.<module>.<feature>'"),
+            format!("feature {feature:?} is not a valid feature id"),
         ));
     }
 
@@ -215,27 +222,7 @@ pub fn validate(raw: &RawManifest, ctx: &ValidationContext<'_>) -> Result<Manife
         ));
     }
 
-    // V6: app_id's feature prefix equals feature, and module equals
-    // feature's second segment.
-    let app_id_feature_prefix = app_id
-        .rsplit_once('.')
-        .map(|(prefix, _)| prefix)
-        .unwrap_or(app_id);
-    if app_id_feature_prefix != feature {
-        return Err(ManifestError::new(
-            Reason::FeaturePrefixMismatch,
-            format!(
-                "app_id {app_id:?} implies feature {app_id_feature_prefix:?}, but manifest declares feature {feature:?}"
-            ),
-        ));
-    }
-    let feature_module_segment = feature.split('.').nth(1);
-    if feature_module_segment != Some(module) {
-        return Err(ManifestError::new(
-            Reason::FeaturePrefixMismatch,
-            format!("feature {feature:?} implies module {feature_module_segment:?}, but manifest declares module {module:?}"),
-        ));
-    }
+    // V6 (retired): feature/module no longer derive from app_id.
 
     // V7: provider is a known provider.
     if !KNOWN_PROVIDERS.contains(&provider) {
@@ -293,7 +280,7 @@ pub fn validate(raw: &RawManifest, ctx: &ValidationContext<'_>) -> Result<Manife
         if !APP_ID_RE.is_match(other_app_id) {
             return Err(ManifestError::new(
                 Reason::InvalidCompatAppId,
-                format!("compatible_with/incompatible_with entry {other_app_id:?} must be namespaced 'waddles.<module>.<feature>.<app>'"),
+                format!("compatible_with/incompatible_with entry {other_app_id:?} must be '<github-org>.<repo>.<bundle-name>'"),
             ));
         }
     }
@@ -527,7 +514,7 @@ pub fn validate(raw: &RawManifest, ctx: &ValidationContext<'_>) -> Result<Manife
         if !APP_ID_RE.is_match(target) {
             return Err(ManifestError::new(
                 Reason::InvalidRoutesToTarget,
-                format!("routes_to entry {target:?} must be a namespaced 'waddles.<module>.<feature>.<app>' with no wildcard"),
+                format!("routes_to entry {target:?} must be a '<github-org>.<repo>.<bundle-name>' app_id with no wildcard"),
             ));
         }
         if let Some(known) = ctx.known_app_ids {
@@ -775,10 +762,10 @@ mod tests {
         );
         RawManifest {
             schema_version: Some(2),
-            app_id: Some("waddles.socials.music.default".to_string()),
+            app_id: Some("penguintechinc.waddles.music".to_string()),
             name: Some("Music Station".to_string()),
             version: Some("3.0.0".to_string()),
-            feature: Some("waddles.socials.music".to_string()),
+            feature: Some("socials.music".to_string()),
             module: Some("socials".to_string()),
             provider: Some("builtin".to_string()),
             language: Some("python".to_string()),
@@ -789,14 +776,42 @@ mod tests {
     }
 
     #[test]
-    fn v6_second_condition_catches_a_module_that_does_not_match_features_second_segment() {
+    fn v3_rejects_legacy_four_segment_app_id() {
         let mut raw = base_manifest();
-        // feature "waddles.socials.music" implies module "socials"; declare
-        // a different, still-known module to isolate the second V6 check
-        // from the first (app_id/feature prefix already agree).
-        raw.module = Some("community".to_string());
-        let err = validate(&raw, &ValidationContext::default()).expect_err("must fail V6");
-        assert_eq!(err.reason, Reason::FeaturePrefixMismatch);
+        raw.app_id = Some("waddles.socials.music.default".to_string());
+        let err = validate(&raw, &ValidationContext::default()).expect_err("must fail V3");
+        assert_eq!(err.reason, Reason::NotNamespaced);
+    }
+
+    #[test]
+    fn v3_accepts_exactly_three_segments_and_rejects_other_shapes() {
+        for ok in [
+            "penguintechinc.waddles.music",
+            "psychoboy.penguintwitchbot.a-b",
+        ] {
+            let mut raw = base_manifest();
+            raw.app_id = Some(ok.to_string());
+            assert!(
+                validate(&raw, &ValidationContext::default()).is_ok(),
+                "{ok}"
+            );
+        }
+        for bad in ["a.b", "a.b.c.d", "A.b.c", "a.b.c_d", "a..c", "a.b.c.", ""] {
+            let mut raw = base_manifest();
+            raw.app_id = Some(bad.to_string());
+            assert!(
+                validate(&raw, &ValidationContext::default()).is_err(),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn v4_feature_is_optional_and_defaults_from_app_id() {
+        let mut raw = base_manifest();
+        raw.feature = None;
+        let m = validate(&raw, &ValidationContext::default()).expect("feature optional");
+        assert_eq!(m.feature, "penguintechinc.waddles");
     }
 
     #[test]

@@ -21,8 +21,9 @@ pub enum Reason {
     NotNamespaced,
     /// V5: `module` is not a member of `KNOWN_MODULES`.
     UnknownModule,
-    /// V6: `app_id`'s feature prefix (or module segment) disagrees with
-    /// the declared `feature`/`module`.
+    /// V6 (retired): no longer emitted now that `app_id` is
+    /// `<github-org>.<repo>.<bundle-name>` and `feature` is descriptive.
+    /// Kept so the serialized reason set stays stable for callers.
     FeaturePrefixMismatch,
     /// V7: `provider` is outside `{builtin, thirdparty}`.
     InvalidProvider,
