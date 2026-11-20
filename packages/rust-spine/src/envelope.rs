@@ -28,7 +28,7 @@ fn validate_rfc3339_millis_z(field: &str, s: &str) -> Result<(), EnvelopeError> 
             "{field:?} must be RFC 3339 UTC with a 'Z' suffix, got {s:?}"
         )));
     }
-    chrono::DateTime::parse_from_rfc3339(s)
+    time::OffsetDateTime::parse(s, &time::format_description::well_known::Rfc3339)
         .map(|_| ())
         .map_err(|e| env_err(format!("{field:?} is not valid RFC 3339: {s:?} ({e})")))
 }

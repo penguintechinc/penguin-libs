@@ -21,7 +21,9 @@ serde_json = { version = "=1.0.151", features = ["preserve_order"] }
 thiserror = "=2.0.20"
 tokio = { version = "=1.53.3", features = ["rt", "time", "sync", "macros", "net"] }
 tracing = "=0.1.44"
-chrono = { version = "=0.4.45", features = ["serde"] }
+# Replaced chrono (RUSTSEC-2026-0543, unmaintained) with `time`: only RFC 3339
+# parse-validation and a millisecond-UTC timestamp are needed.
+time = { version = "=0.3.55", default-features = false, features = ["std", "formatting", "parsing", "macros"] }
 uuid = { version = "=1.26.1", features = ["v4"] }
 # PEM pre-validation of VALKEY_CA_FILE (rustls::pki_types) plus the
 # process-level CryptoProvider every TLS handshake needs: redis's
