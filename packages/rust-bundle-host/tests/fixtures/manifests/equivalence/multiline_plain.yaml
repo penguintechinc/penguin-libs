@@ -1,9 +1,9 @@
 schema_version: 2
-app_id: waddles.socials.music.default
+app_id: penguintechinc.waddles.music
 name: spans
   two lines
 version: 3.0.0
-feature: waddles.socials.music
+feature: socials.music
 module: socials
 provider: builtin
 language: python

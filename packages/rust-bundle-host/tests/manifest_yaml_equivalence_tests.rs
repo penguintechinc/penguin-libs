@@ -111,7 +111,7 @@ const CASES: &[Case] = &[
     Case {
         file: "anchors_aliases.yaml",
         expected: Some(
-            r#"name=Some("Music") version=Some("3.0.0") schema_version=Some(2) is_default=false stages=["action"] limits=(2000,64,10) permissions=[] requires_scopes=None compatible_with=["waddles.socials.other.default"] incompatible_with=["waddles.socials.other.default"] egress=0 filters=[]"#,
+            r#"name=Some("Music") version=Some("3.0.0") schema_version=Some(2) is_default=false stages=["action"] limits=(2000,64,10) permissions=[] requires_scopes=None compatible_with=["penguintechinc.waddles.other"] incompatible_with=["penguintechinc.waddles.other"] egress=0 filters=[]"#,
         ),
         intentional_diff: None,
     },
@@ -752,10 +752,10 @@ fn basic_fixture_parses_and_validates_to_the_expected_manifest() {
         manifest,
         Manifest {
             schema_version: 2,
-            app_id: "waddles.socials.music.default".into(),
+            app_id: "penguintechinc.waddles.music".into(),
             name: "Music Station Song Request".into(),
             version: "3.0.0".into(),
-            feature: "waddles.socials.music".into(),
+            feature: "socials.music".into(),
             module: "socials".into(),
             provider: "builtin".into(),
             language: "python".into(),

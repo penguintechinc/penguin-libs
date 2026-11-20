@@ -101,10 +101,10 @@ fn manifest_error_display_includes_reason_and_detail() {
 
 const VALID_YAML: &str = r#"
 schema_version: 2
-app_id: waddles.socials.music.default
+app_id: penguintechinc.waddles.music
 name: Music Station
 version: 3.0.0
-feature: waddles.socials.music
+feature: socials.music
 module: socials
 provider: builtin
 language: python
@@ -121,7 +121,7 @@ stages:
 fn parse_yaml_succeeds_on_a_valid_document() {
     let manifest =
         parse_yaml(VALID_YAML, &ValidationContext::default()).expect("valid manifest parses");
-    assert_eq!(manifest.app_id, "waddles.socials.music.default");
+    assert_eq!(manifest.app_id, "penguintechinc.waddles.music");
 }
 
 #[test]
