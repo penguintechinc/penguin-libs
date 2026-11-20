@@ -4,6 +4,8 @@ All notable changes to `penguin-spine` are documented here.
 
 ## [Unreleased]
 
+- **BREAKING (hard cutover): `app_id` is `<github-org>.<repo>.<bundle-name>`.** `StageEnvelope` now validates `app_id` against exactly `^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$`; the legacy four-segment `waddles.<module>.<feature>.<app>` form is rejected. The `waddles.binding.v3` MAC domain tag is unchanged.
+
 - **0.2.0 -- numeric scope (schema v3).** `StageEnvelope` gains `tenant_id: Option<i64>` + `community_id: Option<i32>` (AUTHORITATIVE scope keys; `tenant`/`community` strings become display-only; `community_id` 0 = tenant-wide). `ENVELOPE_SCHEMA_VERSION` is now 3; `LEGACY_ENVELOPE_SCHEMA_VERSION` (2) is still accepted on read and MUST NOT carry the ids. New `compute_binding_mac_v3` binds both ids (domain-tagged, length-framed); `verify_binding` dispatches on `schema_version`, so mutating either id invalidates the MAC and v2/v3 MACs never cross-verify. **API change**: `StageEnvelope` struct literals must add `tenant_id`/`community_id`; v2 producers should stamp `LEGACY_ENVELOPE_SCHEMA_VERSION`.
 
 - Fixed `SpineClient::dead_letter` `XACK`ing the source entry under

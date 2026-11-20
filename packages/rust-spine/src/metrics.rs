@@ -77,12 +77,12 @@ mod tests {
         // NoopMetrics is that nothing observable happens.
         metrics.stream_event_written("twitch", "tw-channelA");
         metrics.stream_trimmed("waddles:t:acme:c:main:src:twitch:tw-channelA:events");
-        metrics.stream_claimed("waddles.bot.commands.default");
-        metrics.consumer_skipped("waddles.bot.commands.default", "event_type");
+        metrics.stream_claimed("penguintechinc.waddles.commands");
+        metrics.consumer_skipped("penguintechinc.waddles.commands", "event_type");
         metrics.dlq_written("process", "call_timeout");
-        metrics.group_lag("waddles.bot.commands.default", "some-stream", Some(3));
-        metrics.group_lag("waddles.bot.commands.default", "some-stream", None);
-        metrics.group_pending("waddles.bot.commands.default", "some-stream", 0);
+        metrics.group_lag("penguintechinc.waddles.commands", "some-stream", Some(3));
+        metrics.group_lag("penguintechinc.waddles.commands", "some-stream", None);
+        metrics.group_pending("penguintechinc.waddles.commands", "some-stream", 0);
         metrics.insecure_transport("valkey", "tls", false);
         metrics.tenant_boundary_violation("process", "tenant_mismatch");
     }

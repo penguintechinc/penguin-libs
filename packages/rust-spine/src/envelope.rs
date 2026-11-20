@@ -28,7 +28,7 @@ fn validate_rfc3339_millis_z(field: &str, s: &str) -> Result<(), EnvelopeError> 
             "{field:?} must be RFC 3339 UTC with a 'Z' suffix, got {s:?}"
         )));
     }
-    chrono::DateTime::parse_from_rfc3339(s)
+    time::OffsetDateTime::parse(s, &time::format_description::well_known::Rfc3339)
         .map(|_| ())
         .map_err(|e| env_err(format!("{field:?} is not valid RFC 3339: {s:?} ({e})")))
 }
@@ -149,20 +149,19 @@ pub const TENANT_WIDE_COMMUNITY_ID: i32 = 0;
 const BUNDLE_STAGES: [&str; 3] = ["ingest", "process", "action"];
 
 fn is_valid_app_id_segment(seg: &str) -> bool {
-    let mut chars = seg.chars();
-    let first_ok = matches!(chars.next(), Some(c) if c.is_ascii_lowercase() || c.is_ascii_digit());
-    first_ok && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+    !seg.is_empty()
+        && seg
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
-/// Validates `^waddles\.[a-z0-9][a-z0-9_-]*\.[a-z0-9][a-z0-9_-]*\.[a-z0-9][a-z0-9_-]*$`
-/// (spec Sec6.1.2) without pulling in a `regex` dependency for one pattern.
+/// Validates `^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$`, i.e. exactly
+/// `<github-org>.<repo>.<bundle-name>`, without pulling in a `regex`
+/// dependency for one pattern. The legacy four-segment `waddles.*` form is
+/// rejected.
 fn is_valid_app_id(s: &str) -> bool {
-    let mut parts = s.split('.');
-    if parts.next() != Some("waddles") {
-        return false;
-    }
-    let rest: Vec<&str> = parts.collect();
-    rest.len() == 3 && rest.iter().all(|seg| is_valid_app_id_segment(seg))
+    let parts: Vec<&str> = s.split('.').collect();
+    parts.len() == 3 && parts.iter().all(|seg| is_valid_app_id_segment(seg))
 }
 
 /// Validates a W3C `traceparent` (`00-<32 hex>-<16 hex>-<2 hex>`, spec Sec6.1.2).
@@ -375,7 +374,7 @@ pub struct StageEnvelope {
     /// `binding.mac`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub community_id: Option<i32>,
-    /// Matches `^waddles\.[a-z0-9][a-z0-9_-]*\.[a-z0-9][a-z0-9_-]*\.[a-z0-9][a-z0-9_-]*$`.
+    /// Matches `^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$` (`<github-org>.<repo>.<bundle-name>`).
     pub app_id: String,
     /// One of `"ingest"`, `"process"`, `"action"`.
     pub stage: String,
@@ -449,7 +448,7 @@ impl TryFrom<RawStageEnvelope> for StageEnvelope {
         }
         if !is_valid_app_id(&raw.app_id) {
             return Err(env_err(format!(
-                "'app_id' {:?} does not match the required waddles.<mod>.<feature>.<variant> shape",
+                "'app_id' {:?} does not match the required <github-org>.<repo>.<bundle-name> shape",
                 raw.app_id
             )));
         }
@@ -630,7 +629,7 @@ mod tests {
             "schema_version": 2,
             "tenant": "global",
             "community": null,
-            "app_id": "waddles.bot.commands.default",
+            "app_id": "penguintechinc.waddles.commands",
             "stage": "process",
             "event": valid_event_json(),
             "ts": "2026-09-14T12:00:00.123Z",
@@ -655,7 +654,7 @@ mod tests {
         assert_eq!(env.schema_version, 2);
         assert_eq!(env.tenant, "global");
         assert_eq!(env.community, None);
-        assert_eq!(env.app_id, "waddles.bot.commands.default");
+        assert_eq!(env.app_id, "penguintechinc.waddles.commands");
         assert_eq!(env.stage, "process");
         assert_eq!(env.target_app_id, None);
         assert_eq!(env.workstream_id, "8f14e45f-ceea-467e-adde-3fb5c9752730");
@@ -672,12 +671,12 @@ mod tests {
     fn community_scoped_and_target_app_id_set() {
         let mut v = valid_stage_envelope_json();
         v["community"] = json!("main");
-        v["target_app_id"] = json!("waddles.community.forums.default");
+        v["target_app_id"] = json!("penguintechinc.waddles.forums");
         let env: StageEnvelope = serde_json::from_value(v).unwrap();
         assert_eq!(env.community.as_deref(), Some("main"));
         assert_eq!(
             env.target_app_id.as_deref(),
-            Some("waddles.community.forums.default")
+            Some("penguintechinc.waddles.forums")
         );
     }
 
@@ -707,15 +706,32 @@ mod tests {
     #[test]
     fn rejects_app_id_with_too_few_segments() {
         let mut v = valid_stage_envelope_json();
-        v["app_id"] = json!("waddles.bot");
+        v["app_id"] = json!("penguintechinc.waddles");
         assert!(serde_json::from_value::<StageEnvelope>(v).is_err());
     }
 
     #[test]
-    fn rejects_app_id_without_waddles_prefix() {
+    fn rejects_legacy_four_segment_app_id() {
         let mut v = valid_stage_envelope_json();
-        v["app_id"] = json!("other.bot.commands.default");
+        v["app_id"] = json!("waddles.bot.commands.default");
         assert!(serde_json::from_value::<StageEnvelope>(v).is_err());
+    }
+
+    #[test]
+    fn accepts_any_github_org_prefix_and_rejects_bad_chars() {
+        for ok in ["psychoboy.penguintwitchbot.roll", "a-1.b-2.c-3"] {
+            let mut v = valid_stage_envelope_json();
+            v["app_id"] = json!(ok);
+            assert!(serde_json::from_value::<StageEnvelope>(v).is_ok(), "{ok}");
+        }
+        for bad in ["A.b.c", "a.b.c_d", "a..c", "a.b.c.", ".a.b", ""] {
+            let mut v = valid_stage_envelope_json();
+            v["app_id"] = json!(bad);
+            assert!(
+                serde_json::from_value::<StageEnvelope>(v).is_err(),
+                "{bad:?}"
+            );
+        }
     }
 
     #[test]
@@ -860,7 +876,7 @@ mod tests {
             "community": "main",
             "tenant_id": 10,
             "community_id": 7,
-            "app_id": "waddles.bot.commands.default",
+            "app_id": "penguintechinc.waddles.commands",
             "stage": "action",
             "event": valid_event_json(),
             "ts": "2026-09-14T12:00:00.123Z",

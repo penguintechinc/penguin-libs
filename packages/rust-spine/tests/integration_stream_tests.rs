@@ -29,7 +29,7 @@ fn sample_envelope() -> penguin_spine::StageEnvelope {
         "schema_version": 2,
         "tenant": "acme",
         "community": "main",
-        "app_id": "waddles.bot.commands.default",
+        "app_id": "penguintechinc.waddles.commands",
         "stage": "process",
         "event": {
             "platform": "twitch",
@@ -117,12 +117,12 @@ async fn ensure_group_creates_and_is_busygroup_tolerant() {
     client.append(&stream, &sample_envelope()).await.unwrap();
 
     client
-        .ensure_group(&stream, "waddles.bot.commands.default")
+        .ensure_group(&stream, "penguintechinc.waddles.commands")
         .await
         .unwrap();
     // A second call against the same group must not error.
     client
-        .ensure_group(&stream, "waddles.bot.commands.default")
+        .ensure_group(&stream, "penguintechinc.waddles.commands")
         .await
         .unwrap();
 
@@ -137,7 +137,7 @@ async fn ensure_group_creates_and_is_busygroup_tolerant() {
         groups
             .groups
             .iter()
-            .any(|g| g.name == "waddles.bot.commands.default")
+            .any(|g| g.name == "penguintechinc.waddles.commands")
     );
 }
 
@@ -147,12 +147,12 @@ async fn destroy_group_removes_a_created_group() {
     let stream = unique_stream("destroy-group");
     client.append(&stream, &sample_envelope()).await.unwrap();
     client
-        .ensure_group(&stream, "waddles.bot.commands.default")
+        .ensure_group(&stream, "penguintechinc.waddles.commands")
         .await
         .unwrap();
 
     client
-        .destroy_group(&stream, "waddles.bot.commands.default")
+        .destroy_group(&stream, "penguintechinc.waddles.commands")
         .await
         .unwrap();
 
@@ -167,7 +167,7 @@ async fn destroy_group_removes_a_created_group() {
         !groups
             .groups
             .iter()
-            .any(|g| g.name == "waddles.bot.commands.default"),
+            .any(|g| g.name == "penguintechinc.waddles.commands"),
         "destroy_group must actually remove the consumer group"
     );
 }
@@ -176,7 +176,7 @@ async fn destroy_group_removes_a_created_group() {
 async fn ack_removes_an_entry_from_the_pending_entries_list() {
     let client = test_client().await;
     let stream = unique_stream("ack");
-    let app_id = "waddles.bot.commands.default";
+    let app_id = "penguintechinc.waddles.commands";
     // Group must exist BEFORE the write: XGROUP CREATE ... $ starts the
     // group's cursor at "the last entry in the stream right now", so an
     // entry appended beforehand would be treated as already-seen and
@@ -206,7 +206,7 @@ async fn ack_removes_an_entry_from_the_pending_entries_list() {
 async fn claim_stale_recovers_an_unacked_entry_after_the_idle_window() {
     let client = test_client().await;
     let stream = unique_stream("claim-stale");
-    let app_id = "waddles.bot.commands.default";
+    let app_id = "penguintechinc.waddles.commands";
     // Group must exist BEFORE the write -- see the identical note in
     // ack_removes_an_entry_from_the_pending_entries_list.
     client.ensure_group(&stream, app_id).await.unwrap();
@@ -342,7 +342,7 @@ async fn claim_concurrency_three_replicas_claim_disjoint_entries() {
     let mut cfg = SpineConfig::from_env().unwrap();
     cfg.claim_idle_ms = 50;
     let stream = unique_stream("claim-concurrency");
-    let app_id = "waddles.bot.commands.default";
+    let app_id = "penguintechinc.waddles.commands";
 
     let writer = test_client().await;
     writer.ensure_group(&stream, app_id).await.unwrap();
@@ -395,7 +395,7 @@ async fn redelivery_cap_sends_the_entry_to_the_dlq_after_max_deliveries() {
     cfg.claim_idle_ms = 0;
     cfg.max_deliveries = 3; // keep the test fast; the mechanism is identical at any cap
     let stream = unique_stream("redelivery-cap");
-    let app_id = "waddles.bot.commands.default";
+    let app_id = "penguintechinc.waddles.commands";
 
     let client = SpineClient::connect(cfg, Arc::new(NoopMetrics))
         .await
@@ -523,7 +523,7 @@ async fn dead_letter_acks_under_the_readers_group_not_the_envelope_app_id() {
     let stream = unique_stream("dead-letter-group-mismatch");
     let group = "svc-process-shared-ingest-group";
     // sample_envelope() always carries app_id
-    // "waddles.bot.commands.default" -- deliberately different from
+    // "penguintechinc.waddles.commands" -- deliberately different from
     // `group` above.
     client.ensure_group(&stream, group).await.unwrap();
     client.append(&stream, &sample_envelope()).await.unwrap();

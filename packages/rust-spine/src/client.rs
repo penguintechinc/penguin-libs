@@ -266,7 +266,7 @@ impl SpineClient {
             artifact_digest: err.artifact_digest.clone(),
             consumer_id: err.consumer_id.clone(),
             deliveries: d.deliveries,
-            failed_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            failed_at: now_rfc3339_millis(),
             error: DlqErrorDetail {
                 kind: err.kind,
                 code: err.code.clone(),
@@ -332,7 +332,7 @@ impl SpineClient {
             artifact_digest: None,
             consumer_id: self.cfg.consumer_id.clone(),
             deliveries,
-            failed_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            failed_at: now_rfc3339_millis(),
             error: DlqErrorDetail {
                 kind: DlqErrorKind::EnvelopeInvalid,
                 code: "ENVELOPE_INVALID".to_string(),
@@ -472,5 +472,32 @@ impl SpineClient {
             });
         }
         Ok(out)
+    }
+}
+
+/// Current UTC time as RFC 3339 with millisecond precision and a `Z` suffix.
+/// Used to stamp DLQ records; replaces the former chrono formatter.
+fn now_rfc3339_millis() -> String {
+    const FMT: &[time::format_description::FormatItem<'static>] = time::macros::format_description!(
+        "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:3]Z"
+    );
+    time::OffsetDateTime::now_utc()
+        .format(&FMT)
+        .expect("fixed UTC format description cannot fail")
+}
+
+#[cfg(test)]
+mod timestamp_tests {
+    use super::now_rfc3339_millis;
+
+    /// The DLQ timestamp must be RFC 3339 UTC with exactly 3 fractional digits.
+    #[test]
+    fn now_rfc3339_millis_is_valid_utc_millis() {
+        let s = now_rfc3339_millis();
+        assert!(s.ends_with('Z'), "{s}");
+        let frac = s.split('.').nth(1).expect("fractional part");
+        assert_eq!(frac.len(), 4, "{s}"); // 3 digits + 'Z'
+        time::OffsetDateTime::parse(&s, &time::format_description::well_known::Rfc3339)
+            .expect("round-trips as RFC 3339");
     }
 }

@@ -10,7 +10,7 @@ use std::sync::Arc;
 fn sample_envelope() -> penguin_spine::StageEnvelope {
     let json = serde_json::json!({
         "schema_version": 2,
-        "tenant": "acme", "community": "main", "app_id": "waddles.bot.commands.default",
+        "tenant": "acme", "community": "main", "app_id": "penguintechinc.waddles.commands",
         "stage": "process",
         "event": {"platform": "twitch", "event_type": "chat.message", "actor": "u",
                    "payload": {}, "occurred_at": "2026-09-14T12:00:00.000Z"},
@@ -39,7 +39,7 @@ async fn rule_1_construction_is_refused_when_block_ms_is_not_strictly_less_than_
     let result = GroupReader::connect(
         &cfg,
         vec![],
-        "waddles.bot.commands.default".to_string(),
+        "penguintechinc.waddles.commands".to_string(),
         Stage::Process,
         dlq,
         Arc::new(NoopMetrics),
@@ -68,7 +68,7 @@ async fn rule_2_a_dedicated_reader_connection_survives_a_cancelled_block_and_a_s
 
     let scope = Scope::new("acme", Some("main".to_string()));
     let stream = scope.source_stream("twitch", &format!("client-rule2-{}", uuid::Uuid::new_v4()));
-    let app_id = "waddles.bot.commands.default";
+    let app_id = "penguintechinc.waddles.commands";
     dlq.ensure_group(&stream, app_id).await.unwrap();
 
     let grants = vec![Grant {
@@ -146,7 +146,7 @@ async fn grant_enforcement_refuses_a_stream_outside_the_grant_list_even_with_an_
         scope.source_stream("discord", &format!("granted-{}", uuid::Uuid::new_v4()));
     let ungranted_stream =
         scope.source_stream("twitch", &format!("ungranted-{}", uuid::Uuid::new_v4()));
-    let app_id = "waddles.bot.commands.default";
+    let app_id = "penguintechinc.waddles.commands";
 
     // A group exists on the ungranted stream too -- proving the reader's
     // own grant list is the enforcement point, not group existence
@@ -192,7 +192,7 @@ async fn envelope_invalid_entries_are_dead_lettered_and_excluded_from_read_resul
         "twitch",
         &format!("envelope-invalid-{}", uuid::Uuid::new_v4()),
     );
-    let app_id = "waddles.bot.commands.default";
+    let app_id = "penguintechinc.waddles.commands";
     dlq.ensure_group(&stream, app_id).await.unwrap();
 
     // Write a malformed "env" field directly via a raw connection --
