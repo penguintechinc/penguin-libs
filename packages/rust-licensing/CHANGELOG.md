@@ -1,5 +1,10 @@
 # penguin-licensing (Rust) Changelog
 
+## 0.1.1
+
+- **Security:** bump `url` 2.5.8 -> 2.5.9 (RUSTSEC-2026-0592, stack overflow in
+  `Url::origin()` on nested `blob:` URLs); transitive `form_urlencoded` 1.2.3.
+
 ## 0.1.0 (Unreleased)
 
 - **BREAKING (behaviour, for callers):** `LicenseClient::flag_enabled` no longer
