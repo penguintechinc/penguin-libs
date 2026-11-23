@@ -9,7 +9,6 @@ repository = "https://github.com/penguintechinc/penguin-libs"
 authors = ["Penguin Tech Inc <support@penguintech.io>"]
 keywords = ["wasm", "wasi", "sandbox", "waddles"]
 categories = ["network-programming", "parser-implementations"]
-publish = false
 
 [lib]
 name = "penguin_bundle_host"
